@@ -169,6 +169,18 @@ class ProxyService:
                 message="No providers matched the rules",
                 code="no_available_provider",
             )
+
+        # DEBUG: Print matched providers
+        candidates_info = [
+            {
+                "id": c.provider_id,
+                "name": c.provider_name,
+                "priority": c.priority,
+                "weight": c.weight
+            }
+            for c in candidates
+        ]
+        print(f"[DEBUG] Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
         
         # 8. 执行请求（带重试）
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
@@ -233,6 +245,13 @@ class ProxyService:
             trace_id=trace_id,
         )
         
+        # DEBUG: Print log as JSON
+        try:
+            print(f"[DEBUG] Request Log: {log_data.model_dump_json()}")
+        except AttributeError:
+            # Fallback for Pydantic v1
+            print(f"[DEBUG] Request Log: {log_data.json()}")
+
         await self.log_repo.create(log_data)
         
         return result.response, {
@@ -312,6 +331,18 @@ class ProxyService:
         
         if not candidates:
             raise ServiceError(message="No matched providers", code="no_available_provider")
+
+        # DEBUG: Print matched providers
+        candidates_info = [
+            {
+                "id": c.provider_id,
+                "name": c.provider_name,
+                "priority": c.priority,
+                "weight": c.weight
+            }
+            for c in candidates
+        ]
+        print(f"[DEBUG] Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
             
         # 8. 执行流式请求
         def forward_stream_fn(candidate: CandidateProvider):
@@ -397,6 +428,14 @@ class ProxyService:
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                 )
+                
+                # DEBUG: Print log as JSON
+                try:
+                    print(f"[DEBUG] Request Log: {log_data.model_dump_json()}")
+                except AttributeError:
+                    # Fallback for Pydantic v1
+                    print(f"[DEBUG] Request Log: {log_data.json()}")
+
                 # client disconnect 会触发取消，使用 shield 确保日志仍能写入 DB
                 try:
                     with anyio.CancelScope(shield=True):

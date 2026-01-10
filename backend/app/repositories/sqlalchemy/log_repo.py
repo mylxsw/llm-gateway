@@ -51,6 +51,7 @@ class SQLAlchemyLogRepository(LogRepository):
             response_status=entity.response_status,
             response_body=entity.response_body,
             error_info=entity.error_info,
+            matched_provider_count=entity.matched_provider_count,
             trace_id=entity.trace_id,
         )
     
@@ -65,6 +66,7 @@ class SQLAlchemyLogRepository(LogRepository):
             provider_id=data.provider_id,
             provider_name=data.provider_name,
             retry_count=data.retry_count,
+            matched_provider_count=data.matched_provider_count,
             first_byte_delay_ms=data.first_byte_delay_ms,
             total_time_ms=data.total_time_ms,
             input_tokens=data.input_tokens,
