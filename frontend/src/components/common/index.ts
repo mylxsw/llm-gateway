@@ -7,3 +7,4 @@ export * from './ConfirmDialog';
 export * from './JsonViewer';
 export * from './LoadingState';
 export * from './Sidebar';
+export * from './RuleBuilder';

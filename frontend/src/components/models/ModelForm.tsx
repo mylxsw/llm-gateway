@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { ModelMapping, ModelMappingCreate, ModelMappingUpdate } from '@/types';
+import { RuleBuilder } from '@/components/common';
+import { ModelMapping, ModelMappingCreate, ModelMappingUpdate, RuleSet } from '@/types';
 import { isValidModelName } from '@/lib/utils';
 
 interface ModelFormProps {
@@ -39,7 +40,7 @@ interface ModelFormProps {
 interface FormData {
   requested_model: string;
   strategy: string;
-  matching_rules: string;
+  matching_rules: RuleSet | null;
   capabilities: string;
   is_active: boolean;
 }
@@ -64,12 +65,13 @@ export function ModelForm({
     reset,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
       requested_model: '',
       strategy: 'round_robin',
-      matching_rules: '',
+      matching_rules: null,
       capabilities: '',
       is_active: true,
     },
@@ -83,9 +85,7 @@ export function ModelForm({
       reset({
         requested_model: model.requested_model,
         strategy: model.strategy,
-        matching_rules: model.matching_rules
-          ? JSON.stringify(model.matching_rules, null, 2)
-          : '',
+        matching_rules: model.matching_rules || null,
         capabilities: model.capabilities
           ? JSON.stringify(model.capabilities, null, 2)
           : '',
@@ -95,7 +95,7 @@ export function ModelForm({
       reset({
         requested_model: '',
         strategy: 'round_robin',
-        matching_rules: '',
+        matching_rules: null,
         capabilities: '',
         is_active: true,
       });
@@ -114,17 +114,10 @@ export function ModelForm({
       (submitData as ModelMappingCreate).requested_model = data.requested_model;
     }
     
-    // 解析 JSON 字段
-    if (data.matching_rules.trim()) {
-      try {
-        submitData.matching_rules = JSON.parse(data.matching_rules);
-      } catch {
-        // 解析失败则忽略
-      }
-    } else {
-      submitData.matching_rules = null;
-    }
+    // 规则直接赋值
+    submitData.matching_rules = data.matching_rules || undefined;
     
+    // 解析 JSON 字段
     if (data.capabilities.trim()) {
       try {
         submitData.capabilities = JSON.parse(data.capabilities);
@@ -149,7 +142,7 @@ export function ModelForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? '编辑模型映射' : '新增模型映射'}</DialogTitle>
         </DialogHeader>
@@ -199,22 +192,17 @@ export function ModelForm({
 
           {/* 匹配规则 */}
           <div className="space-y-2">
-            <Label htmlFor="matching_rules">
-              匹配规则 <span className="text-muted-foreground">(JSON, 可选)</span>
-            </Label>
-            <Textarea
-              id="matching_rules"
-              placeholder='{"rules": [{"field": "headers.x-priority", "operator": "eq", "value": "high"}]}'
-              rows={4}
-              {...register('matching_rules', {
-                validate: validateJson,
-              })}
+            <Label>匹配规则</Label>
+            <Controller
+              name="matching_rules"
+              control={control}
+              render={({ field }) => (
+                <RuleBuilder
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            {errors.matching_rules && (
-              <p className="text-sm text-destructive">
-                {errors.matching_rules.message}
-              </p>
-            )}
           </div>
 
           {/* 功能描述 */}

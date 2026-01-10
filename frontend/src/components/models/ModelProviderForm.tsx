@@ -7,7 +7,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -27,11 +27,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { RuleBuilder } from '@/components/common';
 import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
   ModelMappingProviderUpdate,
   Provider,
+  RuleSet,
 } from '@/types';
 
 interface ModelProviderFormProps {
@@ -55,7 +57,7 @@ interface ModelProviderFormProps {
 interface FormData {
   provider_id: string;
   target_model_name: string;
-  provider_rules: string;
+  provider_rules: RuleSet | null;
   priority: number;
   weight: number;
   is_active: boolean;
@@ -83,12 +85,13 @@ export function ModelProviderForm({
     reset,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
       provider_id: '',
       target_model_name: '',
-      provider_rules: '',
+      provider_rules: null,
       priority: 0,
       weight: 1,
       is_active: true,
@@ -104,9 +107,7 @@ export function ModelProviderForm({
       reset({
         provider_id: String(mapping.provider_id),
         target_model_name: mapping.target_model_name,
-        provider_rules: mapping.provider_rules
-          ? JSON.stringify(mapping.provider_rules, null, 2)
-          : '',
+        provider_rules: mapping.provider_rules || null,
         priority: mapping.priority,
         weight: mapping.weight,
         is_active: mapping.is_active,
@@ -115,7 +116,7 @@ export function ModelProviderForm({
       reset({
         provider_id: '',
         target_model_name: '',
-        provider_rules: '',
+        provider_rules: null,
         priority: 0,
         weight: 1,
         is_active: true,
@@ -134,15 +135,7 @@ export function ModelProviderForm({
         is_active: data.is_active,
       };
       
-      if (data.provider_rules.trim()) {
-        try {
-          submitData.provider_rules = JSON.parse(data.provider_rules);
-        } catch {
-          // 解析失败则忽略
-        }
-      } else {
-        submitData.provider_rules = null;
-      }
+      submitData.provider_rules = data.provider_rules || undefined;
       
       onSubmit(submitData);
     } else {
@@ -156,13 +149,7 @@ export function ModelProviderForm({
         is_active: data.is_active,
       };
       
-      if (data.provider_rules.trim()) {
-        try {
-          submitData.provider_rules = JSON.parse(data.provider_rules);
-        } catch {
-          // 解析失败则忽略
-        }
-      }
+      submitData.provider_rules = data.provider_rules || undefined;
       
       onSubmit(submitData);
     }
@@ -181,7 +168,7 @@ export function ModelProviderForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? '编辑供应商配置' : '添加供应商配置'}
@@ -275,22 +262,17 @@ export function ModelProviderForm({
 
           {/* 供应商级规则 */}
           <div className="space-y-2">
-            <Label htmlFor="provider_rules">
-              供应商级规则 <span className="text-muted-foreground">(JSON, 可选)</span>
-            </Label>
-            <Textarea
-              id="provider_rules"
-              placeholder='{"rules": [{"field": "token_usage.input_tokens", "operator": "lte", "value": 4000}]}'
-              rows={4}
-              {...register('provider_rules', {
-                validate: validateJson,
-              })}
+            <Label>供应商级规则</Label>
+            <Controller
+              name="provider_rules"
+              control={control}
+              render={({ field }) => (
+                <RuleBuilder
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            {errors.provider_rules && (
-              <p className="text-sm text-destructive">
-                {errors.provider_rules.message}
-              </p>
-            )}
           </div>
 
           {/* 状态 */}
