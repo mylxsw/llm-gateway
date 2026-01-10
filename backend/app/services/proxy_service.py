@@ -213,12 +213,14 @@ class ProxyService:
             provider_id=result.final_provider.provider_id if result.final_provider else None,
             provider_name=result.final_provider.provider_name if result.final_provider else None,
             retry_count=result.retry_count,
+            matched_provider_count=len(candidates),
             first_byte_delay_ms=result.response.first_byte_delay_ms,
             total_time_ms=result.response.total_time_ms,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             request_headers=sanitize_headers(headers),
             request_body=body,
+
             response_status=result.response.status_code,
             response_body=(
                 json.dumps(result.response.body, ensure_ascii=False)
@@ -373,12 +375,14 @@ class ProxyService:
                     provider_id=final_provider.provider_id if final_provider else None,
                     provider_name=final_provider.provider_name if final_provider else None,
                     retry_count=retry_count,
+                    matched_provider_count=len(candidates),
                     first_byte_delay_ms=initial_response.first_byte_delay_ms,
                     total_time_ms=total_time_ms,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
                     request_headers=sanitize_headers(headers),
                     request_body=body,
+
                     response_status=initial_response.status_code,
                     response_body=json.dumps(
                         {

@@ -217,6 +217,8 @@ class RequestLog(Base):
     provider_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # 重试次数
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    # 匹配到的供应商数量
+    matched_provider_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # 首字节延迟（毫秒）
     first_byte_delay_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # 总耗时（毫秒）

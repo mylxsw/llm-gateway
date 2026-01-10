@@ -52,6 +52,8 @@ class RequestLogCreate(RequestLogBase):
     response_body: Optional[str] = Field(None, description="响应体")
     # 错误信息
     error_info: Optional[str] = Field(None, description="错误信息")
+    # 匹配到的供应商数量
+    matched_provider_count: Optional[int] = Field(None, description="匹配到的供应商数量")
     # 追踪 ID
     trace_id: Optional[str] = Field(None, description="追踪 ID")
 
@@ -70,6 +72,7 @@ class RequestLogResponse(RequestLogBase):
     
     id: int = Field(..., description="日志 ID")
     retry_count: int = Field(0, description="重试次数")
+    matched_provider_count: Optional[int] = None
     first_byte_delay_ms: Optional[int] = None
     total_time_ms: Optional[int] = None
     input_tokens: Optional[int] = None
