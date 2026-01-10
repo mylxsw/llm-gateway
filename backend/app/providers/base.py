@@ -143,7 +143,7 @@ class ProviderClient(ABC):
         new_headers = dict(headers)
         
         # 移除原有的认证头和自动生成的头
-        keys_to_remove = ["authorization", "x-api-key", "api-key", "content-length", "host"]
+        keys_to_remove = ["authorization", "x-api-key", "api-key", "content-length", "host", "content-type"]
         for key in list(new_headers.keys()):
             if key.lower() in keys_to_remove:
                 del new_headers[key]
