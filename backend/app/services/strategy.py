@@ -70,7 +70,14 @@ class RoundRobinStrategy(SelectionStrategy):
         # 每个模型维护独立的计数器
         self._counters: dict[str, int] = {}
         # 用于保护计数器的锁
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+
+    @property
+    def lock(self) -> asyncio.Lock:
+        """获取锁（懒加载）"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
     
     async def select(
         self,
@@ -90,7 +97,7 @@ class RoundRobinStrategy(SelectionStrategy):
         if not candidates:
             return None
         
-        async with self._lock:
+        async with self.lock:
             # 获取当前计数
             counter = self._counters.get(requested_model, 0)
             # 选择供应商

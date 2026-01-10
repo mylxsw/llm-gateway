@@ -23,6 +23,7 @@ from app.services import (
     ApiKeyService,
     LogService,
     ProxyService,
+    RoundRobinStrategy,
 )
 
 
@@ -39,6 +40,12 @@ async def get_db():
 
 # 数据库会话依赖类型
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+# ============ 全局单例 ============
+
+# 全局策略实例，确保轮询状态跨请求保持
+_global_strategy = RoundRobinStrategy()
 
 
 # ============ Repository 依赖 ============
@@ -95,7 +102,7 @@ def get_proxy_service(db: DbSession) -> ProxyService:
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     log_repo = SQLAlchemyLogRepository(db)
-    return ProxyService(model_repo, provider_repo, log_repo)
+    return ProxyService(model_repo, provider_repo, log_repo, strategy=_global_strategy)
 
 
 # ============ 鉴权依赖 ============

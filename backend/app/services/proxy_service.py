@@ -25,7 +25,7 @@ from app.repositories.provider_repo import ProviderRepository
 from app.repositories.log_repo import LogRepository
 from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
 from app.services.retry_handler import RetryHandler
-from app.services.strategy import RoundRobinStrategy
+from app.services.strategy import RoundRobinStrategy, SelectionStrategy
 
 
 class ProxyService:
@@ -49,6 +49,7 @@ class ProxyService:
         model_repo: ModelRepository,
         provider_repo: ProviderRepository,
         log_repo: LogRepository,
+        strategy: Optional[SelectionStrategy] = None,
     ):
         """
         初始化服务
@@ -57,12 +58,13 @@ class ProxyService:
             model_repo: 模型 Repository
             provider_repo: 供应商 Repository
             log_repo: 日志 Repository
+            strategy: 供应商选择策略 (可选，默认使用 RoundRobinStrategy)
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
         self.log_repo = log_repo
         self.rule_engine = RuleEngine()
-        self.strategy = RoundRobinStrategy()
+        self.strategy = strategy or RoundRobinStrategy()
         self.retry_handler = RetryHandler(self.strategy)
     
     async def process_request(
