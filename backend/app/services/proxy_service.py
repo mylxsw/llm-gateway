@@ -5,11 +5,16 @@
 """
 
 import json
+import asyncio
+import time
 from datetime import datetime
 from typing import Any, Optional, AsyncGenerator
 
+import anyio
+
 from app.common.errors import NotFoundError, ServiceError
 from app.common.sanitizer import sanitize_headers
+from app.common.stream_usage import StreamUsageAccumulator
 from app.common.token_counter import get_token_counter
 from app.common.utils import generate_trace_id
 from app.domain.log import RequestLogCreate
@@ -252,6 +257,7 @@ class ProxyService:
         """
         trace_id = generate_trace_id()
         request_time = datetime.utcnow()
+        start_monotonic = time.monotonic()
         
         # 1-7. 同样的模型解析和规则匹配逻辑
         requested_model = body.get("model")
@@ -324,16 +330,32 @@ class ProxyService:
 
         # 封装生成器以处理日志
         async def wrapped_generator():
+            usage_acc = StreamUsageAccumulator(
+                protocol=protocol,
+                model=requested_model,
+            )
+            stream_error: Optional[str] = None
             try:
+                usage_acc.feed(first_chunk)
                 yield first_chunk
                 async for chunk, _, _, _ in stream_gen:
+                    usage_acc.feed(chunk)
                     yield chunk
-            except Exception:
-                # 可以在这里记录流中断异常
-                pass
+            except asyncio.CancelledError:
+                stream_error = "client_disconnected"
+                raise
+            except Exception as e:
+                # 记录流中断异常，但不向上抛出，避免污染 StreamingResponse 日志
+                stream_error = str(e)
+                return
             finally:
+                usage_result = usage_acc.finalize()
+                total_time_ms = initial_response.total_time_ms
+                if total_time_ms is None:
+                    total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
+
                 # 10. 记录日志 (流结束后)
-                # 注意：流式请求难以获取准确的 output_tokens 和完整的 response_body
+                # 注意：流式请求无法稳定获取完整响应体，这里仅记录输出预览（截断）
                 log_data = RequestLogCreate(
                     request_time=request_time,
                     api_key_id=api_key_id,
@@ -344,17 +366,32 @@ class ProxyService:
                     provider_name=final_provider.provider_name if final_provider else None,
                     retry_count=retry_count,
                     first_byte_delay_ms=initial_response.first_byte_delay_ms,
-                    total_time_ms=initial_response.total_time_ms, # 可能不准确，取决于 client 实现
+                    total_time_ms=total_time_ms,
                     input_tokens=input_tokens,
-                    output_tokens=0, # 暂不支持流式 token 统计
+                    output_tokens=usage_result.output_tokens,
                     request_headers=sanitize_headers(headers),
                     request_body=body,
                     response_status=initial_response.status_code,
-                    response_body="[Stream Response]", 
-                    error_info=initial_response.error,
+                    response_body=json.dumps(
+                        {
+                            "type": "stream",
+                            "protocol": protocol,
+                            "output_preview": usage_result.output_preview,
+                            "output_preview_truncated": usage_result.output_preview_truncated,
+                            "upstream_reported_output_tokens": usage_result.upstream_reported_output_tokens,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                 )
-                await self.log_repo.create(log_data)
+                # client disconnect 会触发取消，使用 shield 确保日志仍能写入 DB
+                try:
+                    with anyio.CancelScope(shield=True):
+                        await self.log_repo.create(log_data)
+                except Exception:
+                    # 日志写入失败不影响主流程
+                    pass
 
         return initial_response, wrapped_generator(), {
             "trace_id": trace_id,
