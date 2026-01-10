@@ -4,9 +4,10 @@
 提供通用的工具函数，如 API Key 生成、Trace ID 生成等。
 """
 
+import json
 import secrets
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from app.config import get_settings
 
@@ -113,3 +114,24 @@ def mask_string(s: str, visible_start: int = 4, visible_end: int = 2) -> str:
     if len(s) <= visible_start + visible_end:
         return "***"
     return f"{s[:visible_start]}***...***{s[-visible_end:]}"
+
+
+def try_parse_json_object(text: str) -> Any:
+    """
+    尝试把字符串解析为 JSON 对象/数组
+
+    仅当字符串形态看起来像 JSON object/array（以 { 或 [ 开头）时才尝试解析，
+    解析失败则返回原始字符串。
+    """
+    stripped = text.strip()
+    if not stripped:
+        return text
+    if not (
+        (stripped.startswith("{") and stripped.endswith("}"))
+        or (stripped.startswith("[") and stripped.endswith("]"))
+    ):
+        return text
+    try:
+        return json.loads(stripped)
+    except Exception:
+        return text

@@ -13,7 +13,12 @@ from pydantic import BaseModel
 
 from app.api.deps import LogServiceDep
 from app.common.errors import AppError
-from app.domain.log import RequestLogQuery, RequestLogResponse, RequestLogModel
+from app.common.utils import try_parse_json_object
+from app.domain.log import (
+    RequestLogQuery,
+    RequestLogResponse,
+    RequestLogDetailResponse,
+)
 
 router = APIRouter(prefix="/admin/logs", tags=["Admin - Logs"])
 
@@ -90,7 +95,7 @@ async def list_logs(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.get("/{log_id}", response_model=RequestLogModel)
+@router.get("/{log_id}", response_model=RequestLogDetailResponse)
 async def get_log(
     log_id: int,
     service: LogServiceDep,
@@ -101,6 +106,12 @@ async def get_log(
     包含完整的请求/响应信息（authorization 已脱敏）。
     """
     try:
-        return await service.get_by_id(log_id)
+        log = await service.get_by_id(log_id)
+        return RequestLogDetailResponse(
+            **log.model_dump(),
+            response_body=try_parse_json_object(log.response_body)
+            if log.response_body
+            else None,
+        )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)

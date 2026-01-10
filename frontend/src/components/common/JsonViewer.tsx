@@ -34,8 +34,30 @@ export function JsonViewer({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
+  const normalizedData = React.useMemo(() => {
+    if (typeof data !== 'string') return data;
+    const trimmed = data.trim();
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return data;
+      }
+    }
+    return data;
+  }, [data]);
+
   // 格式化 JSON 字符串
-  const jsonString = JSON.stringify(data, null, 2);
+  const jsonString = (() => {
+    try {
+      return JSON.stringify(normalizedData, null, 2) ?? String(normalizedData);
+    } catch {
+      return String(normalizedData);
+    }
+  })();
 
   // 复制到剪贴板
   const handleCopy = async () => {

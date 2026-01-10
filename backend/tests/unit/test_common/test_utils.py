@@ -9,6 +9,7 @@ from app.common.utils import (
     extract_model_from_body,
     replace_model_in_body,
     mask_string,
+    try_parse_json_object,
 )
 
 
@@ -114,3 +115,22 @@ class TestMaskString:
         """测试短字符串掩码"""
         result = mask_string("abc")
         assert result == "***"
+
+
+class TestTryParseJsonObject:
+    """JSON 对象/数组解析测试"""
+
+    def test_parse_json_object(self):
+        assert try_parse_json_object('{"type":"stream","ok":true}') == {
+            "type": "stream",
+            "ok": True,
+        }
+
+    def test_parse_json_array(self):
+        assert try_parse_json_object('[{"a":1},{"b":2}]') == [{"a": 1}, {"b": 2}]
+
+    def test_keep_non_json_string(self):
+        assert try_parse_json_object("not json") == "not json"
+
+    def test_keep_invalid_json(self):
+        assert try_parse_json_object("{not json}") == "{not json}"

@@ -218,7 +218,13 @@ class ProxyService:
             request_headers=sanitize_headers(headers),
             request_body=body,
             response_status=result.response.status_code,
-            response_body=json.dumps(result.response.body) if result.response.body else None,
+            response_body=(
+                json.dumps(result.response.body, ensure_ascii=False)
+                if isinstance(result.response.body, (dict, list))
+                else result.response.body
+            )
+            if result.response.body is not None
+            else None,
             error_info=result.response.error,
             trace_id=trace_id,
         )

@@ -83,6 +83,8 @@ class RequestLogResponse(RequestLogBase):
 
 class RequestLogDetailResponse(RequestLogModel):
     """请求日志详情响应模型"""
+
+    response_body: Optional[Any] = Field(None, description="响应体（自动解析 JSON）")
     
     class Config:
         from_attributes = True
