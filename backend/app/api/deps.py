@@ -103,15 +103,18 @@ def get_proxy_service(db: DbSession) -> ProxyService:
 async def get_current_api_key(
     db: DbSession,
     authorization: str = Header(None, description="Bearer token"),
+    x_api_key: str = Header(None, description="Anthropic style API key", alias="x-api-key"),
 ) -> ApiKeyModel:
     """
     获取当前请求的 API Key（鉴权）
     
-    从 Authorization 头中提取 API Key 并验证。
+    从 Authorization 头或 x-api-key 头中提取 API Key 并验证。
+    优先使用 x-api-key。
     
     Args:
         db: 数据库会话
         authorization: Authorization 头
+        x_api_key: x-api-key 头
     
     Returns:
         ApiKeyModel: 验证通过的 API Key
@@ -120,7 +123,8 @@ async def get_current_api_key(
         AuthenticationError: 验证失败
     """
     service = get_api_key_service(db)
-    return await service.authenticate(authorization or "")
+    token = x_api_key or authorization
+    return await service.authenticate(token or "")
 
 
 # 依赖类型别名
