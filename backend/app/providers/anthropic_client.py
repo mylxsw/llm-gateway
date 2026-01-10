@@ -93,7 +93,13 @@ class AnthropicClient(ProviderClient):
         Returns:
             ProviderResponse: 供应商响应
         """
-        url = f"{base_url.rstrip('/')}{path}"
+        cleaned_base = base_url.rstrip('/')
+        cleaned_path = path
+        if cleaned_path.startswith('/v1/'):
+            cleaned_path = cleaned_path[3:]
+        elif cleaned_path == '/v1':
+            cleaned_path = ''
+        url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
         prepared_headers = self._prepare_headers(headers, api_key)
         prepared_headers["Content-Type"] = "application/json"
@@ -187,7 +193,13 @@ class AnthropicClient(ProviderClient):
         Yields:
             tuple[bytes, ProviderResponse]: (数据块, 响应信息)
         """
-        url = f"{base_url.rstrip('/')}{path}"
+        cleaned_base = base_url.rstrip('/')
+        cleaned_path = path
+        if cleaned_path.startswith('/v1/'):
+            cleaned_path = cleaned_path[3:]
+        elif cleaned_path == '/v1':
+            cleaned_path = ''
+        url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
         prepared_headers = self._prepare_headers(headers, api_key)
         prepared_headers["Content-Type"] = "application/json"
