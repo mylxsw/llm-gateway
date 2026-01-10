@@ -5,6 +5,7 @@ Anthropic 协议客户端
 """
 
 import json
+import logging
 from typing import Any, AsyncGenerator, Optional
 
 import httpx
@@ -12,6 +13,8 @@ import httpx
 from app.common.timer import Timer
 from app.config import get_settings
 from app.providers.base import ProviderClient, ProviderResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicClient(ProviderClient):
@@ -94,6 +97,14 @@ class AnthropicClient(ProviderClient):
         prepared_body = self._prepare_body(body, target_model)
         prepared_headers = self._prepare_headers(headers, api_key)
         prepared_headers["Content-Type"] = "application/json"
+        
+        logger.debug(
+            "Anthropic Request: method=%s url=%s headers=%s body=%s",
+            method,
+            url,
+            prepared_headers,
+            json.dumps(prepared_body, ensure_ascii=False),
+        )
         
         timer = Timer().start()
         
@@ -180,6 +191,14 @@ class AnthropicClient(ProviderClient):
         prepared_body = self._prepare_body(body, target_model)
         prepared_headers = self._prepare_headers(headers, api_key)
         prepared_headers["Content-Type"] = "application/json"
+        
+        logger.debug(
+            "Anthropic Stream Request: method=%s url=%s headers=%s body=%s",
+            method,
+            url,
+            prepared_headers,
+            json.dumps(prepared_body, ensure_ascii=False),
+        )
         
         timer = Timer().start()
         first_chunk = True
