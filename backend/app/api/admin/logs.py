@@ -108,7 +108,7 @@ async def get_log(
     try:
         log = await service.get_by_id(log_id)
         return RequestLogDetailResponse(
-            **log.model_dump(),
+            **log.model_dump(exclude={"response_body"}),
             response_body=try_parse_json_object(log.response_body)
             if log.response_body
             else None,
