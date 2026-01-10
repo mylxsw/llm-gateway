@@ -48,7 +48,7 @@ async def list_logs(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     sort_by: str = Query("request_time", description="排序字段"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="排序方向"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="排序方向"),
 ):
     """
     查询请求日志列表

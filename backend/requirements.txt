@@ -6,6 +6,7 @@ pydantic-settings>=2.1.0
 
 # 数据库
 sqlalchemy>=2.0.25
+greenlet>=3.0.0  # SQLAlchemy asyncio 依赖
 aiosqlite>=0.19.0  # SQLite 异步支持
 asyncpg>=0.29.0    # PostgreSQL 异步支持
 alembic>=1.13.0    # 数据库迁移
