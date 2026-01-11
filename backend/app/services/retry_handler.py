@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
@@ -12,6 +13,8 @@ from app.config import get_settings
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
 from app.services.strategy import SelectionStrategy
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -105,7 +108,7 @@ class RetryHandler:
                 # 执行请求
                 response = await forward_fn(current_provider)
                 last_response = response
-                
+
                 # 成功响应
                 if response.is_success:
                     return RetryResult(
@@ -114,21 +117,59 @@ class RetryHandler:
                         final_provider=current_provider,
                         success=True,
                     )
-                
+
+                # 记录失败信息
+                logger.warning(
+                    "Provider request failed: provider_id=%s, provider_name=%s, protocol=%s, "
+                    "status_code=%s, error=%s, retry_attempt=%s/%s",
+                    current_provider.provider_id,
+                    current_provider.provider_name,
+                    current_provider.protocol,
+                    response.status_code,
+                    response.error,
+                    same_provider_retries + 1,
+                    self.max_retries,
+                )
+                print(
+                    f"[ERROR] Provider Failed: provider_id={current_provider.provider_id}, "
+                    f"provider_name={current_provider.provider_name}, protocol={current_provider.protocol}, "
+                    f"status_code={response.status_code}, error={response.error}, "
+                    f"retry_attempt={same_provider_retries + 1}/{self.max_retries}"
+                )
+
                 # 状态码 >= 500：同供应商重试
                 if response.is_server_error:
                     same_provider_retries += 1
                     total_retry_count += 1
-                    
+
                     if same_provider_retries < self.max_retries:
                         # 等待后重试
                         await asyncio.sleep(self.retry_delay_ms / 1000)
                         continue
                     else:
                         # 达到最大重试次数，切换供应商
+                        logger.warning(
+                            "Max retries reached for provider: provider_id=%s, provider_name=%s, switching to next provider",
+                            current_provider.provider_id,
+                            current_provider.provider_name,
+                        )
+                        print(
+                            f"[ERROR] Max retries reached for provider_id={current_provider.provider_id}, "
+                            f"provider_name={current_provider.provider_name}, switching to next provider"
+                        )
                         break
                 else:
                     # 状态码 < 500：直接切换供应商
+                    logger.warning(
+                        "Client error from provider, switching: provider_id=%s, provider_name=%s, status_code=%s",
+                        current_provider.provider_id,
+                        current_provider.provider_name,
+                        response.status_code,
+                    )
+                    print(
+                        f"[ERROR] Client error from provider_id={current_provider.provider_id}, "
+                        f"provider_name={current_provider.provider_name}, status_code={response.status_code}, switching to next provider"
+                    )
                     total_retry_count += 1
                     break
             
@@ -199,14 +240,33 @@ class RetryHandler:
                     chunk, response = await anext(generator)
                     last_response = response
                     last_chunk = chunk
-                    
+
                     if response.is_success:
                         # 成功，返回后续数据
                         yield chunk, response, current_provider, total_retry_count
                         async for chunk, response in generator:
                             yield chunk, response, current_provider, total_retry_count
                         return
-                    
+
+                    # 记录失败信息
+                    logger.warning(
+                        "Provider stream request failed: provider_id=%s, provider_name=%s, protocol=%s, "
+                        "status_code=%s, error=%s, retry_attempt=%s/%s",
+                        current_provider.provider_id,
+                        current_provider.provider_name,
+                        current_provider.protocol,
+                        response.status_code,
+                        response.error,
+                        same_provider_retries + 1,
+                        self.max_retries,
+                    )
+                    print(
+                        f"[ERROR] Provider Stream Failed: provider_id={current_provider.provider_id}, "
+                        f"provider_name={current_provider.provider_name}, protocol={current_provider.protocol}, "
+                        f"status_code={response.status_code}, error={response.error}, "
+                        f"retry_attempt={same_provider_retries + 1}/{self.max_retries}"
+                    )
+
                     # 失败逻辑
                     if response.is_server_error:
                         same_provider_retries += 1
@@ -215,19 +275,62 @@ class RetryHandler:
                             await asyncio.sleep(self.retry_delay_ms / 1000)
                             continue
                         else:
+                            logger.warning(
+                                "Max retries reached for stream provider: provider_id=%s, provider_name=%s, switching to next provider",
+                                current_provider.provider_id,
+                                current_provider.provider_name,
+                            )
+                            print(
+                                f"[ERROR] Max stream retries reached for provider_id={current_provider.provider_id}, "
+                                f"provider_name={current_provider.provider_name}, switching to next provider"
+                            )
                             break
                     else:
+                        logger.warning(
+                            "Client error from stream provider, switching: provider_id=%s, provider_name=%s, status_code=%s",
+                            current_provider.provider_id,
+                            current_provider.provider_name,
+                            response.status_code,
+                        )
+                        print(
+                            f"[ERROR] Client error from stream provider_id={current_provider.provider_id}, "
+                            f"provider_name={current_provider.provider_name}, status_code={response.status_code}, switching to next provider"
+                        )
                         total_retry_count += 1
                         break
-                        
+
                 except Exception as e:
                     # 网络或其他异常
+                    logger.warning(
+                        "Exception during stream request: provider_id=%s, provider_name=%s, protocol=%s, "
+                        "exception=%s, retry_attempt=%s/%s",
+                        current_provider.provider_id,
+                        current_provider.provider_name,
+                        current_provider.protocol,
+                        str(e),
+                        same_provider_retries + 1,
+                        self.max_retries,
+                    )
+                    print(
+                        f"[ERROR] Stream Exception: provider_id={current_provider.provider_id}, "
+                        f"provider_name={current_provider.provider_name}, protocol={current_provider.protocol}, "
+                        f"exception={str(e)}, retry_attempt={same_provider_retries + 1}/{self.max_retries}"
+                    )
                     same_provider_retries += 1
                     total_retry_count += 1
                     if same_provider_retries < self.max_retries:
                         await asyncio.sleep(self.retry_delay_ms / 1000)
                         continue
                     else:
+                        logger.warning(
+                            "Max exception retries reached for stream provider: provider_id=%s, provider_name=%s, switching to next provider",
+                            current_provider.provider_id,
+                            current_provider.provider_name,
+                        )
+                        print(
+                            f"[ERROR] Max exception retries reached for stream provider_id={current_provider.provider_id}, "
+                            f"provider_name={current_provider.provider_name}, switching to next provider"
+                        )
                         break
             
             next_provider = await self._get_next_untried_provider(

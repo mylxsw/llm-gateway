@@ -6,6 +6,7 @@
 
 import json
 import asyncio
+import logging
 import time
 from datetime import datetime
 from typing import Any, Optional, AsyncGenerator
@@ -32,6 +33,8 @@ from app.repositories.log_repo import LogRepository
 from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
 from app.services.retry_handler import RetryHandler
 from app.services.strategy import RoundRobinStrategy, SelectionStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class ProxyService:
@@ -232,7 +235,22 @@ class ProxyService:
                     target_model=candidate.target_model,
                 )
             except Exception as e:
-                return ProviderResponse(status_code=400, error=str(e))
+                error_msg = str(e)
+                logger.error(
+                    "Error during request forwarding: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    candidate.provider_id,
+                    candidate.provider_name,
+                    request_protocol,
+                    candidate.protocol,
+                    error_msg,
+                )
+                print(
+                    f"[ERROR] Request Forwarding Error: provider_id={candidate.provider_id}, "
+                    f"provider_name={candidate.provider_name}, request_protocol={request_protocol}, "
+                    f"supplier_protocol={candidate.protocol}, error={error_msg}"
+                )
+                return ProviderResponse(status_code=400, error=error_msg)
 
         result = await self.retry_handler.execute_with_retry(
             candidates=candidates,
@@ -249,10 +267,25 @@ class ProxyService:
                     target_model=result.final_provider.target_model,
                 )
             except Exception as e:
+                error_msg = str(e)
+                logger.error(
+                    "Error during response conversion: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    result.final_provider.provider_id,
+                    result.final_provider.provider_name,
+                    request_protocol,
+                    result.final_provider.protocol,
+                    error_msg,
+                )
+                print(
+                    f"[ERROR] Response Conversion Error: provider_id={result.final_provider.provider_id}, "
+                    f"provider_name={result.final_provider.provider_name}, request_protocol={request_protocol}, "
+                    f"supplier_protocol={result.final_provider.protocol}, error={error_msg}"
+                )
                 result.response = ProviderResponse(
                     status_code=502,
                     headers=result.response.headers,
-                    error=str(e),
+                    error=error_msg,
                     first_byte_delay_ms=result.response.first_byte_delay_ms,
                     total_time_ms=result.response.total_time_ms,
                 )
@@ -385,7 +418,22 @@ class ProxyService:
                     target_model=candidate.target_model,
                 )
             except Exception as e:
-                return error_gen(str(e))
+                error_msg = str(e)
+                logger.error(
+                    "Error during stream request conversion: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    candidate.provider_id,
+                    candidate.provider_name,
+                    request_protocol,
+                    candidate.protocol,
+                    error_msg,
+                )
+                print(
+                    f"[ERROR] Stream Request Conversion Error: provider_id={candidate.provider_id}, "
+                    f"provider_name={candidate.provider_name}, request_protocol={request_protocol}, "
+                    f"supplier_protocol={candidate.protocol}, error={error_msg}"
+                )
+                return error_gen(error_msg)
 
             upstream_gen = client.forward_stream(
                 base_url=candidate.base_url,
@@ -424,6 +472,20 @@ class ProxyService:
                         yield out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
+                    logger.error(
+                        "Error during stream response conversion: provider_id=%s, provider_name=%s, "
+                        "request_protocol=%s, supplier_protocol=%s, error=%s",
+                        candidate.provider_id,
+                        candidate.provider_name,
+                        request_protocol,
+                        candidate.protocol,
+                        err,
+                    )
+                    print(
+                        f"[ERROR] Stream Response Conversion Error: provider_id={candidate.provider_id}, "
+                        f"provider_name={candidate.provider_name}, request_protocol={request_protocol}, "
+                        f"supplier_protocol={candidate.protocol}, error={err}"
+                    )
                     if (request_protocol or "openai").lower() == "anthropic":
                         yield (
                             f"data: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
