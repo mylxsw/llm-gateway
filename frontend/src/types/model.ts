@@ -4,6 +4,7 @@
  */
 
 import { RuleSet } from './common';
+import { ProtocolType } from './provider';
 
 /** 模型映射实体 */
 export interface ModelMapping {
@@ -24,6 +25,7 @@ export interface ModelMappingProvider {
   requested_model: string;
   provider_id: number;
   provider_name: string;              // 关联查询获得
+  provider_protocol?: ProtocolType | null; // 关联查询获得
   target_model_name: string;          // 该供应商对应的目标模型名
   provider_rules?: RuleSet | null;    // 供应商级规则
   priority: number;

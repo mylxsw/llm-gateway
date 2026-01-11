@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Rule, RuleOperator, RuleSet } from '@/types';
 import { Trash2, Plus, Code, List } from 'lucide-react';
 
@@ -44,19 +43,6 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
   const [jsonValue, setJsonValue] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
 
-  // Initialize JSON value when prop changes
-  useEffect(() => {
-    // Don't overwrite JSON value while user is editing in JSON mode
-    // to prevent cursor jumping and unwanted reformatting
-    if (mode === 'json') return;
-
-    if (value) {
-      setJsonValue(JSON.stringify(value, null, 2));
-    } else {
-      setJsonValue('');
-    }
-  }, [value, mode]);
-
   const handleModeChange = (newMode: 'visual' | 'json') => {
     if (newMode === 'visual') {
       // Validate JSON before switching to visual
@@ -75,11 +61,13 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
         } else {
           setJsonError('Invalid RuleSet structure: must contain "rules" array');
         }
-      } catch (e) {
+      } catch {
         setJsonError('Invalid JSON syntax');
       }
     } else {
-      // Switching to JSON mode, ensure current value is reflected (handled by useEffect)
+      // Switching to JSON mode, reflect current visual value
+      setJsonValue(value ? JSON.stringify(value, null, 2) : '');
+      setJsonError(null);
       setMode('json');
     }
   };
@@ -95,7 +83,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
       const parsed = JSON.parse(text);
       onChange(parsed);
       setJsonError(null);
-    } catch (e) {
+    } catch {
       setJsonError('Invalid JSON syntax');
       // Don't call onChange with invalid JSON
     }
@@ -143,7 +131,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
   };
 
   // Helper to guess type of value
-  const getValueType = (val: any): ValueType => {
+  const getValueType = (val: unknown): ValueType => {
     if (typeof val === 'boolean') return 'boolean';
     if (typeof val === 'number') return 'number';
     if (typeof val === 'object') return 'json';
@@ -151,7 +139,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
   };
 
   // Helper to parse value based on type
-  const parseValue = (val: string, type: ValueType): any => {
+  const parseValue = (val: string, type: ValueType): unknown => {
     if (type === 'boolean') return val === 'true';
     if (type === 'number') return Number(val);
     if (type === 'json') {

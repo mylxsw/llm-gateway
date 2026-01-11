@@ -122,6 +122,8 @@ class ModelMappingProviderResponse(ModelMappingProvider):
     
     # 供应商名称
     provider_name: str = Field("", description="供应商名称")
+    # 供应商协议类型：openai 或 anthropic
+    provider_protocol: Optional[str] = Field(None, description="供应商协议类型")
     
     class Config:
         from_attributes = True

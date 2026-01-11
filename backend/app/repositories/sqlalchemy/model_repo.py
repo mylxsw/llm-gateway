@@ -57,7 +57,10 @@ class SQLAlchemyModelRepository(ModelRepository):
         )
     
     def _provider_mapping_to_domain(
-        self, entity: ModelMappingProviderORM, provider_name: str = ""
+        self,
+        entity: ModelMappingProviderORM,
+        provider_name: str = "",
+        provider_protocol: str | None = None,
     ) -> ModelMappingProviderResponse:
         """将模型-供应商映射 ORM 实体转换为领域模型"""
         return ModelMappingProviderResponse(
@@ -65,6 +68,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             requested_model=entity.requested_model,
             provider_id=entity.provider_id,
             provider_name=provider_name,
+            provider_protocol=provider_protocol,
             target_model_name=entity.target_model_name,
             provider_rules=entity.provider_rules,
             priority=entity.priority,
@@ -192,8 +196,9 @@ class SQLAlchemyModelRepository(ModelRepository):
         )
         provider = provider_result.scalar_one_or_none()
         provider_name = provider.name if provider else ""
+        provider_protocol = provider.protocol if provider else None
         
-        return self._provider_mapping_to_domain(entity, provider_name)
+        return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
     
     async def get_provider_mapping(self, id: int) -> Optional[ModelMappingProvider]:
         """根据 ID 获取模型-供应商映射"""
@@ -208,7 +213,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             return None
         
         provider_name = entity.provider.name if entity.provider else ""
-        return self._provider_mapping_to_domain(entity, provider_name)
+        provider_protocol = entity.provider.protocol if entity.provider else None
+        return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
     
     async def get_provider_mappings(
         self,
@@ -241,7 +247,9 @@ class SQLAlchemyModelRepository(ModelRepository):
         
         return [
             self._provider_mapping_to_domain(
-                e, e.provider.name if e.provider else ""
+                e,
+                e.provider.name if e.provider else "",
+                e.provider.protocol if e.provider else None,
             )
             for e in entities
         ]
@@ -270,7 +278,8 @@ class SQLAlchemyModelRepository(ModelRepository):
         await self.session.refresh(entity)
         
         provider_name = entity.provider.name if entity.provider else ""
-        return self._provider_mapping_to_domain(entity, provider_name)
+        provider_protocol = entity.provider.protocol if entity.provider else None
+        return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
     
     async def delete_provider_mapping(self, id: int) -> bool:
         """删除模型-供应商映射"""

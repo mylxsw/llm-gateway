@@ -5,8 +5,8 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,13 +35,22 @@ import {
   ModelMappingProviderUpdate,
 } from '@/types';
 import { formatDateTime, getActiveStatus } from '@/lib/utils';
+import { ProtocolType } from '@/types/provider';
+
+function protocolLabel(protocol: ProtocolType) {
+  switch (protocol) {
+    case 'openai':
+      return 'OpenAI';
+    case 'anthropic':
+      return 'Anthropic';
+  }
+}
 
 /**
  * 模型详情页面组件
  */
 export default function ModelDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const requestedModel = decodeURIComponent(params.model as string);
 
   // 表单对话框状态
@@ -56,6 +65,10 @@ export default function ModelDetailPage() {
   const { data: model, isLoading, isError, refetch } = useModel(requestedModel);
   // 获取所有供应商，不过滤激活状态，以便配置
   const { data: providersData } = useProviders();
+  const providersById = useMemo(() => {
+    const entries = providersData?.items?.map((p) => [p.id, p] as const) ?? [];
+    return new Map(entries);
+  }, [providersData?.items]);
 
   // Mutations
   const createMutation = useCreateModelProvider();
@@ -222,10 +235,24 @@ export default function ModelDetailPage() {
               <TableBody>
                 {model.providers.map((mapping) => {
                   const mappingStatus = getActiveStatus(mapping.is_active);
+                  const protocol =
+                    mapping.provider_protocol ??
+                    providersById.get(mapping.provider_id)?.protocol;
                   return (
                     <TableRow key={mapping.id}>
                       <TableCell className="font-medium">
-                        {mapping.provider_name}
+                        <div className="flex items-center gap-2">
+                          <span>{mapping.provider_name}</span>
+                          {protocol ? (
+                            <Badge
+                              variant="outline"
+                              className="font-normal text-muted-foreground border-muted-foreground/30"
+                              title={`Protocol: ${protocol}`}
+                            >
+                              {protocolLabel(protocol)}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <code className="text-sm">{mapping.target_model_name}</code>
