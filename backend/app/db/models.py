@@ -239,6 +239,8 @@ class RequestLog(Base):
     error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 追踪 ID
     trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # 是否为流式请求
+    is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # 索引定义，优化查询性能
     __table_args__ = (

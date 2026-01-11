@@ -20,6 +20,7 @@ export interface RequestLog {
   output_tokens?: number;
   response_status?: number;
   trace_id?: string;
+  is_stream?: boolean;
 }
 
 /** 请求日志详情实体（包含完整请求/响应） */

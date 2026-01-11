@@ -56,6 +56,8 @@ class RequestLogCreate(RequestLogBase):
     matched_provider_count: Optional[int] = Field(None, description="匹配到的供应商数量")
     # 追踪 ID
     trace_id: Optional[str] = Field(None, description="追踪 ID")
+    # 是否为流式请求
+    is_stream: bool = Field(False, description="是否为流式请求")
 
 
 class RequestLogModel(RequestLogCreate):
@@ -79,6 +81,7 @@ class RequestLogResponse(RequestLogBase):
     output_tokens: Optional[int] = None
     response_status: Optional[int] = None
     trace_id: Optional[str] = None
+    is_stream: bool = False
     
     class Config:
         from_attributes = True

@@ -257,6 +257,7 @@ class ProxyService:
             else None,
             error_info=result.response.error,
             trace_id=trace_id,
+            is_stream=False,
         )
         
         # DEBUG: Print log as JSON
@@ -408,6 +409,7 @@ class ProxyService:
                     ),
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
+                    is_stream=True,
                 )
                 
                 # DEBUG: Print log as JSON
