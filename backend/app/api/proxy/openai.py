@@ -70,6 +70,7 @@ async def chat_completions(
             initial_response, stream_generator, log_info = await proxy_service.process_request_stream(
                 api_key_id=api_key.id,
                 api_key_name=api_key.key_name,
+                request_protocol="openai",
                 path="/v1/chat/completions",
                 method="POST",
                 headers=headers,
@@ -113,6 +114,7 @@ async def chat_completions(
         response, log_info = await proxy_service.process_request(
             api_key_id=api_key.id,
             api_key_name=api_key.key_name,
+            request_protocol="openai",
             path="/v1/chat/completions",
             method="POST",
             headers=headers,
@@ -159,6 +161,7 @@ async def completions(
         response, log_info = await proxy_service.process_request(
             api_key_id=api_key.id,
             api_key_name=api_key.key_name,
+            request_protocol="openai",
             path="/v1/completions",
             method="POST",
             headers=headers,
@@ -199,6 +202,7 @@ async def embeddings(
         response, log_info = await proxy_service.process_request(
             api_key_id=api_key.id,
             api_key_name=api_key.key_name,
+            request_protocol="openai",
             path="/v1/embeddings",
             method="POST",
             headers=headers,

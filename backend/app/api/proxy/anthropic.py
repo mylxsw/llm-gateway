@@ -39,6 +39,7 @@ async def messages(
             initial_response, stream_generator, log_info = await proxy_service.process_request_stream(
                 api_key_id=api_key.id,
                 api_key_name=api_key.key_name,
+                request_protocol="anthropic",
                 path="/v1/messages",
                 method="POST",
                 headers=headers,
@@ -82,6 +83,7 @@ async def messages(
         response, log_info = await proxy_service.process_request(
             api_key_id=api_key.id,
             api_key_name=api_key.key_name,
+            request_protocol="anthropic",
             path="/v1/messages",
             method="POST",
             headers=headers,

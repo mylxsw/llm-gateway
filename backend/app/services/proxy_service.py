@@ -71,6 +71,7 @@ class ProxyService:
     async def _resolve_candidates(
         self,
         requested_model: str,
+        request_protocol: str,
         headers: dict[str, str],
         body: dict[str, Any],
     ) -> tuple[ModelMapping, list[CandidateProvider], int, str]:
@@ -80,6 +81,7 @@ class ProxyService:
         Returns:
             tuple: (model_mapping, candidates, input_tokens, protocol)
         """
+        request_protocol = (request_protocol or "openai").lower()
         model_mapping = await self.model_repo.get_mapping(requested_model)
         if not model_mapping:
             raise NotFoundError(
@@ -111,9 +113,25 @@ class ProxyService:
             if provider:
                 providers[pid] = provider
 
-        first_provider = providers.get(provider_mappings[0].provider_id)
-        protocol = first_provider.protocol if first_provider else "openai"
-        token_counter = get_token_counter(protocol)
+        eligible_provider_mappings = [
+            pm
+            for pm in provider_mappings
+            if (p := providers.get(pm.provider_id)) and p.protocol == request_protocol
+        ]
+        eligible_providers = {
+            pid: p for pid, p in providers.items() if p.protocol == request_protocol
+        }
+
+        if not eligible_provider_mappings:
+            raise ServiceError(
+                message=(
+                    f"No providers configured for model '{requested_model}' "
+                    f"with protocol '{request_protocol}'"
+                ),
+                code="no_available_provider",
+            )
+
+        token_counter = get_token_counter(request_protocol)
         messages = body.get("messages", [])
         input_tokens = token_counter.count_messages(messages, requested_model)
 
@@ -127,8 +145,8 @@ class ProxyService:
         candidates = await self.rule_engine.evaluate(
             context=context,
             model_mapping=model_mapping,
-            provider_mappings=provider_mappings,
-            providers=providers,
+            provider_mappings=eligible_provider_mappings,
+            providers=eligible_providers,
         )
 
         if not candidates:
@@ -137,12 +155,13 @@ class ProxyService:
                 code="no_available_provider",
             )
 
-        return model_mapping, candidates, input_tokens, protocol
+        return model_mapping, candidates, input_tokens, request_protocol
     
     async def process_request(
         self,
         api_key_id: int,
         api_key_name: str,
+        request_protocol: str,
         path: str,
         method: str,
         headers: dict[str, str],
@@ -180,6 +199,7 @@ class ProxyService:
         # 2. 获取模型映射
         model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
             requested_model=requested_model,
+            request_protocol=request_protocol,
             headers=headers,
             body=body,
         )
@@ -280,6 +300,7 @@ class ProxyService:
         self,
         api_key_id: int,
         api_key_name: str,
+        request_protocol: str,
         path: str,
         method: str,
         headers: dict[str, str],
@@ -310,6 +331,7 @@ class ProxyService:
 
         model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
             requested_model=requested_model,
+            request_protocol=request_protocol,
             headers=headers,
             body=body,
         )
