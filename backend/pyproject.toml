@@ -18,6 +18,7 @@ dependencies = [
     "tiktoken>=0.5.2",
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.6",
+    "apscheduler>=3.10.4",
 ]
 
 [dependency-groups]
