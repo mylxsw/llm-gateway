@@ -19,11 +19,28 @@ from app.common.errors import ServiceError
 from app.common.stream_usage import SSEDecoder
 
 try:
-    from litellm.llms.anthropic.chat.transformation import AnthropicConfig
-    from litellm.llms.anthropic.experimental_pass_through.transformation import (
-        AnthropicExperimentalPassThroughConfig,
-    )
-    from litellm.types.utils import ModelResponse
+    import litellm
+
+    try:
+        from litellm.llms.anthropic.chat.transformation import AnthropicConfig  # type: ignore
+    except Exception:  # pragma: no cover
+        AnthropicConfig = litellm.AnthropicConfig  # type: ignore[misc,assignment]
+
+    try:
+        from litellm.types.utils import ModelResponse  # type: ignore
+    except Exception:  # pragma: no cover
+        from litellm.utils import ModelResponse  # type: ignore
+
+    # NOTE: This module path is not available in all LiteLLM versions.
+    try:  # pragma: no cover
+        from litellm.llms.anthropic.experimental_pass_through.transformation import (  # type: ignore
+            AnthropicExperimentalPassThroughConfig,
+        )
+
+        _HAS_EXPERIMENTAL_PASSTHROUGH = True
+    except Exception:  # pragma: no cover
+        AnthropicExperimentalPassThroughConfig = None  # type: ignore[assignment]
+        _HAS_EXPERIMENTAL_PASSTHROUGH = False
 except Exception as e:  # pragma: no cover
     raise RuntimeError(
         "litellm is required for protocol conversion. "
@@ -60,6 +77,141 @@ def _map_anthropic_finish_reason_to_openai(stop_reason: Optional[str]) -> str:
     if stop_reason == "tool_use":
         return "tool_calls"
     return "stop"
+
+
+def _map_openai_finish_reason_to_anthropic(finish_reason: Optional[str]) -> str:
+    if not finish_reason:
+        return "end_turn"
+    if finish_reason == "stop":
+        return "end_turn"
+    if finish_reason == "length":
+        return "max_tokens"
+    if finish_reason == "tool_calls":
+        return "tool_use"
+    return "end_turn"
+
+
+def _translate_anthropic_to_openai_request(
+    *, anthropic_body: dict[str, Any], target_model: str
+) -> dict[str, Any]:
+    """
+    Fallback translator when LiteLLM experimental passthrough module is unavailable.
+    Covers the common text-only paths needed by this gateway.
+    """
+    system = anthropic_body.get("system")
+    messages = anthropic_body.get("messages", [])
+    if not isinstance(messages, list):
+        raise ServiceError(message="Anthropic request missing 'messages'", code="invalid_request")
+
+    openai_messages: list[dict[str, Any]] = []
+    if system is not None:
+        if isinstance(system, str):
+            system_text = system
+        elif isinstance(system, list):
+            # Anthropic allows list of system blocks; keep only text blocks.
+            parts: list[str] = []
+            for item in system:
+                if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
+                    parts.append(item["text"])
+            system_text = "\n".join(parts)
+        else:
+            system_text = str(system)
+        openai_messages.append({"role": "system", "content": system_text})
+
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        content = m.get("content")
+        if isinstance(content, str):
+            openai_messages.append({"role": role, "content": content})
+        elif isinstance(content, list):
+            text_parts: list[str] = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
+                    text_parts.append(block["text"])
+                elif isinstance(block, dict) and block.get("type") == "tool_result":
+                    # Minimal conversion: treat tool_result as tool message content.
+                    tool_call_id = block.get("tool_use_id")
+                    tool_content = block.get("content", "")
+                    if isinstance(tool_content, list):
+                        tool_text_parts: list[str] = []
+                        for item in tool_content:
+                            if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
+                                tool_text_parts.append(item["text"])
+                        tool_content = "\n".join(tool_text_parts)
+                    if tool_call_id is not None:
+                        openai_messages.append(
+                            {"role": "tool", "tool_call_id": tool_call_id, "content": tool_content}
+                        )
+            if text_parts:
+                openai_messages.append({"role": role, "content": "".join(text_parts)})
+
+    out: dict[str, Any] = {"model": target_model, "messages": openai_messages}
+    metadata = anthropic_body.get("metadata")
+    if isinstance(metadata, dict) and "user_id" in metadata:
+        out["user"] = metadata["user_id"]
+
+    passthrough_keys = [
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "stream",
+        "stop",
+        "tools",
+        "tool_choice",
+    ]
+    for k in passthrough_keys:
+        if k in anthropic_body:
+            out[k] = anthropic_body[k]
+    return out
+
+
+def _translate_openai_response_to_anthropic(body: dict[str, Any], target_model: str) -> dict[str, Any]:
+    """
+    Fallback translator when LiteLLM experimental passthrough module is unavailable.
+    Produces a basic Anthropic Messages response.
+    """
+    choices = body.get("choices") or []
+    first = choices[0] if isinstance(choices, list) and choices else {}
+    message = first.get("message") if isinstance(first, dict) else {}
+    content = ""
+    tool_calls = None
+    if isinstance(message, dict):
+        content = message.get("content") or ""
+        tool_calls = message.get("tool_calls")
+
+    anthropic_content: list[dict[str, Any]] = []
+    if tool_calls and isinstance(tool_calls, list):
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function") or {}
+            name = fn.get("name") or ""
+            args = fn.get("arguments") or "{}"
+            try:
+                inp = json.loads(args) if isinstance(args, str) else args
+            except Exception:
+                inp = {}
+            anthropic_content.append({"type": "tool_use", "id": tc.get("id"), "name": name, "input": inp})
+    if isinstance(content, str) and content:
+        anthropic_content.append({"type": "text", "text": content})
+
+    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+    input_tokens = int(usage.get("prompt_tokens") or 0)
+    output_tokens = int(usage.get("completion_tokens") or 0)
+    finish_reason = first.get("finish_reason") if isinstance(first, dict) else None
+
+    return {
+        "id": body.get("id") or f"msg_{uuid.uuid4().hex}",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model") or target_model,
+        "stop_sequence": None,
+        "stop_reason": _map_openai_finish_reason_to_anthropic(finish_reason if isinstance(finish_reason, str) else None),
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+        "content": anthropic_content,
+    }
 
 
 def convert_request_for_supplier(
@@ -119,9 +271,14 @@ def convert_request_for_supplier(
             )
         anthropic_body = copy.deepcopy(body)
         anthropic_body["model"] = target_model
-        openai_body = AnthropicExperimentalPassThroughConfig().translate_anthropic_to_openai(
-            anthropic_message_request=anthropic_body  # type: ignore[arg-type]
-        )
+        if _HAS_EXPERIMENTAL_PASSTHROUGH:
+            openai_body = AnthropicExperimentalPassThroughConfig().translate_anthropic_to_openai(  # type: ignore[union-attr]
+                anthropic_message_request=anthropic_body  # type: ignore[arg-type]
+            )
+        else:
+            openai_body = _translate_anthropic_to_openai_request(
+                anthropic_body=anthropic_body, target_model=target_model
+            )
         return "/v1/chat/completions", openai_body
 
     raise ServiceError(
@@ -150,11 +307,13 @@ def convert_response_for_user(
         return body
 
     if request_protocol == ANTHROPIC_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
-        model_response = ModelResponse(**body)
-        translated = AnthropicExperimentalPassThroughConfig().translate_openai_response_to_anthropic(
-            response=model_response
-        )
-        return translated.model_dump(exclude_none=True)
+        if _HAS_EXPERIMENTAL_PASSTHROUGH:
+            model_response = ModelResponse(**body)
+            translated = AnthropicExperimentalPassThroughConfig().translate_openai_response_to_anthropic(  # type: ignore[union-attr]
+                response=model_response
+            )
+            return translated.model_dump(exclude_none=True)
+        return _translate_openai_response_to_anthropic(body, target_model)
 
     if request_protocol == OPENAI_PROTOCOL and supplier_protocol == ANTHROPIC_PROTOCOL:
         dummy_logger = type("DummyLogger", (), {"post_call": lambda *args, **kwargs: None})()
@@ -204,7 +363,6 @@ async def convert_stream_for_user(
 
     if request_protocol == ANTHROPIC_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
         decoder = SSEDecoder()
-        cfg = AnthropicExperimentalPassThroughConfig()
 
         sent_message_start = False
         sent_content_block_start = False
@@ -252,7 +410,28 @@ async def convert_stream_for_user(
                 except Exception:
                     continue
 
-                processed = cfg.translate_streaming_openai_response_to_anthropic(response=openai_chunk)
+                if _HAS_EXPERIMENTAL_PASSTHROUGH:
+                    cfg = AnthropicExperimentalPassThroughConfig()  # type: ignore[call-arg]
+                    processed = cfg.translate_streaming_openai_response_to_anthropic(response=openai_chunk)  # type: ignore[union-attr]
+                else:
+                    # Minimal fallback: translate content delta + finish into Anthropic stream events
+                    choice = openai_chunk.choices[0] if openai_chunk.choices else None
+                    if choice is None:
+                        continue
+                    if choice.delta and getattr(choice.delta, "content", None):
+                        processed = {
+                            "type": "content_block_delta",
+                            "index": choice.index,
+                            "delta": {"type": "text_delta", "text": choice.delta.content},
+                        }
+                    elif choice.finish_reason is not None:
+                        processed = {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": _map_openai_finish_reason_to_anthropic(choice.finish_reason)},
+                            "usage": {"output_tokens": 0},
+                        }
+                    else:
+                        continue
 
                 if processed.get("type") == "message_delta" and sent_content_block_finish is False:
                     holding = processed
@@ -401,4 +580,3 @@ async def convert_stream_for_user(
         message=f"Unsupported protocol conversion: {supplier_protocol} -> {request_protocol}",
         code="unsupported_protocol_conversion",
     )
-
