@@ -18,6 +18,7 @@ from app.common.stream_usage import StreamUsageAccumulator
 from app.common.token_counter import get_token_counter
 from app.common.utils import generate_trace_id
 from app.domain.log import RequestLogCreate
+from app.domain.model import ModelMapping
 from app.domain.provider import Provider
 from app.providers import get_provider_client, ProviderResponse
 from app.repositories.model_repo import ModelRepository
@@ -66,6 +67,77 @@ class ProxyService:
         self.rule_engine = RuleEngine()
         self.strategy = strategy or RoundRobinStrategy()
         self.retry_handler = RetryHandler(self.strategy)
+
+    async def _resolve_candidates(
+        self,
+        requested_model: str,
+        headers: dict[str, str],
+        body: dict[str, Any],
+    ) -> tuple[ModelMapping, list[CandidateProvider], int, str]:
+        """
+        解析模型与供应商候选列表
+
+        Returns:
+            tuple: (model_mapping, candidates, input_tokens, protocol)
+        """
+        model_mapping = await self.model_repo.get_mapping(requested_model)
+        if not model_mapping:
+            raise NotFoundError(
+                message=f"Model '{requested_model}' is not configured",
+                code="model_not_found",
+            )
+
+        if not model_mapping.is_active:
+            raise ServiceError(
+                message=f"Model '{requested_model}' is disabled",
+                code="model_disabled",
+            )
+
+        provider_mappings = await self.model_repo.get_provider_mappings(
+            requested_model=requested_model,
+            is_active=True,
+        )
+
+        if not provider_mappings:
+            raise ServiceError(
+                message=f"No providers configured for model '{requested_model}'",
+                code="no_available_provider",
+            )
+
+        provider_ids = [pm.provider_id for pm in provider_mappings]
+        providers: dict[int, Provider] = {}
+        for pid in provider_ids:
+            provider = await self.provider_repo.get_by_id(pid)
+            if provider:
+                providers[pid] = provider
+
+        first_provider = providers.get(provider_mappings[0].provider_id)
+        protocol = first_provider.protocol if first_provider else "openai"
+        token_counter = get_token_counter(protocol)
+        messages = body.get("messages", [])
+        input_tokens = token_counter.count_messages(messages, requested_model)
+
+        context = RuleContext(
+            current_model=requested_model,
+            headers=headers,
+            request_body=body,
+            token_usage=TokenUsage(input_tokens=input_tokens),
+        )
+
+        candidates = await self.rule_engine.evaluate(
+            context=context,
+            model_mapping=model_mapping,
+            provider_mappings=provider_mappings,
+            providers=providers,
+        )
+
+        if not candidates:
+            raise ServiceError(
+                message="No providers matched the rules",
+                code="no_available_provider",
+            )
+
+        return model_mapping, candidates, input_tokens, protocol
     
     async def process_request(
         self,
@@ -106,69 +178,11 @@ class ProxyService:
             )
         
         # 2. 获取模型映射
-        model_mapping = await self.model_repo.get_mapping(requested_model)
-        if not model_mapping:
-            raise NotFoundError(
-                message=f"Model '{requested_model}' is not configured",
-                code="model_not_found",
-            )
-        
-        if not model_mapping.is_active:
-            raise ServiceError(
-                message=f"Model '{requested_model}' is disabled",
-                code="model_disabled",
-            )
-        
-        # 3. 获取模型-供应商映射
-        provider_mappings = await self.model_repo.get_provider_mappings(
+        model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
             requested_model=requested_model,
-            is_active=True,
-        )
-        
-        if not provider_mappings:
-            raise ServiceError(
-                message=f"No providers configured for model '{requested_model}'",
-                code="no_available_provider",
-            )
-        
-        # 4. 获取供应商信息
-        provider_ids = [pm.provider_id for pm in provider_mappings]
-        providers: dict[int, Provider] = {}
-        for pid in provider_ids:
-            provider = await self.provider_repo.get_by_id(pid)
-            if provider:
-                providers[pid] = provider
-        
-        # 5. 计算输入 Token
-        # 根据第一个供应商的协议确定 token 计数器
-        first_provider = providers.get(provider_mappings[0].provider_id)
-        protocol = first_provider.protocol if first_provider else "openai"
-        token_counter = get_token_counter(protocol)
-        
-        messages = body.get("messages", [])
-        input_tokens = token_counter.count_messages(messages, requested_model)
-        
-        # 6. 构建规则上下文
-        context = RuleContext(
-            current_model=requested_model,
             headers=headers,
-            request_body=body,
-            token_usage=TokenUsage(input_tokens=input_tokens),
+            body=body,
         )
-        
-        # 7. 规则引擎匹配
-        candidates = await self.rule_engine.evaluate(
-            context=context,
-            model_mapping=model_mapping,
-            provider_mappings=provider_mappings,
-            providers=providers,
-        )
-        
-        if not candidates:
-            raise ServiceError(
-                message="No providers matched the rules",
-                code="no_available_provider",
-            )
 
         # DEBUG: Print matched providers
         candidates_info = [
@@ -292,45 +306,12 @@ class ProxyService:
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(message="Model is required", code="missing_model")
-            
-        model_mapping = await self.model_repo.get_mapping(requested_model)
-        if not model_mapping:
-            raise NotFoundError(message=f"Model '{requested_model}' not found", code="model_not_found")
-            
-        if not model_mapping.is_active:
-            raise ServiceError(message=f"Model '{requested_model}' disabled", code="model_disabled")
-            
-        provider_mappings = await self.model_repo.get_provider_mappings(requested_model, True)
-        if not provider_mappings:
-            raise ServiceError(message=f"No providers for '{requested_model}'", code="no_available_provider")
-            
-        provider_ids = [pm.provider_id for pm in provider_mappings]
-        providers = {}
-        for pid in provider_ids:
-            p = await self.provider_repo.get_by_id(pid)
-            if p:
-                providers[pid] = p
-                
-        # 计算输入 token
-        first_provider = providers.get(provider_mappings[0].provider_id)
-        protocol = first_provider.protocol if first_provider else "openai"
-        token_counter = get_token_counter(protocol)
-        messages = body.get("messages", [])
-        input_tokens = token_counter.count_messages(messages, requested_model)
-        
-        context = RuleContext(
-            current_model=requested_model,
+
+        model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
+            requested_model=requested_model,
             headers=headers,
-            request_body=body,
-            token_usage=TokenUsage(input_tokens=input_tokens),
+            body=body,
         )
-        
-        candidates = await self.rule_engine.evaluate(
-            context, model_mapping, provider_mappings, providers
-        )
-        
-        if not candidates:
-            raise ServiceError(message="No matched providers", code="no_available_provider")
 
         # DEBUG: Print matched providers
         candidates_info = [
