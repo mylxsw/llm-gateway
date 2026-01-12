@@ -1,72 +1,66 @@
 """
-日志 Repository 接口
+Log Repository Interface
 
-定义请求日志数据访问的抽象接口。
+Defines the data access interface for request logs.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import List, Tuple
 
 from app.domain.log import RequestLogModel, RequestLogCreate, RequestLogQuery
 
 
 class LogRepository(ABC):
-    """
-    日志 Repository 抽象类
-    
-    定义请求日志数据访问的所有操作接口。
-    """
+    """Log Repository Interface"""
     
     @abstractmethod
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
         """
-        创建请求日志
+        Create Request Log
         
         Args:
-            data: 创建数据
-        
+            data: Log creation data
+            
         Returns:
-            RequestLogModel: 创建后的日志
+            RequestLogModel: Created log model
         """
         pass
     
     @abstractmethod
-    async def get_by_id(self, id: int) -> Optional[RequestLogModel]:
+    async def get_by_id(self, id: int) -> RequestLogModel | None:
         """
-        根据 ID 获取日志
+        Get Log Details by ID
         
         Args:
-            id: 日志 ID
-        
+            id: Log ID
+            
         Returns:
-            Optional[RequestLogModel]: 日志或 None
+            RequestLogModel | None: Log model or None
         """
         pass
     
     @abstractmethod
-    async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogModel], int]:
+    async def query(self, query: RequestLogQuery) -> Tuple[List[RequestLogModel], int]:
         """
-        查询日志列表
-
-        支持多条件过滤、分页和排序。
-
+        Query Logs
+        
         Args:
-            query: 查询条件
-
+            query: Query conditions
+            
         Returns:
-            tuple[list[RequestLogModel], int]: (日志列表, 总数)
+            Tuple[List[RequestLogModel], int]: (Log list, Total count)
         """
         pass
-
+    
     @abstractmethod
-    async def delete_older_than_days(self, days: int) -> int:
+    async def cleanup_old_logs(self, days_to_keep: int) -> int:
         """
-        删除指定天数之前的日志
-
+        Clean up old logs
+        
         Args:
-            days: 保留天数，删除 days 天之前的日志
-
+            days_to_keep: Number of days to keep logs
+            
         Returns:
-            int: 删除的日志数量
+            int: Number of deleted logs
         """
         pass

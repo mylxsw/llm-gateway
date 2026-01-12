@@ -1,7 +1,7 @@
 """
-供应商 Repository SQLAlchemy 实现
+Provider Repository SQLAlchemy Implementation
 
-提供供应商数据的具体数据库操作实现。
+Provides concrete database operation implementation for Provider data.
 """
 
 from datetime import datetime
@@ -17,29 +17,29 @@ from app.repositories.provider_repo import ProviderRepository
 
 class SQLAlchemyProviderRepository(ProviderRepository):
     """
-    供应商 Repository SQLAlchemy 实现
+    Provider Repository SQLAlchemy Implementation
     
-    使用 SQLAlchemy ORM 实现供应商的数据库操作。
+    Uses SQLAlchemy ORM to implement database operations for Providers.
     """
     
     def __init__(self, session: AsyncSession):
         """
-        初始化 Repository
+        Initialize Repository
         
         Args:
-            session: 异步数据库会话
+            session: Async database session
         """
         self.session = session
     
     def _to_domain(self, entity: ServiceProvider) -> Provider:
         """
-        将 ORM 实体转换为领域模型
+        Convert ORM entity to domain model
         
         Args:
-            entity: ORM 实体
+            entity: ORM entity
         
         Returns:
-            Provider: 领域模型
+            Provider: Domain model
         """
         return Provider(
             id=entity.id,
@@ -55,7 +55,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         )
     
     async def create(self, data: ProviderCreate) -> Provider:
-        """创建供应商"""
+        """Create Provider"""
         entity = ServiceProvider(
             name=data.name,
             base_url=data.base_url,
@@ -71,7 +71,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return self._to_domain(entity)
     
     async def get_by_id(self, id: int) -> Optional[Provider]:
-        """根据 ID 获取供应商"""
+        """Get Provider by ID"""
         result = await self.session.execute(
             select(ServiceProvider).where(ServiceProvider.id == id)
         )
@@ -79,7 +79,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return self._to_domain(entity) if entity else None
     
     async def get_by_name(self, name: str) -> Optional[Provider]:
-        """根据名称获取供应商"""
+        """Get Provider by Name"""
         result = await self.session.execute(
             select(ServiceProvider).where(ServiceProvider.name == name)
         )
@@ -92,8 +92,8 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Provider], int]:
-        """获取供应商列表"""
-        # 构建查询条件
+        """Get Provider List"""
+        # Build query
         query = select(ServiceProvider)
         count_query = select(func.count()).select_from(ServiceProvider)
         
@@ -101,11 +101,11 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             query = query.where(ServiceProvider.is_active == is_active)
             count_query = count_query.where(ServiceProvider.is_active == is_active)
         
-        # 获取总数
+        # Get total count
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0
         
-        # 分页查询
+        # Pagination
         query = query.order_by(ServiceProvider.id.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         
@@ -115,7 +115,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return [self._to_domain(e) for e in entities], total
     
     async def update(self, id: int, data: ProviderUpdate) -> Optional[Provider]:
-        """更新供应商"""
+        """Update Provider"""
         result = await self.session.execute(
             select(ServiceProvider).where(ServiceProvider.id == id)
         )
@@ -124,7 +124,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         if not entity:
             return None
         
-        # 更新非空字段
+        # Update non-null fields
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(entity, key, value)
@@ -136,7 +136,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return self._to_domain(entity)
     
     async def delete(self, id: int) -> bool:
-        """删除供应商"""
+        """Delete Provider"""
         result = await self.session.execute(
             select(ServiceProvider).where(ServiceProvider.id == id)
         )
@@ -150,7 +150,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return True
     
     async def has_model_mappings(self, id: int) -> bool:
-        """检查供应商是否有关联的模型映射"""
+        """Check if provider has associated model mappings"""
         result = await self.session.execute(
             select(func.count())
             .select_from(ModelMappingProviderORM)

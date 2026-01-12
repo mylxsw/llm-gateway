@@ -226,5 +226,5 @@ async def test_convert_stream_anthropic_to_openai():
 
     assert payloads[-1].strip() == "[DONE]"
     content_payloads = [p for p in payloads if p.strip() not in ("[DONE]", "")]
-    chunk_obj = json.loads(next(p for p in content_payloads if "\"chat.completion.chunk\"" in p))
+    chunk_obj = json.loads(next(p for p in content_payloads if '"chat.completion.chunk"' in p))
     assert chunk_obj["choices"][0]["delta"]["content"] == "Hi"

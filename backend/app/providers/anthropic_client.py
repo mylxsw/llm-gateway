@@ -1,7 +1,7 @@
 """
-Anthropic 协议客户端
+Anthropic Protocol Client
 
-实现 Anthropic 兼容的请求转发。
+Implements Anthropic-compatible request forwarding.
 """
 
 import json
@@ -19,17 +19,17 @@ logger = logging.getLogger(__name__)
 
 class AnthropicClient(ProviderClient):
     """
-    Anthropic 协议客户端
+    Anthropic Protocol Client
     
-    支持 Anthropic 风格的 API 请求转发，包括：
+    Supports Anthropic-style API request forwarding, including:
     - /v1/messages
     """
     
-    # Anthropic API 版本
+    # Anthropic API Version
     ANTHROPIC_VERSION = "2023-06-01"
     
     def __init__(self):
-        """初始化客户端"""
+        """Initialize client"""
         settings = get_settings()
         self.timeout = settings.HTTP_TIMEOUT
     
@@ -40,35 +40,35 @@ class AnthropicClient(ProviderClient):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> dict[str, str]:
         """
-        准备 Anthropic 请求头
+        Prepare Anthropic request headers
         
-        Anthropic 使用 x-api-key 头进行认证。
+        Anthropic uses x-api-key header for authentication.
         
         Args:
-            headers: 原始请求头
-            api_key: 供应商 API Key
-            extra_headers: 额外请求头
+            headers: Original request headers
+            api_key: Provider API Key
+            extra_headers: Extra headers
         
         Returns:
-            dict: 处理后的请求头
+            dict: Processed request headers
         """
         new_headers = dict(headers)
         
-        # 移除原有的认证头和自动生成的头
+        # Remove original authentication headers and auto-generated headers
         keys_to_remove = ["authorization", "x-api-key", "api-key", "content-length", "host", "content-type"]
         for key in list(new_headers.keys()):
             if key.lower() in keys_to_remove:
                 del new_headers[key]
         
-        # 添加 Anthropic 特定头
+        # Add Anthropic specific header
         if api_key:
             new_headers["x-api-key"] = api_key
         
-        # 确保设置 Anthropic 版本
+        # Ensure Anthropic version is set
         if "anthropic-version" not in [k.lower() for k in new_headers.keys()]:
             new_headers["anthropic-version"] = self.ANTHROPIC_VERSION
             
-        # 合并额外请求头（覆盖现有）
+        # Merge extra headers (overwrite existing)
         if extra_headers:
             new_headers.update(extra_headers)
         
@@ -87,21 +87,21 @@ class AnthropicClient(ProviderClient):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> ProviderResponse:
         """
-        转发请求到 Anthropic 兼容供应商
+        Forward request to Anthropic-compatible provider
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
-            target_model: 目标模型名
-            response_mode: 响应模式，"parsed" (解析 JSON) 或 "raw" (返回原始 bytes)
-            extra_headers: 额外请求头
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
+            target_model: Target model name
+            response_mode: Response mode, "parsed" (parse JSON) or "raw" (return raw bytes)
+            extra_headers: Extra headers
         
         Returns:
-            ProviderResponse: 供应商响应
+            ProviderResponse: Provider response
         """
         cleaned_base = base_url.rstrip('/')
         cleaned_path = path
@@ -193,20 +193,20 @@ class AnthropicClient(ProviderClient):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
-        转发流式请求到 Anthropic 兼容供应商
+        Forward streaming request to Anthropic-compatible provider
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
-            target_model: 目标模型名
-            extra_headers: 额外请求头
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
+            target_model: Target model name
+            extra_headers: Extra headers
         
         Yields:
-            tuple[bytes, ProviderResponse]: (数据块, 响应信息)
+            tuple[bytes, ProviderResponse]: (Data chunk, Response info)
         """
         cleaned_base = base_url.rstrip('/')
         cleaned_path = path

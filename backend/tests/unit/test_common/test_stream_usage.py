@@ -1,5 +1,5 @@
 """
-Streaming usage 解析单元测试
+Streaming Usage Parsing Unit Tests
 """
 
 from app.common.stream_usage import StreamUsageAccumulator
@@ -51,4 +51,3 @@ def test_anthropic_stream_accumulates_text_and_uses_output_tokens():
     result = acc.finalize()
     assert result.output_text == "Hi"
     assert result.output_tokens == 9
-

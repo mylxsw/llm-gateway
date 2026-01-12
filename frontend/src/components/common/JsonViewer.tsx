@@ -1,6 +1,6 @@
 /**
- * JSON 查看器组件
- * 用于格式化显示 JSON 数据，支持折叠和复制
+ * JSON Viewer Component
+ * Used to display formatted JSON data, supports collapse and copy.
  */
 
 'use client';
@@ -11,19 +11,19 @@ import { Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { copyToClipboard, cn } from '@/lib/utils';
 
 interface JsonViewerProps {
-  /** JSON 数据 */
+  /** JSON Data */
   data: unknown;
-  /** 是否默认展开 */
+  /** Whether expanded by default */
   defaultExpanded?: boolean;
-  /** 最大高度 */
+  /** Max height */
   maxHeight?: string;
-  /** 自定义类名 */
+  /** Custom class name */
   className?: string;
 }
 
 /**
- * JSON 查看器组件
- * 格式化显示 JSON 数据
+ * JSON Viewer Component
+ * Formats and displays JSON data
  */
 export function JsonViewer({
   data,
@@ -50,7 +50,7 @@ export function JsonViewer({
     return data;
   }, [data]);
 
-  // 格式化 JSON 字符串
+  // Format JSON string
   const jsonString = (() => {
     try {
       return JSON.stringify(normalizedData, null, 2) ?? String(normalizedData);
@@ -59,7 +59,7 @@ export function JsonViewer({
     }
   })();
 
-  // 复制到剪贴板
+  // Copy to clipboard
   const handleCopy = async () => {
     const success = await copyToClipboard(jsonString);
     if (success) {
@@ -70,7 +70,7 @@ export function JsonViewer({
 
   return (
     <div className={cn('relative rounded-md border bg-muted/50', className)}>
-      {/* 工具栏 */}
+      {/* Toolbar */}
       <div className="flex items-center justify-between border-b px-3 py-2">
         <button
           onClick={() => setExpanded(!expanded)}
@@ -81,7 +81,7 @@ export function JsonViewer({
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
-          <span>{expanded ? '收起' : '展开'}</span>
+          <span>{expanded ? 'Collapse' : 'Expand'}</span>
         </button>
         <Button
           variant="ghost"
@@ -92,18 +92,18 @@ export function JsonViewer({
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5 text-green-500" />
-              <span className="text-green-500">已复制</span>
+              <span className="text-green-500">Copied</span>
             </>
           ) : (
             <>
               <Copy className="h-3.5 w-3.5" />
-              <span>复制</span>
+              <span>Copy</span>
             </>
           )}
         </Button>
       </div>
 
-      {/* JSON 内容 */}
+      {/* JSON Content */}
       {expanded && (
         <pre
           className="overflow-auto p-3 text-sm"

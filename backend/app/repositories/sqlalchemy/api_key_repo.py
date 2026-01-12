@@ -1,7 +1,7 @@
 """
-API Key Repository SQLAlchemy 实现
+API Key Repository SQLAlchemy Implementation
 
-提供 API Key 的具体数据库操作实现。
+Provides concrete database operation implementation for API Keys.
 """
 
 from datetime import datetime
@@ -17,22 +17,22 @@ from app.repositories.api_key_repo import ApiKeyRepository
 
 class SQLAlchemyApiKeyRepository(ApiKeyRepository):
     """
-    API Key Repository SQLAlchemy 实现
+    API Key Repository SQLAlchemy Implementation
     
-    使用 SQLAlchemy ORM 实现 API Key 的数据库操作。
+    Uses SQLAlchemy ORM to implement database operations for API Keys.
     """
     
     def __init__(self, session: AsyncSession):
         """
-        初始化 Repository
+        Initialize Repository
         
         Args:
-            session: 异步数据库会话
+            session: Async database session
         """
         self.session = session
     
     def _to_domain(self, entity: ApiKeyORM) -> ApiKeyModel:
-        """将 ORM 实体转换为领域模型"""
+        """Convert ORM entity to domain model"""
         return ApiKeyModel(
             id=entity.id,
             key_name=entity.key_name,
@@ -43,7 +43,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         )
     
     async def create(self, data: ApiKeyCreate, key_value: str) -> ApiKeyModel:
-        """创建 API Key"""
+        """Create API Key"""
         entity = ApiKeyORM(
             key_name=data.key_name,
             key_value=key_value,
@@ -55,7 +55,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         return self._to_domain(entity)
     
     async def get_by_id(self, id: int) -> Optional[ApiKeyModel]:
-        """根据 ID 获取 API Key"""
+        """Get API Key by ID"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.id == id)
         )
@@ -63,7 +63,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         return self._to_domain(entity) if entity else None
     
     async def get_by_key_value(self, key_value: str) -> Optional[ApiKeyModel]:
-        """根据 key 值获取 API Key（用于鉴权）"""
+        """Get API Key by key value (for authentication)"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.key_value == key_value)
         )
@@ -71,7 +71,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         return self._to_domain(entity) if entity else None
     
     async def get_by_name(self, key_name: str) -> Optional[ApiKeyModel]:
-        """根据名称获取 API Key"""
+        """Get API Key by name"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.key_name == key_name)
         )
@@ -84,7 +84,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ApiKeyModel], int]:
-        """获取 API Key 列表"""
+        """Get API Key list"""
         query = select(ApiKeyORM)
         count_query = select(func.count()).select_from(ApiKeyORM)
         
@@ -92,11 +92,11 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
             query = query.where(ApiKeyORM.is_active == is_active)
             count_query = count_query.where(ApiKeyORM.is_active == is_active)
         
-        # 获取总数
+        # Get total count
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0
         
-        # 分页查询
+        # Pagination
         query = query.order_by(ApiKeyORM.id.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         
@@ -106,7 +106,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         return [self._to_domain(e) for e in entities], total
     
     async def update(self, id: int, data: ApiKeyUpdate) -> Optional[ApiKeyModel]:
-        """更新 API Key"""
+        """Update API Key"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.id == id)
         )
@@ -123,19 +123,19 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         await self.session.refresh(entity)
         return self._to_domain(entity)
     
-    async def update_last_used(self, id: int) -> None:
-        """更新 API Key 的最后使用时间"""
+    async def update_last_used(self, id: int, last_used_at: datetime) -> None:
+        """Update API Key's last used time"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.id == id)
         )
         entity = result.scalar_one_or_none()
         
         if entity:
-            entity.last_used_at = datetime.utcnow()
+            entity.last_used_at = last_used_at
             await self.session.commit()
     
     async def delete(self, id: int) -> bool:
-        """删除 API Key"""
+        """Delete API Key"""
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.id == id)
         )

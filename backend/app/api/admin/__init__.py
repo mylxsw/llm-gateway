@@ -1,5 +1,5 @@
 """
-管理接口模块初始化
+Admin API Module Initialization
 """
 
 from app.api.admin.providers import router as providers_router

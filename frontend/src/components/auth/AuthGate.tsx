@@ -1,9 +1,9 @@
 /**
- * 登录鉴权守卫
+ * Authentication Gate
  *
- * 当后端启用 ADMIN_USERNAME/ADMIN_PASSWORD 后：
- * - 未登录会自动弹出登录对话框
- * - 任意 API 返回 401 会再次唤起登录对话框
+ * When backend enables ADMIN_USERNAME/ADMIN_PASSWORD:
+ * - Automatically pops up login dialog if not logged in
+ * - Re-triggers login dialog if any API returns 401
  */
 
 'use client';
@@ -45,7 +45,7 @@ export function AuthGate() {
         }
       } catch {
         if (cancelled) return;
-        // 如果状态接口异常，不强制拦截，避免把 UI 锁死
+        // If status API fails, do not block UI forcibly
         setEnabled(false);
       }
     }
@@ -76,7 +76,7 @@ export function AuthGate() {
       setOpen(false);
       window.location.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : '登录失败');
+      setError(e instanceof Error ? e.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -86,15 +86,15 @@ export function AuthGate() {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>登录</DialogTitle>
+          <DialogTitle>Login</DialogTitle>
           <DialogDescription>
-            需要输入用户名和密码才能继续访问管理后台。
+            Username and password are required to access the admin panel.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
           <div className="grid gap-2">
-            <label className="text-sm font-medium">用户名</label>
+            <label className="text-sm font-medium">Username</label>
             <Input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -103,7 +103,7 @@ export function AuthGate() {
             />
           </div>
           <div className="grid gap-2">
-            <label className="text-sm font-medium">密码</label>
+            <label className="text-sm font-medium">Password</label>
             <Input
               type="password"
               value={password}
@@ -126,14 +126,13 @@ export function AuthGate() {
             onClick={() => handleOpenChange(false)}
             disabled={!canClose || loading}
           >
-            取消
+            Cancel
           </Button>
           <Button onClick={handleLogin} disabled={loading || !username || !password}>
-            {loading ? '登录中...' : '登录'}
+            {loading ? 'Logging in...' : 'Login'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-

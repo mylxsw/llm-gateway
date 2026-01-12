@@ -72,4 +72,3 @@ async def test_process_request_same_protocol_response_body_passthrough_bytes():
     assert response.status_code == 200
     assert response.body == b'{"id":"raw"}'
     service.log_repo.create.assert_awaited()
-

@@ -1,7 +1,7 @@
 """
-API 依赖注入模块
+API Dependency Injection Module
 
-提供 FastAPI 路由所需的依赖项。
+Provides dependencies required by FastAPI routers.
 """
 
 from typing import Annotated
@@ -31,83 +31,83 @@ from app.services import (
 
 async def get_db():
     """
-    获取数据库会话依赖
+    Get database session dependency
     
     Yields:
-        AsyncSession: 异步数据库会话
+        AsyncSession: Async database session
     """
     async for session in _get_db():
         yield session
 
 
-# 数据库会话依赖类型
+# Database session dependency type
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
-# ============ 全局单例 ============
+# ============ Global Singleton ============
 
-# 全局策略实例，确保轮询状态跨请求保持
+# Global strategy instance, ensures round-robin state is maintained across requests
 _global_strategy = RoundRobinStrategy()
 
 
-# ============ Repository 依赖 ============
+# ============ Repository Dependencies ============
 
 def get_provider_repo(db: DbSession) -> SQLAlchemyProviderRepository:
-    """获取供应商 Repository"""
+    """Get Provider Repository"""
     return SQLAlchemyProviderRepository(db)
 
 
 def get_model_repo(db: DbSession) -> SQLAlchemyModelRepository:
-    """获取模型 Repository"""
+    """Get Model Repository"""
     return SQLAlchemyModelRepository(db)
 
 
 def get_api_key_repo(db: DbSession) -> SQLAlchemyApiKeyRepository:
-    """获取 API Key Repository"""
+    """Get API Key Repository"""
     return SQLAlchemyApiKeyRepository(db)
 
 
 def get_log_repo(db: DbSession) -> SQLAlchemyLogRepository:
-    """获取日志 Repository"""
+    """Get Log Repository"""
     return SQLAlchemyLogRepository(db)
 
 
-# ============ Service 依赖 ============
+# ============ Service Dependencies ============
 
 def get_provider_service(db: DbSession) -> ProviderService:
-    """获取供应商服务"""
+    """Get Provider Service"""
     repo = SQLAlchemyProviderRepository(db)
     return ProviderService(repo)
 
 
 def get_model_service(db: DbSession) -> ModelService:
-    """获取模型服务"""
+    """Get Model Service"""
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     return ModelService(model_repo, provider_repo)
 
 
 def get_api_key_service(db: DbSession) -> ApiKeyService:
-    """获取 API Key 服务"""
+    """Get API Key Service"""
     repo = SQLAlchemyApiKeyRepository(db)
     return ApiKeyService(repo)
 
 
 def get_log_service(db: DbSession) -> LogService:
-    """获取日志服务"""
+    """Get Log Service"""
     repo = SQLAlchemyLogRepository(db)
     return LogService(repo)
 
 
 def get_proxy_service(db: DbSession) -> ProxyService:
-    """获取代理服务"""
+    """Get Proxy Service"""
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     log_repo = SQLAlchemyLogRepository(db)
     return ProxyService(model_repo, provider_repo, log_repo, strategy=_global_strategy)
 
 
-# ============ 鉴权依赖 ============
+# ============ Auth Dependencies ============
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
     if not authorization:
@@ -122,9 +122,9 @@ async def require_admin_auth(
     x_admin_token: str = Header(None, description="Admin token", alias="x-admin-token"),
 ) -> None:
     """
-    后台管理接口登录鉴权
+    Admin API Authentication
 
-    当设置了 ADMIN_USERNAME 与 ADMIN_PASSWORD 时启用鉴权，否则直接放行。
+    Enables authentication when ADMIN_USERNAME and ADMIN_PASSWORD are set, otherwise allows access.
     """
     settings = get_settings()
     if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):
@@ -157,28 +157,28 @@ async def get_current_api_key(
     x_api_key: str = Header(None, description="Anthropic style API key", alias="x-api-key"),
 ) -> ApiKeyModel:
     """
-    获取当前请求的 API Key（鉴权）
+    Get current request API Key (Authentication)
     
-    从 Authorization 头或 x-api-key 头中提取 API Key 并验证。
-    优先使用 x-api-key。
+    Extracts API Key from Authorization header or x-api-key header and verifies it.
+    Prioritizes x-api-key.
     
     Args:
-        db: 数据库会话
-        authorization: Authorization 头
-        x_api_key: x-api-key 头
+        db: Database session
+        authorization: Authorization header
+        x_api_key: x-api-key header
     
     Returns:
-        ApiKeyModel: 验证通过的 API Key
+        ApiKeyModel: Verified API Key
     
     Raises:
-        AuthenticationError: 验证失败
+        AuthenticationError: Verification failed
     """
     service = get_api_key_service(db)
     token = x_api_key or authorization
     return await service.authenticate(token or "")
 
 
-# 依赖类型别名
+# Dependency Type Aliases
 ProviderServiceDep = Annotated[ProviderService, Depends(get_provider_service)]
 ModelServiceDep = Annotated[ModelService, Depends(get_model_service)]
 ApiKeyServiceDep = Annotated[ApiKeyService, Depends(get_api_key_service)]

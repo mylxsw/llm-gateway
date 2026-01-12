@@ -5,7 +5,7 @@ from app.config import get_settings
 
 def setup_logging():
     """
-    配置全局日志格式
+    Configure global log format
     Standardize log output format for all loggers including uvicorn and third-party libraries.
     """
     settings = get_settings()

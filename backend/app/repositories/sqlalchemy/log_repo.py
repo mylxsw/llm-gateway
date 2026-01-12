@@ -1,7 +1,7 @@
 """
-日志 Repository SQLAlchemy 实现
+Log Repository SQLAlchemy Implementation
 
-提供请求日志的具体数据库操作实现。
+Provides concrete database operation implementation for request logs.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -17,22 +17,22 @@ from app.repositories.log_repo import LogRepository
 
 class SQLAlchemyLogRepository(LogRepository):
     """
-    日志 Repository SQLAlchemy 实现
+    Log Repository SQLAlchemy Implementation
     
-    使用 SQLAlchemy ORM 实现请求日志的数据库操作。
+    Uses SQLAlchemy ORM to implement database operations for request logs.
     """
     
     def __init__(self, session: AsyncSession):
         """
-        初始化 Repository
+        Initialize Repository
         
         Args:
-            session: 异步数据库会话
+            session: Async database session
         """
         self.session = session
     
     def _to_domain(self, entity: RequestLogORM) -> RequestLogModel:
-        """将 ORM 实体转换为领域模型"""
+        """Convert ORM entity to domain model"""
         return RequestLogModel(
             id=entity.id,
             request_time=entity.request_time,
@@ -58,7 +58,7 @@ class SQLAlchemyLogRepository(LogRepository):
         )
     
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
-        """创建请求日志"""
+        """Create request log"""
         entity = RequestLogORM(
             request_time=data.request_time,
             api_key_id=data.api_key_id,
@@ -87,7 +87,7 @@ class SQLAlchemyLogRepository(LogRepository):
         return self._to_domain(entity)
     
     async def get_by_id(self, id: int) -> Optional[RequestLogModel]:
-        """根据 ID 获取日志"""
+        """Get log by ID"""
         result = await self.session.execute(
             select(RequestLogORM).where(RequestLogORM.id == id)
         )
@@ -96,24 +96,24 @@ class SQLAlchemyLogRepository(LogRepository):
     
     async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogModel], int]:
         """
-        查询日志列表
+        Query log list
         
-        支持多条件过滤、分页和排序。
+        Supports multi-condition filtering, pagination, and sorting.
         """
-        # 构建基础查询
+        # Build base query
         stmt = select(RequestLogORM)
         count_stmt = select(func.count()).select_from(RequestLogORM)
         
-        # 构建过滤条件列表
+        # Build filter conditions list
         conditions = []
         
-        # 时间范围过滤
+        # Time range filter
         if query.start_time:
             conditions.append(RequestLogORM.request_time >= query.start_time)
         if query.end_time:
             conditions.append(RequestLogORM.request_time <= query.end_time)
         
-        # 模型过滤（模糊匹配）
+        # Model filter (fuzzy match)
         if query.requested_model:
             conditions.append(
                 RequestLogORM.requested_model.ilike(f"%{query.requested_model}%")
@@ -123,17 +123,17 @@ class SQLAlchemyLogRepository(LogRepository):
                 RequestLogORM.target_model.ilike(f"%{query.target_model}%")
             )
         
-        # 供应商过滤
+        # Provider filter
         if query.provider_id:
             conditions.append(RequestLogORM.provider_id == query.provider_id)
         
-        # 状态码过滤
+        # Status code filter
         if query.status_min is not None:
             conditions.append(RequestLogORM.response_status >= query.status_min)
         if query.status_max is not None:
             conditions.append(RequestLogORM.response_status <= query.status_max)
         
-        # 是否有错误
+        # Has error
         if query.has_error is not None:
             if query.has_error:
                 conditions.append(
@@ -150,7 +150,7 @@ class SQLAlchemyLogRepository(LogRepository):
                     )
                 )
         
-        # API Key 过滤
+        # API Key filter
         if query.api_key_id:
             conditions.append(RequestLogORM.api_key_id == query.api_key_id)
         if query.api_key_name:
@@ -158,60 +158,60 @@ class SQLAlchemyLogRepository(LogRepository):
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
         
-        # 重试次数过滤
+        # Retry count filter
         if query.retry_count_min is not None:
             conditions.append(RequestLogORM.retry_count >= query.retry_count_min)
         if query.retry_count_max is not None:
             conditions.append(RequestLogORM.retry_count <= query.retry_count_max)
         
-        # Token 过滤
+        # Token filter
         if query.input_tokens_min is not None:
             conditions.append(RequestLogORM.input_tokens >= query.input_tokens_min)
         if query.input_tokens_max is not None:
             conditions.append(RequestLogORM.input_tokens <= query.input_tokens_max)
         
-        # 耗时过滤
+        # Duration filter
         if query.total_time_min is not None:
             conditions.append(RequestLogORM.total_time_ms >= query.total_time_min)
         if query.total_time_max is not None:
             conditions.append(RequestLogORM.total_time_ms <= query.total_time_max)
         
-        # 应用过滤条件
+        # Apply filter conditions
         if conditions:
             stmt = stmt.where(and_(*conditions))
             count_stmt = count_stmt.where(and_(*conditions))
         
-        # 获取总数
+        # Get total count
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar() or 0
         
-        # 排序
+        # Sorting
         sort_column = getattr(RequestLogORM, query.sort_by, RequestLogORM.request_time)
         if query.sort_order == "asc":
             stmt = stmt.order_by(sort_column.asc())
         else:
             stmt = stmt.order_by(sort_column.desc())
         
-        # 分页
+        # Pagination
         stmt = stmt.offset((query.page - 1) * query.page_size).limit(query.page_size)
         
-        # 执行查询
+        # Execute query
         result = await self.session.execute(stmt)
         entities = result.scalars().all()
 
         return [self._to_domain(e) for e in entities], total
 
-    async def delete_older_than_days(self, days: int) -> int:
+    async def cleanup_old_logs(self, days_to_keep: int) -> int:
         """
-        删除指定天数之前的日志
+        Delete logs older than specified days
 
         Args:
-            days: 保留天数，删除 days 天之前的日志
+            days_to_keep: Number of days to keep logs
 
         Returns:
-            int: 删除的日志数量
+            int: Number of deleted logs
         """
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
         stmt = delete(RequestLogORM).where(RequestLogORM.request_time < cutoff_time)
         result = await self.session.execute(stmt)
         await self.session.commit()

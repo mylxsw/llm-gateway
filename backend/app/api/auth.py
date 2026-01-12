@@ -1,9 +1,9 @@
 """
-登录鉴权 API
+Authentication API
 
-当同时设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 时启用后台登录鉴权：
-- POST /auth/login：用户名密码换取 token
-- GET /auth/status：查看是否启用与是否已登录
+Enables admin authentication when both ADMIN_USERNAME and ADMIN_PASSWORD are set:
+- POST /auth/login: Exchange username and password for a token
+- GET /auth/status: Check if enabled and authenticated
 """
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -92,4 +92,3 @@ async def login(data: LoginRequest):
 @router.post("/logout")
 async def logout():
     return {"ok": True}
-

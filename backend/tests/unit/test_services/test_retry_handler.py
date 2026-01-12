@@ -1,5 +1,5 @@
 """
-重试处理器单元测试
+Retry Handler Unit Tests
 """
 
 import pytest
@@ -11,14 +11,14 @@ from app.rules.models import CandidateProvider
 
 
 class TestRetryHandler:
-    """重试处理器测试"""
+    """Retry Handler Tests"""
     
     def setup_method(self):
-        """测试前准备"""
+        """Setup before test"""
         self.strategy = RoundRobinStrategy()
         self.handler = RetryHandler(self.strategy)
         self.handler.max_retries = 3
-        self.handler.retry_delay_ms = 10  # 加快测试
+        self.handler.retry_delay_ms = 10  # Speed up test
         
         self.candidates = [
             CandidateProvider(
@@ -43,7 +43,7 @@ class TestRetryHandler:
     
     @pytest.mark.asyncio
     async def test_success_on_first_try(self):
-        """测试第一次就成功"""
+        """Test success on first attempt"""
         self.strategy.reset()
         
         async def forward_fn(candidate):
@@ -61,7 +61,7 @@ class TestRetryHandler:
     
     @pytest.mark.asyncio
     async def test_retry_on_500_error(self):
-        """测试 500 错误时重试"""
+        """Test retry on 500 error"""
         self.strategy.reset()
         call_count = 0
         
@@ -79,12 +79,12 @@ class TestRetryHandler:
         )
         
         assert result.success is True
-        assert result.retry_count == 2  # 重试了 2 次后成功
+        assert result.retry_count == 2  # Succeeded after 2 retries
         assert call_count == 3
     
     @pytest.mark.asyncio
     async def test_switch_provider_on_400_error(self):
-        """测试 400 错误时切换供应商"""
+        """Test switch provider on 400 error"""
         self.strategy.reset()
         provider_calls = []
         
@@ -102,12 +102,12 @@ class TestRetryHandler:
         
         assert result.success is True
         assert result.final_provider.provider_id == 2
-        # 第一个供应商失败后直接切换到第二个
+        # Switch to second provider immediately after first failure
         assert provider_calls == [1, 2]
     
     @pytest.mark.asyncio
     async def test_max_retries_then_switch(self):
-        """测试达到最大重试次数后切换供应商"""
+        """Test switch provider after max retries"""
         self.strategy.reset()
         provider_calls = []
         
@@ -125,12 +125,12 @@ class TestRetryHandler:
         
         assert result.success is True
         assert result.final_provider.provider_id == 2
-        # Provider1 重试 3 次后切换到 Provider2
+        # Provider1 retries 3 times then switch to Provider2
         assert provider_calls == [1, 1, 1, 2]
     
     @pytest.mark.asyncio
     async def test_all_providers_fail(self):
-        """测试所有供应商都失败"""
+        """Test all providers fail"""
         self.strategy.reset()
         
         async def forward_fn(candidate):
@@ -144,12 +144,12 @@ class TestRetryHandler:
         
         assert result.success is False
         assert result.response.status_code == 500
-        # 每个供应商重试 3 次，共 6 次
+        # Each provider retries 3 times, total 6 times
         assert result.retry_count == 6
     
     @pytest.mark.asyncio
     async def test_empty_candidates(self):
-        """测试空候选列表"""
+        """Test empty candidate list"""
         result = await self.handler.execute_with_retry(
             candidates=[],
             requested_model="test",

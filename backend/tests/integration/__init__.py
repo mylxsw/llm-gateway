@@ -1,3 +1,3 @@
 """
-集成测试模块初始化
+Integration Test Module Initialization
 """

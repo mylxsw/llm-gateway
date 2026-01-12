@@ -1,7 +1,7 @@
 """
-模型 Repository SQLAlchemy 实现
+Model Repository SQLAlchemy Implementation
 
-提供模型映射和模型-供应商映射的具体数据库操作实现。
+Provides concrete database operation implementation for Model Mappings and Model-Provider Mappings.
 """
 
 from datetime import datetime
@@ -30,22 +30,22 @@ from app.repositories.model_repo import ModelRepository
 
 class SQLAlchemyModelRepository(ModelRepository):
     """
-    模型 Repository SQLAlchemy 实现
+    Model Repository SQLAlchemy Implementation
     
-    使用 SQLAlchemy ORM 实现模型映射的数据库操作。
+    Uses SQLAlchemy ORM to implement database operations for Model Mappings.
     """
     
     def __init__(self, session: AsyncSession):
         """
-        初始化 Repository
+        Initialize Repository
         
         Args:
-            session: 异步数据库会话
+            session: Async database session
         """
         self.session = session
     
     def _mapping_to_domain(self, entity: ModelMappingORM) -> ModelMapping:
-        """将模型映射 ORM 实体转换为领域模型"""
+        """Convert Model Mapping ORM entity to domain model"""
         return ModelMapping(
             requested_model=entity.requested_model,
             strategy=entity.strategy,
@@ -62,7 +62,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         provider_name: str = "",
         provider_protocol: str | None = None,
     ) -> ModelMappingProviderResponse:
-        """将模型-供应商映射 ORM 实体转换为领域模型"""
+        """Convert Model-Provider Mapping ORM entity to domain model"""
         return ModelMappingProviderResponse(
             id=entity.id,
             requested_model=entity.requested_model,
@@ -78,10 +78,10 @@ class SQLAlchemyModelRepository(ModelRepository):
             updated_at=entity.updated_at,
         )
     
-    # ============ 模型映射操作 ============
+    # ============ Model Mapping Operations ============
     
     async def create_mapping(self, data: ModelMappingCreate) -> ModelMapping:
-        """创建模型映射"""
+        """Create Model Mapping"""
         entity = ModelMappingORM(
             requested_model=data.requested_model,
             strategy=data.strategy,
@@ -95,7 +95,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return self._mapping_to_domain(entity)
     
     async def get_mapping(self, requested_model: str) -> Optional[ModelMapping]:
-        """根据请求模型名获取模型映射"""
+        """Get Model Mapping by requested model name"""
         result = await self.session.execute(
             select(ModelMappingORM).where(
                 ModelMappingORM.requested_model == requested_model
@@ -110,7 +110,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[ModelMapping], int]:
-        """获取模型映射列表"""
+        """Get Model Mapping list"""
         query = select(ModelMappingORM)
         count_query = select(func.count()).select_from(ModelMappingORM)
         
@@ -118,11 +118,11 @@ class SQLAlchemyModelRepository(ModelRepository):
             query = query.where(ModelMappingORM.is_active == is_active)
             count_query = count_query.where(ModelMappingORM.is_active == is_active)
         
-        # 获取总数
+        # Get total count
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0
         
-        # 分页查询
+        # Pagination
         query = query.order_by(ModelMappingORM.requested_model)
         query = query.offset((page - 1) * page_size).limit(page_size)
         
@@ -134,7 +134,7 @@ class SQLAlchemyModelRepository(ModelRepository):
     async def update_mapping(
         self, requested_model: str, data: ModelMappingUpdate
     ) -> Optional[ModelMapping]:
-        """更新模型映射"""
+        """Update Model Mapping"""
         result = await self.session.execute(
             select(ModelMappingORM).where(
                 ModelMappingORM.requested_model == requested_model
@@ -156,7 +156,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return self._mapping_to_domain(entity)
     
     async def delete_mapping(self, requested_model: str) -> bool:
-        """删除模型映射（级联删除关联的供应商映射）"""
+        """Delete Model Mapping (Cascades delete associated provider mappings)"""
         result = await self.session.execute(
             select(ModelMappingORM).where(
                 ModelMappingORM.requested_model == requested_model
@@ -171,12 +171,12 @@ class SQLAlchemyModelRepository(ModelRepository):
         await self.session.commit()
         return True
     
-    # ============ 模型-供应商映射操作 ============
+    # ============ Model-Provider Mapping Operations ============
     
-    async def create_provider_mapping(
+    async def add_provider_mapping(
         self, data: ModelMappingProviderCreate
     ) -> ModelMappingProvider:
-        """创建模型-供应商映射"""
+        """Create Model-Provider Mapping"""
         entity = ModelMappingProviderORM(
             requested_model=data.requested_model,
             provider_id=data.provider_id,
@@ -190,7 +190,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         await self.session.commit()
         await self.session.refresh(entity)
         
-        # 获取供应商名称
+        # Get provider name
         provider_result = await self.session.execute(
             select(ServiceProvider).where(ServiceProvider.id == entity.provider_id)
         )
@@ -201,7 +201,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
     
     async def get_provider_mapping(self, id: int) -> Optional[ModelMappingProvider]:
-        """根据 ID 获取模型-供应商映射"""
+        """Get Model-Provider Mapping by ID"""
         result = await self.session.execute(
             select(ModelMappingProviderORM)
             .options(selectinload(ModelMappingProviderORM.provider))
@@ -222,7 +222,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         provider_id: Optional[int] = None,
         is_active: Optional[bool] = None,
     ) -> list[ModelMappingProvider]:
-        """获取模型-供应商映射列表"""
+        """Get Model-Provider Mapping list"""
         query = select(ModelMappingProviderORM).options(
             selectinload(ModelMappingProviderORM.provider)
         )
@@ -236,7 +236,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         if is_active is not None:
             query = query.where(ModelMappingProviderORM.is_active == is_active)
         
-        # 按优先级排序
+        # Sort by priority
         query = query.order_by(
             ModelMappingProviderORM.priority,
             ModelMappingProviderORM.id,
@@ -257,7 +257,7 @@ class SQLAlchemyModelRepository(ModelRepository):
     async def update_provider_mapping(
         self, id: int, data: ModelMappingProviderUpdate
     ) -> Optional[ModelMappingProvider]:
-        """更新模型-供应商映射"""
+        """Update Model-Provider Mapping"""
         result = await self.session.execute(
             select(ModelMappingProviderORM)
             .options(selectinload(ModelMappingProviderORM.provider))
@@ -282,7 +282,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
     
     async def delete_provider_mapping(self, id: int) -> bool:
-        """删除模型-供应商映射"""
+        """Delete Model-Provider Mapping"""
         result = await self.session.execute(
             select(ModelMappingProviderORM).where(ModelMappingProviderORM.id == id)
         )
@@ -296,7 +296,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return True
     
     async def get_provider_count(self, requested_model: str) -> int:
-        """获取模型关联的供应商数量"""
+        """Get the count of providers associated with the model"""
         result = await self.session.execute(
             select(func.count())
             .select_from(ModelMappingProviderORM)

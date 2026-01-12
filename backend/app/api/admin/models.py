@@ -1,7 +1,7 @@
 """
-模型管理 API
+Model Management API
 
-提供模型映射和模型-供应商映射的 CRUD 接口。
+Provides CRUD endpoints for Model Mappings and Model-Provider Mappings.
 """
 
 from typing import Optional
@@ -29,7 +29,7 @@ router = APIRouter(
 
 
 class PaginatedModelResponse(BaseModel):
-    """模型映射分页响应"""
+    """Model Mapping Pagination Response"""
     items: list[ModelMappingResponse]
     total: int
     page: int
@@ -37,22 +37,22 @@ class PaginatedModelResponse(BaseModel):
 
 
 class ModelProviderListResponse(BaseModel):
-    """模型-供应商映射列表响应"""
+    """Model-Provider Mapping List Response"""
     items: list[ModelMappingProviderResponse]
     total: int
 
 
-# ============ 模型映射接口 ============
+# ============ Model Mapping Endpoints ============
 
 @router.get("/models", response_model=PaginatedModelResponse)
 async def list_models(
     service: ModelServiceDep,
-    is_active: Optional[bool] = Query(None, description="过滤激活状态"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
 ):
     """
-    获取模型映射列表
+    Get Model Mapping List
     """
     try:
         items, total = await service.get_all_mappings(is_active, page, page_size)
@@ -72,7 +72,7 @@ async def get_model(
     service: ModelServiceDep,
 ):
     """
-    获取单个模型映射详情（含供应商配置）
+    Get single Model Mapping details (including provider configuration)
     """
     try:
         return await service.get_mapping(requested_model)
@@ -86,7 +86,7 @@ async def create_model(
     service: ModelServiceDep,
 ):
     """
-    创建模型映射
+    Create Model Mapping
     """
     try:
         return await service.create_mapping(data)
@@ -101,7 +101,7 @@ async def update_model(
     service: ModelServiceDep,
 ):
     """
-    更新模型映射
+    Update Model Mapping
     """
     try:
         return await service.update_mapping(requested_model, data)
@@ -115,7 +115,7 @@ async def delete_model(
     service: ModelServiceDep,
 ):
     """
-    删除模型映射（同时删除关联的供应商配置）
+    Delete Model Mapping (Simultaneously deletes associated provider configurations)
     """
     try:
         await service.delete_mapping(requested_model)
@@ -123,17 +123,17 @@ async def delete_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-# ============ 模型-供应商映射接口 ============
+# ============ Model-Provider Mapping Endpoints ============
 
 @router.get("/model-providers", response_model=ModelProviderListResponse)
 async def list_model_providers(
     service: ModelServiceDep,
-    requested_model: Optional[str] = Query(None, description="按模型过滤"),
-    provider_id: Optional[int] = Query(None, description="按供应商过滤"),
-    is_active: Optional[bool] = Query(None, description="过滤激活状态"),
+    requested_model: Optional[str] = Query(None, description="Filter by model"),
+    provider_id: Optional[int] = Query(None, description="Filter by provider"),
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """
-    获取模型-供应商映射列表
+    Get Model-Provider Mapping List
     """
     try:
         items = await service.get_provider_mappings(
@@ -157,7 +157,7 @@ async def create_model_provider(
     service: ModelServiceDep,
 ):
     """
-    创建模型-供应商映射
+    Create Model-Provider Mapping
     """
     try:
         return await service.create_provider_mapping(data)
@@ -172,7 +172,7 @@ async def update_model_provider(
     service: ModelServiceDep,
 ):
     """
-    更新模型-供应商映射
+    Update Model-Provider Mapping
     """
     try:
         return await service.update_provider_mapping(mapping_id, data)
@@ -186,7 +186,7 @@ async def delete_model_provider(
     service: ModelServiceDep,
 ):
     """
-    删除模型-供应商映射
+    Delete Model-Provider Mapping
     """
     try:
         await service.delete_provider_mapping(mapping_id)

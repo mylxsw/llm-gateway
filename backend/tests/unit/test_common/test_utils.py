@@ -1,5 +1,5 @@
 """
-工具函数单元测试
+Utility Functions Unit Tests
 """
 
 import pytest
@@ -14,59 +14,59 @@ from app.common.utils import (
 
 
 class TestGenerateApiKey:
-    """API Key 生成测试"""
+    """API Key Generation Tests"""
     
     def test_generate_with_default_prefix(self):
-        """测试使用默认前缀生成"""
+        """Test generation with default prefix"""
         key = generate_api_key()
         assert key.startswith("lgw-")
         assert len(key) > 10
     
     def test_generate_with_custom_prefix(self):
-        """测试使用自定义前缀生成"""
+        """Test generation with custom prefix"""
         key = generate_api_key(prefix="test-")
         assert key.startswith("test-")
     
     def test_generate_unique_keys(self):
-        """测试生成的 key 唯一性"""
+        """Test uniqueness of generated keys"""
         keys = [generate_api_key() for _ in range(100)]
         assert len(set(keys)) == 100
 
 
 class TestGenerateTraceId:
-    """Trace ID 生成测试"""
+    """Trace ID Generation Tests"""
     
     def test_generate_trace_id(self):
-        """测试生成 trace ID"""
+        """Test trace ID generation"""
         trace_id = generate_trace_id()
-        assert len(trace_id) == 36  # UUID 格式
+        assert len(trace_id) == 36  # UUID format
         assert "-" in trace_id
     
     def test_generate_unique_trace_ids(self):
-        """测试生成的 trace ID 唯一性"""
+        """Test uniqueness of generated trace IDs"""
         ids = [generate_trace_id() for _ in range(100)]
         assert len(set(ids)) == 100
 
 
 class TestExtractModelFromBody:
-    """提取模型名测试"""
+    """Extract Model from Body Tests"""
     
     def test_extract_model(self):
-        """测试提取模型名"""
+        """Test extract model name"""
         body = {"model": "gpt-4", "messages": []}
         assert extract_model_from_body(body) == "gpt-4"
     
     def test_extract_missing_model(self):
-        """测试模型名不存在"""
+        """Test extracting missing model name"""
         body = {"messages": []}
         assert extract_model_from_body(body) is None
 
 
 class TestReplaceModelInBody:
-    """替换模型名测试"""
+    """Replace Model in Body Tests"""
     
     def test_replace_model(self):
-        """测试替换模型名"""
+        """Test replace model name"""
         body = {
             "model": "gpt-4",
             "messages": [{"role": "user", "content": "Hello"}],
@@ -74,16 +74,16 @@ class TestReplaceModelInBody:
         }
         result = replace_model_in_body(body, "gpt-4-turbo")
         
-        # 只修改 model，其他保持不变
+        # Only modify model, others remain unchanged
         assert result["model"] == "gpt-4-turbo"
         assert result["messages"] == body["messages"]
         assert result["temperature"] == 0.7
         
-        # 不修改原始数据
+        # Original data not modified
         assert body["model"] == "gpt-4"
     
     def test_not_modify_other_fields(self):
-        """测试不修改其他字段"""
+        """Test not modifying other fields"""
         body = {
             "model": "gpt-4",
             "messages": [],
@@ -102,23 +102,23 @@ class TestReplaceModelInBody:
 
 
 class TestMaskString:
-    """字符串掩码测试"""
+    """String Masking Tests"""
     
     def test_mask_normal_string(self):
-        """测试普通字符串掩码"""
+        """Test normal string masking"""
         result = mask_string("abcdefghijklmnop")
         assert result.startswith("abcd")
         assert result.endswith("op")
         assert "***" in result
     
     def test_mask_short_string(self):
-        """测试短字符串掩码"""
+        """Test short string masking"""
         result = mask_string("abc")
         assert result == "***"
 
 
 class TestTryParseJsonObject:
-    """JSON 对象/数组解析测试"""
+    """JSON Object/Array Parsing Tests"""
 
     def test_parse_json_object(self):
         assert try_parse_json_object('{"type":"stream","ok":true}') == {

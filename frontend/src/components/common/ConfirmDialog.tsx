@@ -1,6 +1,6 @@
 /**
- * 确认对话框组件
- * 用于删除等危险操作的二次确认
+ * Confirmation Dialog Component
+ * Used for secondary confirmation of dangerous operations like deletion.
  */
 
 'use client';
@@ -18,37 +18,37 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmDialogProps {
-  /** 是否显示对话框 */
+  /** Whether the dialog is open */
   open: boolean;
-  /** 关闭对话框回调 */
+  /** Callback when open state changes */
   onOpenChange: (open: boolean) => void;
-  /** 确认标题 */
+  /** Confirmation title */
   title: string;
-  /** 确认描述 */
+  /** Confirmation description */
   description: string;
-  /** 确认按钮文本 */
+  /** Confirm button text */
   confirmText?: string;
-  /** 取消按钮文本 */
+  /** Cancel button text */
   cancelText?: string;
-  /** 确认回调 */
+  /** Confirmation callback */
   onConfirm: () => void;
-  /** 是否为危险操作 */
+  /** Whether it is a destructive operation */
   destructive?: boolean;
-  /** 是否加载中 */
+  /** Whether loading */
   loading?: boolean;
 }
 
 /**
- * 确认对话框组件
- * 用于需要用户确认的操作
+ * Confirmation Dialog Component
+ * Used for operations requiring user confirmation
  */
 export function ConfirmDialog({
   open,
   onOpenChange,
   title,
   description,
-  confirmText = '确认',
-  cancelText = '取消',
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
   onConfirm,
   destructive = false,
   loading = false,
@@ -88,7 +88,7 @@ export function ConfirmDialog({
             onClick={handleConfirm}
             disabled={loading}
           >
-            {loading ? '处理中...' : confirmText}
+            {loading ? 'Processing...' : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,7 @@
 """
-日志服务模块
+Log Service Module
 
-提供请求日志的业务逻辑处理。
+Provides business logic processing for request logs.
 """
 
 import logging
@@ -21,44 +21,44 @@ logger = logging.getLogger(__name__)
 
 class LogService:
     """
-    日志服务
+    Log Service
     
-    处理请求日志相关的业务逻辑。
+    Handles business logic related to request logs.
     """
     
     def __init__(self, repo: LogRepository):
         """
-        初始化服务
+        Initialize Service
         
         Args:
-            repo: 日志 Repository
+            repo: Log Repository
         """
         self.repo = repo
     
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
         """
-        创建请求日志
+        Create Request Log
         
         Args:
-            data: 创建数据
+            data: Creation data
         
         Returns:
-            RequestLogModel: 创建后的日志
+            RequestLogModel: Created log
         """
         return await self.repo.create(data)
     
     async def get_by_id(self, id: int) -> RequestLogModel:
         """
-        根据 ID 获取日志详情
+        Get Log Details by ID
         
         Args:
-            id: 日志 ID
+            id: Log ID
         
         Returns:
-            RequestLogModel: 日志详情
+            RequestLogModel: Log details
         
         Raises:
-            NotFoundError: 日志不存在
+            NotFoundError: Log not found
         """
         log = await self.repo.get_by_id(id)
         if not log:
@@ -72,17 +72,17 @@ class LogService:
         self, query: RequestLogQuery
     ) -> tuple[list[RequestLogResponse], int]:
         """
-        查询日志列表
+        Query Log List
         
         Args:
-            query: 查询条件
+            query: Query conditions
         
         Returns:
-            tuple[list[RequestLogResponse], int]: (日志列表, 总数)
+            tuple[list[RequestLogResponse], int]: (Log list, Total count)
         """
         logs, total = await self.repo.query(query)
         
-        # 转换为响应模型（列表展示不包含详细的请求/响应体）
+        # Convert to response model (list view does not include detailed request/response body)
         responses = [
             RequestLogResponse(
                 id=log.id,
@@ -109,13 +109,13 @@ class LogService:
 
     async def cleanup_old_logs(self, retention_days: int) -> int:
         """
-        清理指定天数之前的旧日志
+        Clean up old logs older than specified days
 
         Args:
-            retention_days: 保留天数
+            retention_days: Number of days to keep
 
         Returns:
-            int: 删除的日志数量
+            int: Number of deleted logs
         """
         try:
             deleted_count = await self.repo.delete_older_than_days(retention_days)

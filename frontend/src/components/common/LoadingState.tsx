@@ -1,6 +1,6 @@
 /**
- * 加载状态组件
- * 用于显示数据加载中、加载失败、数据为空等状态
+ * Loading State Component
+ * Used to display loading, error, and empty data states.
  */
 
 'use client';
@@ -11,12 +11,12 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface LoadingStateProps {
-  /** 自定义类名 */
+  /** Custom class name */
   className?: string;
 }
 
 /**
- * 加载中状态
+ * Loading Spinner
  */
 export function LoadingSpinner({ className }: LoadingStateProps) {
   return (
@@ -27,18 +27,18 @@ export function LoadingSpinner({ className }: LoadingStateProps) {
 }
 
 interface ErrorStateProps extends LoadingStateProps {
-  /** 错误消息 */
+  /** Error message */
   message?: string;
-  /** 重试回调 */
+  /** Retry callback */
   onRetry?: () => void;
 }
 
 /**
- * 错误状态
+ * Error State
  */
 export function ErrorState({
   className,
-  message = '加载失败，请稍后重试',
+  message = 'Failed to load, please try again later',
   onRetry,
 }: ErrorStateProps) {
   return (
@@ -47,7 +47,7 @@ export function ErrorState({
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-          重试
+          Retry
         </Button>
       )}
     </div>
@@ -55,20 +55,20 @@ export function ErrorState({
 }
 
 interface EmptyStateProps extends LoadingStateProps {
-  /** 空状态提示 */
+  /** Empty state message */
   message?: string;
-  /** 操作按钮文本 */
+  /** Action button text */
   actionText?: string;
-  /** 操作回调 */
+  /** Action callback */
   onAction?: () => void;
 }
 
 /**
- * 空数据状态
+ * Empty Data State
  */
 export function EmptyState({
   className,
-  message = '暂无数据',
+  message = 'No data available',
   actionText,
   onAction,
 }: EmptyStateProps) {

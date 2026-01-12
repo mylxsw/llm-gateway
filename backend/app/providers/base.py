@@ -1,7 +1,7 @@
 """
-上游供应商客户端基类
+Upstream Provider Client Base Class
 
-定义供应商客户端的抽象接口。
+Defines the abstract interface for provider clients.
 """
 
 from abc import ABC, abstractmethod
@@ -12,40 +12,40 @@ from typing import Any, AsyncGenerator, Optional
 @dataclass
 class ProviderResponse:
     """
-    供应商响应数据类
+    Provider Response Data Class
     
-    封装上游供应商的响应信息。
+    Encapsulates response information from the upstream provider.
     """
     
-    # HTTP 状态码
+    # HTTP status code
     status_code: int
-    # 响应头
+    # Response headers
     headers: dict[str, str] = field(default_factory=dict)
-    # 响应体
+    # Response body
     body: Any = None
-    # 首字节延迟（毫秒）
+    # Time to first byte (ms)
     first_byte_delay_ms: Optional[int] = None
-    # 总耗时（毫秒）
+    # Total time (ms)
     total_time_ms: Optional[int] = None
-    # 错误信息
+    # Error message
     error: Optional[str] = None
     
     @property
     def is_success(self) -> bool:
-        """是否成功响应"""
+        """Whether the response is successful"""
         return 200 <= self.status_code < 400
     
     @property
     def is_server_error(self) -> bool:
-        """是否是服务端错误（状态码 >= 500）"""
+        """Whether it is a server error (status code >= 500)"""
         return self.status_code >= 500
 
 
 class ProviderClient(ABC):
     """
-    上游供应商客户端抽象基类
+    Upstream Provider Client Abstract Base Class
     
-    定义供应商客户端的通用接口，包括普通请求和流式请求。
+    Defines the common interface for provider clients, including normal requests and streaming requests.
     """
     
     @abstractmethod
@@ -62,23 +62,23 @@ class ProviderClient(ABC):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> ProviderResponse:
         """
-        转发请求到上游供应商
+        Forward request to upstream provider
         
-        注意：只允许修改 body 中的 model 字段，其他字段原样转发。
+        Note: Only the 'model' field in the body is allowed to be modified; other fields are forwarded as-is.
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径（如 /v1/chat/completions）
-            method: HTTP 方法
-            headers: 请求头（已移除客户端 Authorization）
-            body: 请求体
-            target_model: 目标模型名
-            response_mode: 响应模式，"parsed" (解析 JSON) 或 "raw" (返回原始 bytes)
-            extra_headers: 额外请求头
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path (e.g., /v1/chat/completions)
+            method: HTTP method
+            headers: Request headers (client Authorization removed)
+            body: Request body
+            target_model: Target model name
+            response_mode: Response mode, "parsed" (parse JSON) or "raw" (return raw bytes)
+            extra_headers: Extra headers
         
         Returns:
-            ProviderResponse: 供应商响应
+            ProviderResponse: Provider response
         """
         pass
     
@@ -95,35 +95,35 @@ class ProviderClient(ABC):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
-        转发流式请求到上游供应商
+        Forward streaming request to upstream provider
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
-            target_model: 目标模型名
-            extra_headers: 额外请求头
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
+            target_model: Target model name
+            extra_headers: Extra headers
         
         Yields:
-            tuple[bytes, ProviderResponse]: (数据块, 响应信息)
+            tuple[bytes, ProviderResponse]: (Data chunk, Response info)
         """
         pass
     
     def _prepare_body(self, body: dict[str, Any], target_model: str) -> dict[str, Any]:
         """
-        准备请求体
+        Prepare request body
         
-        仅替换 model 字段，其他字段保持不变。
+        Only replaces the 'model' field, other fields remain unchanged.
         
         Args:
-            body: 原始请求体
-            target_model: 目标模型名
+            body: Original request body
+            target_model: Target model name
         
         Returns:
-            dict: 处理后的请求体（新字典）
+            dict: Processed request body (new dictionary)
         """
         new_body = body.copy()
         new_body["model"] = target_model
@@ -136,31 +136,31 @@ class ProviderClient(ABC):
         extra_headers: Optional[dict[str, str]] = None,
     ) -> dict[str, str]:
         """
-        准备请求头
+        Prepare request headers
         
-        添加供应商 API Key 到 Authorization 头。
+        Adds provider API Key to Authorization header.
         
         Args:
-            headers: 原始请求头
-            api_key: 供应商 API Key
-            extra_headers: 额外请求头
+            headers: Original request headers
+            api_key: Provider API Key
+            extra_headers: Extra headers
         
         Returns:
-            dict: 处理后的请求头（新字典）
+            dict: Processed request headers (new dictionary)
         """
         new_headers = dict(headers)
         
-        # 移除原有的认证头和自动生成的头
+        # Remove original authentication headers and auto-generated headers
         keys_to_remove = ["authorization", "x-api-key", "api-key", "content-length", "host", "content-type"]
         for key in list(new_headers.keys()):
             if key.lower() in keys_to_remove:
                 del new_headers[key]
         
-        # 添加供应商 API Key
+        # Add provider API Key
         if api_key:
             new_headers["Authorization"] = f"Bearer {api_key}"
             
-        # 合并额外请求头（覆盖现有）
+        # Merge extra headers (overwrite existing)
         if extra_headers:
             new_headers.update(extra_headers)
         

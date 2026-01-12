@@ -1,6 +1,6 @@
 /**
- * 侧边栏导航组件
- * 提供全局导航菜单
+ * Sidebar Navigation Component
+ * Provides global navigation menu
  */
 
 'use client';
@@ -18,50 +18,50 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** 导航菜单项定义 */
+/** Navigation Items Definition */
 const navItems = [
   {
-    title: '首页',
+    title: 'Home',
     href: '/',
     icon: Home,
   },
   {
-    title: '供应商管理',
+    title: 'Providers',
     href: '/providers',
     icon: Server,
   },
   {
-    title: '模型管理',
+    title: 'Models',
     href: '/models',
     icon: Layers,
   },
   {
-    title: 'API Key 管理',
+    title: 'API Keys',
     href: '/api-keys',
     icon: Key,
   },
   {
-    title: '请求日志',
+    title: 'Request Logs',
     href: '/logs',
     icon: FileText,
   },
 ];
 
 /**
- * 侧边栏导航组件
+ * Sidebar Navigation Component
  */
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
     <div className="flex w-64 flex-col border-r bg-white">
-      {/* Logo 和标题 */}
+      {/* Logo and Title */}
       <div className="flex h-16 items-center border-b px-6">
         <Settings className="h-6 w-6 text-primary" />
         <span className="ml-3 text-lg font-semibold">LLM Gateway</span>
       </div>
 
-      {/* 导航菜单 */}
+      {/* Navigation Menu */}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href ||
@@ -86,7 +86,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* 底部信息 */}
+      {/* Footer Info */}
       <div className="border-t px-6 py-4">
         <p className="text-xs text-muted-foreground">
           LLM Gateway v1.0.0

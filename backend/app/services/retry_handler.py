@@ -1,7 +1,7 @@
 """
-重试与故障切换处理器模块
+Retry and Failover Handler Module
 
-实现请求的重试和供应商切换逻辑。
+Implements logic for request retry and provider failover.
 """
 
 import asyncio
@@ -20,43 +20,43 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RetryResult:
     """
-    重试结果数据类
+    Retry Result Data Class
     
-    封装重试执行后的结果信息。
+    Encapsulates result information after retry execution.
     """
     
-    # 最终响应
+    # Final Response
     response: ProviderResponse
-    # 总重试次数
+    # Total Retry Count
     retry_count: int
-    # 最终使用的供应商
+    # Final Provider Used
     final_provider: CandidateProvider
-    # 是否成功
+    # Success Status
     success: bool
 
 
 class RetryHandler:
     """
-    重试与故障切换处理器
+    Retry and Failover Handler
     
-    实现以下重试逻辑：
-    - 状态码 >= 500：对同一供应商重试，最多 3 次，每次间隔 1000ms
-    - 状态码 < 500：直接切换到下一个供应商
-    - 所有供应商都失败：返回最后一次失败的响应
+    Implements the following retry logic:
+    - Status code >= 500: Retry on the same provider, max 3 times, 1000ms interval
+    - Status code < 500: Switch directly to the next provider
+    - All providers failed: Return the last failed response
     """
     
     def __init__(self, strategy: SelectionStrategy):
         """
-        初始化处理器
+        Initialize Handler
         
         Args:
-            strategy: 供应商选择策略
+            strategy: Provider Selection Strategy
         """
         settings = get_settings()
         self.strategy = strategy
-        # 同供应商最大重试次数
+        # Max retries on same provider
         self.max_retries = settings.RETRY_MAX_ATTEMPTS
-        # 重试间隔（毫秒）
+        # Retry interval (ms)
         self.retry_delay_ms = settings.RETRY_DELAY_MS
     
     async def execute_with_retry(
@@ -66,15 +66,15 @@ class RetryHandler:
         forward_fn: Callable[[CandidateProvider], Any],
     ) -> RetryResult:
         """
-        带重试的请求执行
+        Execute Request with Retry
         
         Args:
-            candidates: 候选供应商列表
-            requested_model: 请求的模型名
-            forward_fn: 转发函数，接受 CandidateProvider 返回 ProviderResponse
+            candidates: List of candidate providers
+            requested_model: Requested model name
+            forward_fn: Forwarding function, accepts CandidateProvider and returns ProviderResponse
         
         Returns:
-            RetryResult: 重试结果
+            RetryResult: Retry result
         """
         if not candidates:
             return RetryResult(
@@ -87,29 +87,29 @@ class RetryHandler:
                 success=False,
             )
         
-        # 记录已尝试的供应商
+        # Track tried providers
         tried_providers: set[int] = set()
         total_retry_count = 0
         last_response: Optional[ProviderResponse] = None
         last_provider: Optional[CandidateProvider] = None
         
-        # 选择第一个供应商
+        # Select the first provider
         current_provider = await self.strategy.select(candidates, requested_model)
         
         while current_provider is not None:
-            # 记录当前供应商已尝试
+            # Record current provider as tried
             tried_providers.add(current_provider.provider_id)
             last_provider = current_provider
             
-            # 同供应商重试计数
+            # Same provider retry count
             same_provider_retries = 0
             
             while same_provider_retries < self.max_retries:
-                # 执行请求
+                # Execute request
                 response = await forward_fn(current_provider)
                 last_response = response
 
-                # 成功响应
+                # Success response
                 if response.is_success:
                     return RetryResult(
                         response=response,
@@ -118,7 +118,7 @@ class RetryHandler:
                         success=True,
                     )
 
-                # 记录失败信息
+                # Log failure
                 logger.warning(
                     "Provider request failed: provider_id=%s, provider_name=%s, protocol=%s, "
                     "status_code=%s, error=%s, retry_attempt=%s/%s",
@@ -131,17 +131,17 @@ class RetryHandler:
                     self.max_retries,
                 )
 
-                # 状态码 >= 500：同供应商重试
+                # Status code >= 500: Retry on same provider
                 if response.is_server_error:
                     same_provider_retries += 1
                     total_retry_count += 1
 
                     if same_provider_retries < self.max_retries:
-                        # 等待后重试
+                        # Wait before retry
                         await asyncio.sleep(self.retry_delay_ms / 1000)
                         continue
                     else:
-                        # 达到最大重试次数，切换供应商
+                        # Max retries reached, switch provider
                         logger.warning(
                             "Max retries reached for provider: provider_id=%s, provider_name=%s, switching to next provider",
                             current_provider.provider_id,
@@ -149,7 +149,7 @@ class RetryHandler:
                         )
                         break
                 else:
-                    # 状态码 < 500：直接切换供应商
+                    # Status code < 500: Switch provider immediately
                     logger.warning(
                         "Client error from provider, switching: provider_id=%s, provider_name=%s, status_code=%s",
                         current_provider.provider_id,
@@ -159,18 +159,18 @@ class RetryHandler:
                     total_retry_count += 1
                     break
             
-            # 尝试切换到下一个供应商
+            # Try to switch to the next provider
             next_provider = await self._get_next_untried_provider(
                 candidates, tried_providers
             )
             
             if next_provider is None:
-                # 所有供应商都已尝试
+                # All providers tried
                 break
             
             current_provider = next_provider
         
-        # 所有供应商都失败
+        # All providers failed
         return RetryResult(
             response=last_response or ProviderResponse(
                 status_code=503,
@@ -188,15 +188,15 @@ class RetryHandler:
         forward_stream_fn: Callable[[CandidateProvider], Any],
     ) -> Any:
         """
-        带重试的流式请求执行
+        Execute Streaming Request with Retry
         
         Args:
-            candidates: 候选供应商列表
-            requested_model: 请求的模型名
-            forward_stream_fn: 流式转发函数
+            candidates: List of candidate providers
+            requested_model: Requested model name
+            forward_stream_fn: Streaming forwarding function
             
         Yields:
-            tuple[bytes, ProviderResponse, CandidateProvider, int]: (数据块, 响应信息, 最终供应商, 重试次数)
+            tuple[bytes, ProviderResponse, CandidateProvider, int]: (Data chunk, Response info, Final Provider, Retry Count)
         """
         if not candidates:
             yield b"", ProviderResponse(
@@ -220,21 +220,21 @@ class RetryHandler:
             
             while same_provider_retries < self.max_retries:
                 try:
-                    # 获取生成器
+                    # Get generator
                     generator = forward_stream_fn(current_provider)
-                    # 获取第一个块
+                    # Get first chunk
                     chunk, response = await anext(generator)
                     last_response = response
                     last_chunk = chunk
 
                     if response.is_success:
-                        # 成功，返回后续数据
+                        # Success, yield subsequent data
                         yield chunk, response, current_provider, total_retry_count
                         async for chunk, response in generator:
                             yield chunk, response, current_provider, total_retry_count
                         return
 
-                    # 记录失败信息
+                    # Log failure
                     logger.warning(
                         "Provider stream request failed: provider_id=%s, provider_name=%s, protocol=%s, "
                         "status_code=%s, error=%s, retry_attempt=%s/%s",
@@ -247,7 +247,7 @@ class RetryHandler:
                         self.max_retries,
                     )
 
-                    # 失败逻辑
+                    # Failure logic
                     if response.is_server_error:
                         same_provider_retries += 1
                         total_retry_count += 1
@@ -272,7 +272,7 @@ class RetryHandler:
                         break
 
                 except Exception as e:
-                    # 网络或其他异常
+                    # Network or other exceptions
                     logger.warning(
                         "Exception during stream request: provider_id=%s, provider_name=%s, protocol=%s, "
                         "exception=%s, retry_attempt=%s/%s",
@@ -303,7 +303,7 @@ class RetryHandler:
                 break
             current_provider = next_provider
             
-        # 全部失败，返回最后的错误
+        # All failed, return last error
         yield last_chunk, last_response or ProviderResponse(
             status_code=503,
             error="All providers failed",
@@ -315,14 +315,14 @@ class RetryHandler:
         tried_providers: set[int],
     ) -> Optional[CandidateProvider]:
         """
-        获取下一个未尝试的供应商
+        Get next untried provider
         
         Args:
-            candidates: 候选供应商列表
-            tried_providers: 已尝试的供应商 ID 集合
+            candidates: List of candidate providers
+            tried_providers: Set of tried provider IDs
         
         Returns:
-            Optional[CandidateProvider]: 下一个供应商
+            Optional[CandidateProvider]: Next provider
         """
         for candidate in candidates:
             if candidate.provider_id not in tried_providers:

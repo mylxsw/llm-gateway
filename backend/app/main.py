@@ -1,7 +1,7 @@
 """
-LLM Gateway 应用入口
+LLM Gateway Application Entry Point
 
-FastAPI 应用主入口，包含路由注册和应用配置。
+FastAPI application main entry, including router registration and application configuration.
 """
 
 from contextlib import asynccontextmanager
@@ -20,50 +20,50 @@ from app.api.auth import router as auth_router
 from app.scheduler import start_scheduler, shutdown_scheduler
 
 
-# 初始化日志配置
+# Initialize logging configuration
 setup_logging()
 
 
-# 应用生命周期管理
+# Application Lifecycle Management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    应用生命周期管理
+    Application Lifecycle Management
 
-    启动时初始化数据库，关闭时清理资源。
+    Initialize database on startup, clean up resources on shutdown.
     """
-    # 启动时
+    # Startup
     await init_db()
     start_scheduler()
     yield
-    # 关闭时
+    # Shutdown
     shutdown_scheduler()
 
 
-# 创建 FastAPI 应用
+# Create FastAPI application
 settings = get_settings()
 app = FastAPI(
     title=settings.APP_NAME,
-    description="兼容 OpenAI/Anthropic 的 LLM 代理网关服务",
+    description="LLM Proxy Gateway Service compatible with OpenAI/Anthropic",
     version="0.1.0",
     lifespan=lifespan,
 )
 
-# 配置 CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_origins=["*"],  # Should restrict specific domains in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# 全局异常处理
+# Global Exception Handler
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     """
-    处理应用自定义异常
+    Handle application custom exceptions
     """
     return JSONResponse(
         status_code=exc.status_code,
@@ -74,7 +74,7 @@ async def app_error_handler(request: Request, exc: AppError):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """
-    处理未捕获的异常
+    Handle uncaught exceptions
     """
     return JSONResponse(
         status_code=500,
@@ -88,13 +88,13 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# 健康检查端点
+# Health Check Endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
-    健康检查
+    Health Check
     
-    用于服务存活探测。
+    Used for service liveness probe.
     """
     return {"status": "healthy"}
 
@@ -102,25 +102,25 @@ async def health_check():
 @app.get("/", tags=["Health"])
 async def root():
     """
-    根路径
+    Root Path
     
-    返回服务基本信息。
+    Returns basic service information.
     """
     return {
         "name": settings.APP_NAME,
         "version": "0.1.0",
-        "description": "LLM Gateway - 模型路由与代理服务",
+        "description": "LLM Gateway - Model Routing & Proxy Service",
     }
 
 
-# 注册代理路由
+# Register Proxy Routers
 app.include_router(openai_router)
 app.include_router(anthropic_router)
 
-# 登录鉴权路由
+# Auth Router
 app.include_router(auth_router)
 
-# 注册管理路由
+# Register Admin Routers
 app.include_router(providers_router)
 app.include_router(models_router)
 app.include_router(api_keys_router)

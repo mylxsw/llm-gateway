@@ -1,4 +1,6 @@
-"代理核心服务模块\n\n实现请求代理的核心业务逻辑。\n"
+"Proxy Core Service Module
+
+Implements core business logic for request proxying."
 
 import json
 import asyncio
@@ -36,18 +38,18 @@ logger = logging.getLogger(__name__)
 
 class ProxyService:
     """
-    代理核心服务
+    Proxy Core Service
     
-    处理代理请求的完整流程：
-    1. 解析请求，提取 requested_model
-    2. 计算输入 Token
-    3. 规则引擎匹配，获取候选供应商
-    4. 轮询策略选择供应商
-    5. 替换 model 字段，转发请求
-    6. 处理重试和故障切换
-    7. 计算输出 Token
-    8. 记录日志
-    9. 返回响应
+    Handles the complete flow of proxy requests:
+    1. Parse request, extract requested_model
+    2. Calculate input Token
+    3. Rule engine match, get candidate providers
+    4. Round-robin strategy selects provider
+    5. Replace model field, forward request
+    6. Handle retry and failover
+    7. Calculate output Token
+    8. Record log
+    9. Return response
     """
     
     def __init__(
@@ -58,13 +60,13 @@ class ProxyService:
         strategy: Optional[SelectionStrategy] = None,
     ):
         """
-        初始化服务
+        Initialize Service
         
         Args:
-            model_repo: 模型 Repository
-            provider_repo: 供应商 Repository
-            log_repo: 日志 Repository
-            strategy: 供应商选择策略 (可选，默认使用 RoundRobinStrategy)
+            model_repo: Model Repository
+            provider_repo: Provider Repository
+            log_repo: Log Repository
+            strategy: Provider Selection Strategy (Optional, defaults to RoundRobinStrategy)
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
@@ -81,7 +83,7 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ModelMapping, list[CandidateProvider], int, str]:
         """
-        解析模型与供应商候选列表
+        Resolve model and provider candidate list
 
         Returns:
             tuple: (model_mapping, candidates, input_tokens, protocol)
@@ -163,27 +165,27 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
-        处理代理请求
+        Process Proxy Request
         
         Args:
             api_key_id: API Key ID
-            api_key_name: API Key 名称
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
+            api_key_name: API Key Name
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
         
         Returns:
-            tuple[ProviderResponse, dict]: (供应商响应, 日志信息)
+            tuple[ProviderResponse, dict]: (Provider response, Log info)
         
         Raises:
-            NotFoundError: 模型未配置
-            ServiceError: 无可用供应商
+            NotFoundError: Model not configured
+            ServiceError: No available provider
         """
         trace_id = generate_trace_id()
         request_time = datetime.utcnow()
         
-        # 1. 提取 requested_model
+        # 1. Extract requested_model
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(
@@ -191,7 +193,7 @@ class ProxyService:
                 code="missing_model",
             )
         
-        # 2. 获取模型映射
+        # 2. Get model mapping
         model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
@@ -211,7 +213,7 @@ class ProxyService:
         ]
         logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
         
-        # 8. 执行请求（带重试）
+        # 8. Execute request (with retry)
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             try:
                 client = get_provider_client(candidate.protocol)
@@ -282,21 +284,21 @@ class ProxyService:
                     total_time_ms=result.response.total_time_ms,
                 )
         
-        # 9. 计算输出 Token
+        # 9. Calculate Output Token
         output_tokens = 0
         if result.success and result.response.body:
             try:
-                # OpenAI 格式
+                # OpenAI format
                 if isinstance(result.response.body, dict):
                     usage = result.response.body.get("usage", {})
                     output_tokens = usage.get("completion_tokens", 0)
                     if not output_tokens:
-                        # Anthropic 格式
+                        # Anthropic format
                         output_tokens = usage.get("output_tokens", 0)
             except Exception:
                 pass
         
-        # 10. 记录日志
+        # 10. Record log
         log_data = RequestLogCreate(
             request_time=request_time,
             api_key_id=api_key_id,
@@ -358,24 +360,24 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ProviderResponse, AsyncGenerator[bytes, None], dict[str, Any]]:
         """
-        处理流式代理请求
+        Process Streaming Proxy Request
         
         Args:
             api_key_id: API Key ID
-            api_key_name: API Key 名称
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
+            api_key_name: API Key Name
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
         
         Returns:
-            tuple: (初始响应, 流生成器, 日志信息)
+            tuple: (Initial response, Stream generator, Log info)
         """
         trace_id = generate_trace_id()
         request_time = datetime.utcnow()
         start_monotonic = time.monotonic()
         
-        # 1-7. 同样的模型解析和规则匹配逻辑
+        # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(message="Model is required", code="missing_model")
@@ -399,7 +401,7 @@ class ProxyService:
         ]
         logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
             
-        # 8. 执行流式请求
+        # 8. Execute streaming request
         def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
                 yield b"", ProviderResponse(status_code=400, error=msg)
@@ -507,7 +509,7 @@ class ProxyService:
             candidates, requested_model, forward_stream_fn
         )
         
-        # 获取第一个块以确定状态
+        # Get first chunk to determine status
         try:
             first_chunk, initial_response, final_provider, retry_count = await anext(stream_gen)
         except StopAsyncIteration:
@@ -515,7 +517,7 @@ class ProxyService:
         except Exception as e:
             raise ServiceError(message=f"Stream connection error: {str(e)}", code="stream_error")
 
-        # 封装生成器以处理日志
+        # Wrap generator to handle logging
         async def wrapped_generator():
             usage_acc = StreamUsageAccumulator(
                 protocol=protocol,
@@ -532,7 +534,7 @@ class ProxyService:
                 stream_error = "client_disconnected"
                 raise
             except Exception as e:
-                # 记录流中断异常，但不向上抛出，避免污染 StreamingResponse 日志
+                # Log stream interruption exception, but do not throw upwards to avoid polluting StreamingResponse logs
                 stream_error = str(e)
                 return
             finally:
@@ -541,8 +543,8 @@ class ProxyService:
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
 
-                # 10. 记录日志 (流结束后)
-                # 注意：流式请求无法稳定获取完整响应体，这里仅记录输出预览（截断）
+                # 10. Record log (after stream ends)
+                # Note: Streaming requests cannot stably obtain the full response body, here only record output preview (truncated)
                 log_data = RequestLogCreate(
                     request_time=request_time,
                     api_key_id=api_key_id,
@@ -583,12 +585,12 @@ class ProxyService:
                     # Fallback for Pydantic v1
                     logger.debug(f"Request Log: {log_data.json()}")
 
-                # client disconnect 会触发取消，使用 shield 确保日志仍能写入 DB
+                # client disconnect triggers cancellation, use shield to ensure logs are written to DB
                 try:
                     with anyio.CancelScope(shield=True):
                         await self.log_repo.create(log_data)
                 except Exception:
-                    # 日志写入失败不影响主流程
+                    # Log writing failure does not affect main flow
                     pass
 
         return initial_response, wrapped_generator(), {

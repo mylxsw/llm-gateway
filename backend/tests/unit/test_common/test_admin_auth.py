@@ -76,4 +76,3 @@ async def test_require_admin_auth_enabled_requires_token(monkeypatch):
         now=int(time.time()),
     )
     await require_admin_auth(authorization=f"Bearer {token}", x_admin_token=None)
-

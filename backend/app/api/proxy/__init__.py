@@ -1,5 +1,5 @@
 """
-代理接口模块初始化
+Proxy API Module Initialization
 """
 
 from app.api.proxy.openai import router as openai_router
