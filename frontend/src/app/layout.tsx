@@ -8,6 +8,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
+import { AuthGate } from "@/components/auth";
 
 // 配置无衬线字体
 const geistSans = Geist({
@@ -42,6 +43,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
+          <AuthGate />
           <div className="flex min-h-screen">
             {/* 侧边栏导航 */}
             <Sidebar />

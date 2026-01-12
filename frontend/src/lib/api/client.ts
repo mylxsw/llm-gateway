@@ -21,17 +21,21 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 30000, // 30秒超时
 });
 
+const ADMIN_TOKEN_STORAGE_KEY = 'lgw_admin_token';
+
 /**
  * 请求拦截器
  * 可在此处添加认证 token 等
  */
 apiClient.interceptors.request.use(
   (config) => {
-    // 可在此处添加 Authorization header
-    // const token = localStorage.getItem('admin_token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    if (typeof window !== 'undefined') {
+      const token = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
     return config;
   },
   (error) => {
@@ -46,6 +50,19 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
+    const statusCode = error.response?.status;
+    const url = error.config?.url || '';
+
+    if (typeof window !== 'undefined' && statusCode === 401 && !url.includes('/auth/')) {
+      window.dispatchEvent(new CustomEvent('auth:required'));
+    }
+
+    // FastAPI 默认错误结构（HTTPException）
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string' && detail) {
+      return Promise.reject(new Error(detail));
+    }
+
     // 提取错误信息
     if (error.response?.data?.error) {
       const apiError = error.response.data.error;
@@ -54,6 +71,21 @@ apiClient.interceptors.response.use(
     return Promise.reject(new Error(error.message || '网络错误'));
   }
 );
+
+export function getStoredAdminToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+}
+
+export function setStoredAdminToken(token: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredAdminToken() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+}
 
 /**
  * 通用 GET 请求

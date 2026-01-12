@@ -16,6 +16,7 @@ from app.db.session import init_db
 from app.common.errors import AppError
 from app.api.proxy import openai_router, anthropic_router
 from app.api.admin import providers_router, models_router, api_keys_router, logs_router
+from app.api.auth import router as auth_router
 from app.scheduler import start_scheduler, shutdown_scheduler
 
 
@@ -115,6 +116,9 @@ async def root():
 # 注册代理路由
 app.include_router(openai_router)
 app.include_router(anthropic_router)
+
+# 登录鉴权路由
+app.include_router(auth_router)
 
 # 注册管理路由
 app.include_router(providers_router)

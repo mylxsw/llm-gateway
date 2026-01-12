@@ -6,15 +6,19 @@ API Key 管理 API
 
 from typing import Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import ApiKeyServiceDep
+from app.api.deps import ApiKeyServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.api_key import ApiKeyCreate, ApiKeyUpdate, ApiKeyResponse, ApiKeyCreateResponse
 
-router = APIRouter(prefix="/admin/api-keys", tags=["Admin - API Keys"])
+router = APIRouter(
+    prefix="/admin/api-keys",
+    tags=["Admin - API Keys"],
+    dependencies=[Depends(require_admin_auth)],
+)
 
 
 class PaginatedApiKeyResponse(BaseModel):

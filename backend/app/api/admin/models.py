@@ -6,11 +6,11 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import ModelServiceDep
+from app.api.deps import ModelServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.model import (
     ModelMappingCreate,
@@ -21,7 +21,11 @@ from app.domain.model import (
     ModelMappingProviderResponse,
 )
 
-router = APIRouter(prefix="/admin", tags=["Admin - Models"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Admin - Models"],
+    dependencies=[Depends(require_admin_auth)],
+)
 
 
 class PaginatedModelResponse(BaseModel):

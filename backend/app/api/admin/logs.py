@@ -7,11 +7,11 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import LogServiceDep
+from app.api.deps import LogServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
@@ -21,7 +21,11 @@ from app.domain.log import (
     RequestLogDetailResponse,
 )
 
-router = APIRouter(prefix="/admin/logs", tags=["Admin - Logs"])
+router = APIRouter(
+    prefix="/admin/logs",
+    tags=["Admin - Logs"],
+    dependencies=[Depends(require_admin_auth)],
+)
 
 
 class PaginatedLogResponse(BaseModel):

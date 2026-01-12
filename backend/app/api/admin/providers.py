@@ -6,15 +6,19 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import ProviderServiceDep
+from app.api.deps import ProviderServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.provider import ProviderCreate, ProviderUpdate, ProviderResponse
 
-router = APIRouter(prefix="/admin/providers", tags=["Admin - Providers"])
+router = APIRouter(
+    prefix="/admin/providers",
+    tags=["Admin - Providers"],
+    dependencies=[Depends(require_admin_auth)],
+)
 
 
 class PaginatedProviderResponse(BaseModel):

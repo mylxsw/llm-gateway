@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # API Key 长度（不含前缀）
     API_KEY_LENGTH: int = 32
 
+    # 管理后台登录鉴权
+    # 当同时设置 ADMIN_USERNAME 和 ADMIN_PASSWORD 时启用登录鉴权；否则不需要登录。
+    ADMIN_USERNAME: str | None = None
+    ADMIN_PASSWORD: str | None = None
+    # 管理后台登录令牌有效期（秒）
+    ADMIN_TOKEN_TTL_SECONDS: int = 86400
+
     # 日志清理配置
     # 日志保留天数（默认 7 天）
     LOG_RETENTION_DAYS: int = 7
