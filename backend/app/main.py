@@ -11,11 +11,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
+from app.logging_config import setup_logging
 from app.db.session import init_db
 from app.common.errors import AppError
 from app.api.proxy import openai_router, anthropic_router
 from app.api.admin import providers_router, models_router, api_keys_router, logs_router
 from app.scheduler import start_scheduler, shutdown_scheduler
+
+
+# 初始化日志配置
+setup_logging()
 
 
 # 应用生命周期管理
