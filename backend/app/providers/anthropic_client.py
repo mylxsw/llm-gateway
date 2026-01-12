@@ -37,6 +37,7 @@ class AnthropicClient(ProviderClient):
         self,
         headers: dict[str, str],
         api_key: Optional[str],
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> dict[str, str]:
         """
         准备 Anthropic 请求头
@@ -46,6 +47,7 @@ class AnthropicClient(ProviderClient):
         Args:
             headers: 原始请求头
             api_key: 供应商 API Key
+            extra_headers: 额外请求头
         
         Returns:
             dict: 处理后的请求头
@@ -65,6 +67,10 @@ class AnthropicClient(ProviderClient):
         # 确保设置 Anthropic 版本
         if "anthropic-version" not in [k.lower() for k in new_headers.keys()]:
             new_headers["anthropic-version"] = self.ANTHROPIC_VERSION
+            
+        # 合并额外请求头（覆盖现有）
+        if extra_headers:
+            new_headers.update(extra_headers)
         
         return new_headers
     
@@ -78,6 +84,7 @@ class AnthropicClient(ProviderClient):
         body: dict[str, Any],
         target_model: str,
         response_mode: str = "parsed",
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> ProviderResponse:
         """
         转发请求到 Anthropic 兼容供应商
@@ -90,6 +97,8 @@ class AnthropicClient(ProviderClient):
             headers: 请求头
             body: 请求体
             target_model: 目标模型名
+            response_mode: 响应模式，"parsed" (解析 JSON) 或 "raw" (返回原始 bytes)
+            extra_headers: 额外请求头
         
         Returns:
             ProviderResponse: 供应商响应
@@ -102,7 +111,7 @@ class AnthropicClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
-        prepared_headers = self._prepare_headers(headers, api_key)
+        prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         prepared_headers["Content-Type"] = "application/json"
         
         logger.debug(
@@ -181,6 +190,7 @@ class AnthropicClient(ProviderClient):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
         转发流式请求到 Anthropic 兼容供应商
@@ -193,6 +203,7 @@ class AnthropicClient(ProviderClient):
             headers: 请求头
             body: 请求体
             target_model: 目标模型名
+            extra_headers: 额外请求头
         
         Yields:
             tuple[bytes, ProviderResponse]: (数据块, 响应信息)
@@ -205,7 +216,7 @@ class AnthropicClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
-        prepared_headers = self._prepare_headers(headers, api_key)
+        prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         prepared_headers["Content-Type"] = "application/json"
         
         logger.debug(

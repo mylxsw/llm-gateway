@@ -21,6 +21,8 @@ class ProviderBase(BaseModel):
     protocol: str = Field(..., pattern="^(openai|anthropic)$", description="协议类型")
     # API 类型：chat / completion / embedding
     api_type: str = Field(..., description="API 类型")
+    # 额外请求头
+    extra_headers: Optional[dict[str, str]] = Field(None, description="额外请求头")
 
 
 class ProviderCreate(ProviderBase):
@@ -40,6 +42,7 @@ class ProviderUpdate(BaseModel):
     protocol: Optional[str] = Field(None, pattern="^(openai|anthropic)$")
     api_type: Optional[str] = None
     api_key: Optional[str] = None
+    extra_headers: Optional[dict[str, str]] = None
     is_active: Optional[bool] = None
 
 
@@ -48,6 +51,7 @@ class Provider(ProviderBase):
     
     id: int = Field(..., description="供应商 ID")
     api_key: Optional[str] = Field(None, description="供应商 API Key")
+    extra_headers: Optional[dict[str, str]] = Field(None, description="额外请求头")
     is_active: bool = Field(True, description="是否激活")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
@@ -62,6 +66,7 @@ class ProviderResponse(ProviderBase):
     id: int = Field(..., description="供应商 ID")
     # API Key 脱敏显示
     api_key: Optional[str] = Field(None, description="供应商 API Key（脱敏）")
+    extra_headers: Optional[dict[str, str]] = Field(None, description="额外请求头")
     is_active: bool = Field(True, description="是否激活")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")

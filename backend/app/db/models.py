@@ -51,6 +51,8 @@ class ServiceProvider(Base):
     api_type: Mapped[str] = mapped_column(String(50), nullable=False)
     # 供应商的 API Key（加密存储建议）
     api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 额外请求头（JSON 格式）
+    extra_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # 是否激活
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # 创建时间

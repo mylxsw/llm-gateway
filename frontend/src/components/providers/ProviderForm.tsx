@@ -5,8 +5,9 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -99,6 +100,28 @@ export function ProviderForm({
   // 监听表单值变化
   const protocol = watch('protocol');
   const isActive = watch('is_active');
+  
+  // 额外请求头状态
+  const [extraHeaders, setExtraHeaders] = useState<{ key: string; value: string }[]>([]);
+
+  // 添加请求头
+  const addHeader = () => {
+    setExtraHeaders([...extraHeaders, { key: '', value: '' }]);
+  };
+
+  // 删除请求头
+  const removeHeader = (index: number) => {
+    const newHeaders = [...extraHeaders];
+    newHeaders.splice(index, 1);
+    setExtraHeaders(newHeaders);
+  };
+
+  // 更新请求头
+  const updateHeader = (index: number, field: 'key' | 'value', value: string) => {
+    const newHeaders = [...extraHeaders];
+    newHeaders[index][field] = value;
+    setExtraHeaders(newHeaders);
+  };
 
   // 编辑模式下，填充表单数据
   useEffect(() => {
@@ -111,6 +134,18 @@ export function ProviderForm({
         api_key: '', // API Key 不回显
         is_active: provider.is_active,
       });
+      
+      // 填充额外请求头
+      if (provider.extra_headers) {
+        setExtraHeaders(
+          Object.entries(provider.extra_headers).map(([key, value]) => ({
+            key,
+            value,
+          }))
+        );
+      } else {
+        setExtraHeaders([]);
+      }
     } else {
       reset({
         name: '',
@@ -120,11 +155,20 @@ export function ProviderForm({
         api_key: '',
         is_active: true,
       });
+      setExtraHeaders([]);
     }
   }, [provider, reset]);
 
   // 提交表单
   const onFormSubmit = (data: FormData) => {
+    // 处理额外请求头
+    const headers: Record<string, string> = {};
+    extraHeaders.forEach(({ key, value }) => {
+      if (key && value) {
+        headers[key] = value;
+      }
+    });
+
     // 过滤掉空字符串
     const submitData: ProviderCreate | ProviderUpdate = {
       name: data.name,
@@ -132,6 +176,7 @@ export function ProviderForm({
       protocol: data.protocol,
       api_type: data.api_type,
       is_active: data.is_active,
+      extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
     };
     
     // 只有填写了 API Key 才提交
@@ -241,6 +286,57 @@ export function ProviderForm({
               placeholder={isEdit ? '留空则不修改' : '请输入供应商 API Key'}
               {...register('api_key')}
             />
+          </div>
+
+          {/* 额外请求头 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>额外请求头</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addHeader}
+                className="h-8 px-2"
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                添加
+              </Button>
+            </div>
+            
+            {extraHeaders.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                暂无额外请求头，点击上方按钮添加。
+              </p>
+            )}
+
+            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {extraHeaders.map((header, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Key"
+                    value={header.key}
+                    onChange={(e) => updateHeader(index, 'key', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={header.value}
+                    onChange={(e) => updateHeader(index, 'value', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeHeader(index)}
+                    className="h-9 w-9 text-destructive hover:text-destructive/90"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 状态 */}

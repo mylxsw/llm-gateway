@@ -48,6 +48,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             protocol=entity.protocol,
             api_type=entity.api_type,
             api_key=entity.api_key,
+            extra_headers=entity.extra_headers,
             is_active=entity.is_active,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
@@ -61,6 +62,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             protocol=data.protocol,
             api_type=data.api_type,
             api_key=data.api_key,
+            extra_headers=data.extra_headers,
             is_active=data.is_active,
         )
         self.session.add(entity)

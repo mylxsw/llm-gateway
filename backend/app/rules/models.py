@@ -105,5 +105,6 @@ class CandidateProvider:
     protocol: str
     api_key: Optional[str]
     target_model: str
+    extra_headers: Optional[dict[str, str]] = None
     priority: int = 0
     weight: int = 1

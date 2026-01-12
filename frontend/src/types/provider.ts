@@ -14,6 +14,7 @@ export interface Provider {
   protocol: ProtocolType;
   api_type: string;
   api_key?: string;          // 脱敏显示
+  extra_headers?: Record<string, string>;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -26,6 +27,7 @@ export interface ProviderCreate {
   protocol: ProtocolType;
   api_type: string;
   api_key?: string;
+  extra_headers?: Record<string, string>;
   is_active?: boolean;
 }
 
@@ -36,6 +38,7 @@ export interface ProviderUpdate {
   protocol?: ProtocolType;
   api_type?: string;
   api_key?: string;
+  extra_headers?: Record<string, string>;
   is_active?: boolean;
 }
 

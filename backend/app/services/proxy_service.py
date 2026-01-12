@@ -1,8 +1,4 @@
-"""
-代理核心服务模块
-
-实现请求代理的核心业务逻辑。
-"""
+"代理核心服务模块\n\n实现请求代理的核心业务逻辑。\n"
 
 import json
 import asyncio
@@ -236,6 +232,7 @@ class ProxyService:
                     body=supplier_body,
                     target_model=candidate.target_model,
                     response_mode="raw" if same_protocol else "parsed",
+                    extra_headers=candidate.extra_headers,
                 )
             except Exception as e:
                 error_msg = str(e)
@@ -452,6 +449,7 @@ class ProxyService:
                 headers=headers,
                 body=supplier_body,
                 target_model=candidate.target_model,
+                extra_headers=candidate.extra_headers,
             )
 
             async def wrapped() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
