@@ -118,7 +118,7 @@ class LogService:
             int: Number of deleted logs
         """
         try:
-            deleted_count = await self.repo.delete_older_than_days(retention_days)
+            deleted_count = await self.repo.cleanup_old_logs(retention_days)
             logger.info(
                 f"Log cleanup completed: {deleted_count} logs older than {retention_days} days deleted"
             )

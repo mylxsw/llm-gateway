@@ -218,10 +218,20 @@ class SQLAlchemyModelRepository(ModelRepository):
     
     async def get_provider_mappings(
         self,
+        requested_model: str,
+        is_active: Optional[bool] = None,
+    ) -> list[ModelMappingProviderResponse]:
+        """Get all provider mappings under a requested model"""
+        return await self.get_all_provider_mappings(
+            requested_model=requested_model, is_active=is_active
+        )
+
+    async def get_all_provider_mappings(
+        self,
         requested_model: Optional[str] = None,
         provider_id: Optional[int] = None,
         is_active: Optional[bool] = None,
-    ) -> list[ModelMappingProvider]:
+    ) -> list[ModelMappingProviderResponse]:
         """Get Model-Provider Mapping list"""
         query = select(ModelMappingProviderORM).options(
             selectinload(ModelMappingProviderORM.provider)

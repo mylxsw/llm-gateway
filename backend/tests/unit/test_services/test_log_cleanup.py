@@ -66,7 +66,7 @@ async def test_delete_older_than_days(db_session):
         )
 
     # Delete logs older than 7 days
-    deleted_count = await repo.delete_older_than_days(7)
+    deleted_count = await repo.cleanup_old_logs(7)
 
     # Verify 3 old logs deleted
     assert deleted_count == 3
@@ -101,7 +101,7 @@ async def test_delete_older_than_days_no_matching_logs(db_session):
     )
 
     # Delete logs older than 7 days (should be none)
-    deleted_count = await repo.delete_older_than_days(7)
+    deleted_count = await repo.cleanup_old_logs(7)
 
     # Verify no logs deleted
     assert deleted_count == 0
