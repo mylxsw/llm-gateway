@@ -1,6 +1,6 @@
-"Proxy Core Service Module
+"""Proxy Core Service Module
 
-Implements core business logic for request proxying."
+Implements core business logic for request proxying."""
 
 import json
 import asyncio
