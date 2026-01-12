@@ -33,9 +33,12 @@ class SQLAlchemyLogRepository(LogRepository):
     
     def _to_domain(self, entity: RequestLogORM) -> RequestLogModel:
         """Convert ORM entity to domain model"""
+        request_time = entity.request_time
+        if request_time and request_time.tzinfo is None:
+            request_time = request_time.replace(tzinfo=timezone.utc)
         return RequestLogModel(
             id=entity.id,
-            request_time=entity.request_time,
+            request_time=request_time,
             api_key_id=entity.api_key_id,
             api_key_name=entity.api_key_name,
             requested_model=entity.requested_model,

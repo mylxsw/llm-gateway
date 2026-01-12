@@ -29,6 +29,7 @@ export function formatDateTime(
   if (!dateString) return '-';
   
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '-';
   const { showTime = true, showSeconds = false } = options || {};
   
   const dateOptions: Intl.DateTimeFormatOptions = {
@@ -45,7 +46,8 @@ export function formatDateTime(
     }
   }
   
-  return date.toLocaleString('en-US', dateOptions);
+  // Use the user's current locale + timezone (browser runtime defaults).
+  return date.toLocaleString(undefined, dateOptions);
 }
 
 /**
@@ -71,7 +73,7 @@ export function formatDuration(ms: number | null | undefined): string {
  */
 export function formatNumber(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-';
-  return num.toLocaleString('en-US');
+  return num.toLocaleString(undefined);
 }
 
 /**
