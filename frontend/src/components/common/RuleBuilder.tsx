@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { Rule, RuleSet } from '@/types';
+import { Rule, RuleSet, RuleOperator } from '@/types';
 
 interface RuleBuilderProps {
   /** Rule set data */
@@ -151,7 +151,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
                 {/* Operator Selection */}
                 <Select
                   value={rule.operator}
-                  onValueChange={(val) => updateRule(index, { ...rule, operator: val })}
+                  onValueChange={(val) => updateRule(index, { ...rule, operator: val as RuleOperator })}
                   disabled={disabled}
                 >
                   <SelectTrigger>

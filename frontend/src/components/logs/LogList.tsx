@@ -83,7 +83,7 @@ export function LogList({ logs, onView }: LogListProps) {
               <TableCell>{log.provider_name}</TableCell>
               <TableCell>
                 <div className="flex flex-col items-start gap-1">
-                  <Badge variant="outline" className={statusColor.className}>
+                  <Badge variant="outline" className={statusColor}>
                     {log.response_status || 'Unknown'}
                   </Badge>
                   {log.retry_count > 0 && (

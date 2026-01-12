@@ -198,7 +198,7 @@ export function ModelForm({
               control={control}
               render={({ field }) => (
                 <RuleBuilder
-                  value={field.value}
+                  value={field.value || undefined}
                   onChange={field.onChange}
                 />
               )}

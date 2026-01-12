@@ -16,13 +16,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Clock, Server, AlertCircle, Shield, Play } from 'lucide-react';
-import { RequestLog } from '@/types';
+import { RequestLogDetail } from '@/types';
 import { formatDateTime, getStatusColor, formatDuration } from '@/lib/utils';
 import { JsonViewer } from '@/components/common/JsonViewer';
 
 interface LogDetailProps {
   /** Log data */
-  log: RequestLog | null;
+  log: RequestLogDetail | null;
   /** Whether detailed view is open */
   open: boolean;
   /** Close callback */
@@ -53,7 +53,7 @@ export function LogDetail({ log, open, onOpenChange }: LogDetailProps) {
                     <span className="font-mono">{log.trace_id}</span>
                   </DialogDescription>
                 </div>
-                <Badge className={statusColor.className}>
+                <Badge className={statusColor}>
                   {log.response_status || 'Unknown'}
                 </Badge>
               </div>
