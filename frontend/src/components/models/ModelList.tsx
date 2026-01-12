@@ -84,7 +84,7 @@ export function ModelList({
                 <div className="flex justify-end gap-2">
                   <Link href={`/models/${encodeURIComponent(model.requested_model)}`}>
                     <Button variant="ghost" size="icon" title="View Details">
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-4 w-4" suppressHydrationWarning />
                     </Button>
                   </Link>
                   <Button
@@ -93,7 +93,7 @@ export function ModelList({
                     onClick={() => onEdit(model)}
                     title="Edit"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                   <Button
                     variant="ghost"
@@ -101,7 +101,7 @@ export function ModelList({
                     onClick={() => onDelete(model)}
                     title="Delete"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
                 </div>
               </TableCell>

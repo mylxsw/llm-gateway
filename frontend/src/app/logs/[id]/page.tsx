@@ -56,7 +56,7 @@ export default function LogDetailPage() {
         <div className="flex items-center gap-4">
           <Link href="/logs">
             <Button variant="ghost" size="icon" aria-label="Back to logs">
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" suppressHydrationWarning />
             </Button>
           </Link>
           <div>

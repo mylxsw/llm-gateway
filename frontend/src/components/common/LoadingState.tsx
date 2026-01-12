@@ -21,7 +21,7 @@ interface LoadingStateProps {
 export function LoadingSpinner({ className }: LoadingStateProps) {
   return (
     <div className={cn('flex items-center justify-center py-8', className)}>
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" suppressHydrationWarning />
     </div>
   );
 }
@@ -43,7 +43,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center py-8', className)}>
-      <AlertCircle className="h-10 w-10 text-destructive" />
+      <AlertCircle className="h-10 w-10 text-destructive" suppressHydrationWarning />
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
@@ -74,7 +74,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center py-8', className)}>
-      <Inbox className="h-10 w-10 text-muted-foreground" />
+      <Inbox className="h-10 w-10 text-muted-foreground" suppressHydrationWarning />
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       {actionText && onAction && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onAction}>

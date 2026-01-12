@@ -87,7 +87,7 @@ export function LogDetail({ log }: LogDetailProps) {
             <div className="flex shrink-0 items-center gap-2 sm:justify-end">
               {log.is_stream && (
                 <span title="Stream Request">
-                  <Waves className="h-4 w-4 text-blue-500" />
+                  <Waves className="h-4 w-4 text-blue-500" suppressHydrationWarning />
                 </span>
               )}
               <Badge variant={statusVariant}>
@@ -112,12 +112,12 @@ export function LogDetail({ log }: LogDetailProps) {
             >
               {traceCopied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  <Check className="h-3.5 w-3.5 text-green-600" suppressHydrationWarning />
                   <span className="text-green-600">Copied</span>
                 </>
               ) : (
                 <>
-                  <Copy className="h-3.5 w-3.5" />
+                  <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
                   <span>Copy</span>
                 </>
               )}
@@ -128,7 +128,7 @@ export function LogDetail({ log }: LogDetailProps) {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex items-start gap-2">
-              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">Request Time</div>
                 <div className="truncate font-medium" title={log.request_time}>
@@ -137,7 +137,7 @@ export function LogDetail({ log }: LogDetailProps) {
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Server className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Server className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">Provider</div>
                 <div className="truncate font-medium" title={log.provider_name}>
@@ -146,7 +146,7 @@ export function LogDetail({ log }: LogDetailProps) {
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Shield className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">API Key</div>
                 <div className="truncate font-medium" title={log.api_key_name}>
@@ -158,7 +158,7 @@ export function LogDetail({ log }: LogDetailProps) {
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Play className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Play className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">Model Mapping</div>
                 <div className="truncate font-medium" title={modelMapping}>
@@ -207,17 +207,17 @@ export function LogDetail({ log }: LogDetailProps) {
                 <span className="text-muted-foreground">API Key</span>
                 <span className="ml-2 font-medium">{log.api_key_name || '-'}</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" suppressHydrationWarning />
               <div className="inline-flex items-center rounded-md border bg-background px-2 py-1">
                 <span className="text-muted-foreground">Provider</span>
                 <span className="ml-2 font-medium">{log.provider_name || '-'}</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" suppressHydrationWarning />
               <div className="inline-flex items-center rounded-md border bg-background px-2 py-1">
                 <span className="text-muted-foreground">Model</span>
                 <span className="ml-2 font-medium">{modelMapping}</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground" suppressHydrationWarning />
               <div className="inline-flex items-center rounded-md border bg-background px-2 py-1">
                 <span className="text-muted-foreground">Status</span>
                 <span className="ml-2 font-medium">{log.response_status ?? 'Unknown'}</span>
@@ -231,7 +231,7 @@ export function LogDetail({ log }: LogDetailProps) {
         <Card className="border-red-200 bg-red-50/50">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base text-red-700">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="h-4 w-4" suppressHydrationWarning />
               Error
             </CardTitle>
           </CardHeader>

@@ -299,7 +299,7 @@ export function ProviderForm({
                 onClick={addHeader}
                 className="h-8 px-2"
               >
-                <Plus className="mr-1 h-3 w-3" />
+                <Plus className="mr-1 h-3 w-3" suppressHydrationWarning />
                 Add
               </Button>
             </div>
@@ -332,7 +332,7 @@ export function ProviderForm({
                     onClick={() => removeHeader(index)}
                     className="h-9 w-9 text-destructive hover:text-destructive/90"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                 </div>
               ))}

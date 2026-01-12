@@ -57,7 +57,7 @@ export function Sidebar() {
     <div className="flex w-64 flex-col border-r bg-white">
       {/* Logo and Title */}
       <div className="flex h-16 items-center border-b px-6">
-        <Settings className="h-6 w-6 text-primary" />
+        <Settings className="h-6 w-6 text-primary" suppressHydrationWarning />
         <span className="ml-3 text-lg font-semibold">LLM Gateway</span>
       </div>
 
@@ -79,7 +79,7 @@ export function Sidebar() {
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-5 w-5" suppressHydrationWarning />
               {item.title}
             </Link>
           );

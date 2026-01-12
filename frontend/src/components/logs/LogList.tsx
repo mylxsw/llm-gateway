@@ -68,7 +68,7 @@ export function LogList({ logs, onView }: LogListProps) {
                     {log.requested_model}
                     {log.requested_model !== log.target_model && (
                       <>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
                         <span className="text-muted-foreground">
                           {log.target_model}
                         </span>
@@ -117,7 +117,7 @@ export function LogList({ logs, onView }: LogListProps) {
                   <span className="text-muted-foreground">/</span>
                   {log.is_stream ? (
                     <span title="Stream Request">
-                      <Waves className="h-4 w-4 text-blue-500" />
+                      <Waves className="h-4 w-4 text-blue-500" suppressHydrationWarning />
                     </span>
                   ) : (
                     <span className="text-muted-foreground">-</span>
@@ -131,7 +131,7 @@ export function LogList({ logs, onView }: LogListProps) {
                   onClick={() => onView(log)}
                   title="View Details"
                 >
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-4 w-4" suppressHydrationWarning />
                 </Button>
               </TableCell>
             </TableRow>

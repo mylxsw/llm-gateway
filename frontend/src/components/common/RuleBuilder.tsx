@@ -192,7 +192,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
                       onClick={() => removeRule(index)}
                       className="text-muted-foreground hover:text-destructive"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4" suppressHydrationWarning />
                     </Button>
                   )}
                 </div>
@@ -217,7 +217,7 @@ export function RuleBuilder({ value, onChange, disabled }: RuleBuilderProps) {
             onClick={addRule}
             className="w-full border-dashed"
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
             Add Rule
           </Button>
         )}

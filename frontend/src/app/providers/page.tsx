@@ -107,7 +107,7 @@ export default function ProvidersPage() {
           </p>
         </div>
         <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
           Add Provider
         </Button>
       </div>

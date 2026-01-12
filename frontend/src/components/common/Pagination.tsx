@@ -85,7 +85,7 @@ export function Pagination({
           disabled={!canPreviousPage}
           title="First Page"
         >
-          <ChevronsLeft className="h-4 w-4" />
+          <ChevronsLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
         {/* Previous Page */}
@@ -96,7 +96,7 @@ export function Pagination({
           disabled={!canPreviousPage}
           title="Previous Page"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
         {/* Page Number Display */}
@@ -126,7 +126,7 @@ export function Pagination({
           disabled={!canNextPage}
           title="Next Page"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
         {/* Last Page */}
@@ -137,7 +137,7 @@ export function Pagination({
           disabled={!canNextPage}
           title="Last Page"
         >
-          <ChevronsRight className="h-4 w-4" />
+          <ChevronsRight className="h-4 w-4" suppressHydrationWarning />
         </Button>
       </div>
     </div>

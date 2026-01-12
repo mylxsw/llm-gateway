@@ -149,7 +149,7 @@ export default function ModelDetailPage() {
       <div className="flex items-center gap-4">
         <Link href="/models">
           <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" suppressHydrationWarning />
           </Button>
         </Link>
         <div>
@@ -214,7 +214,7 @@ export default function ModelDetailPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Provider Configuration</CardTitle>
           <Button onClick={handleAddProvider} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
             Add Provider
           </Button>
         </CardHeader>
@@ -281,7 +281,7 @@ export default function ModelDetailPage() {
                             onClick={() => handleEditMapping(mapping)}
                             title="Edit"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" suppressHydrationWarning />
                           </Button>
                           <Button
                             variant="ghost"
@@ -289,7 +289,7 @@ export default function ModelDetailPage() {
                             onClick={() => handleDeleteMapping(mapping)}
                             title="Delete"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                           </Button>
                         </div>
                       </TableCell>

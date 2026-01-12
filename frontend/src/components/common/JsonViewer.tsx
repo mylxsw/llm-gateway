@@ -77,9 +77,9 @@ export function JsonViewer({
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           {expanded ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4" suppressHydrationWarning />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" suppressHydrationWarning />
           )}
           <span>{expanded ? 'Collapse' : 'Expand'}</span>
         </button>
@@ -91,12 +91,12 @@ export function JsonViewer({
         >
           {copied ? (
             <>
-              <Check className="h-3.5 w-3.5 text-green-500" />
+              <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
               <span className="text-green-500">Copied</span>
             </>
           ) : (
             <>
-              <Copy className="h-3.5 w-3.5" />
+              <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
               <span>Copy</span>
             </>
           )}

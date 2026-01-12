@@ -131,7 +131,7 @@ export function ApiKeyForm({
           
           <div className="space-y-4">
             <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
-              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              <AlertCircle className="h-5 w-5 text-yellow-500" suppressHydrationWarning />
               <span className="text-sm text-muted-foreground">
                 This is the only time the full Key will be displayed
               </span>
@@ -156,9 +156,9 @@ export function ApiKeyForm({
                   onClick={handleCopy}
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check className="h-4 w-4 text-green-500" suppressHydrationWarning />
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Copy className="h-4 w-4" suppressHydrationWarning />
                   )}
                 </Button>
               </div>

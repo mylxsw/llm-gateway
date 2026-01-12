@@ -83,7 +83,7 @@ export function ProviderList({
                     onClick={() => onEdit(provider)}
                     title="Edit"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                   <Button
                     variant="ghost"
@@ -91,7 +91,7 @@ export function ProviderList({
                     onClick={() => onDelete(provider)}
                     title="Delete"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
                 </div>
               </TableCell>

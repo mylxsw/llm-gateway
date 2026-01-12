@@ -93,9 +93,9 @@ export function ApiKeyList({
                     title={isVisible ? 'Hide' : 'Show'}
                   >
                     {isVisible ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-3.5 w-3.5" suppressHydrationWarning />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="h-3.5 w-3.5" suppressHydrationWarning />
                     )}
                   </Button>
                   <Button
@@ -106,9 +106,9 @@ export function ApiKeyList({
                     title="Copy"
                   >
                     {isCopied ? (
-                      <Check className="h-3.5 w-3.5 text-green-500" />
+                      <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
                     ) : (
-                      <Copy className="h-3.5 w-3.5" />
+                      <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
                     )}
                   </Button>
                 </div>
@@ -130,7 +130,7 @@ export function ApiKeyList({
                     onClick={() => onEdit(apiKey)}
                     title="Edit"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                   <Button
                     variant="ghost"
@@ -138,7 +138,7 @@ export function ApiKeyList({
                     onClick={() => onDelete(apiKey)}
                     title="Delete"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
                 </div>
               </TableCell>

@@ -232,11 +232,11 @@ export function LogFilters({
 
           <div className="flex items-end justify-end gap-2">
             <Button type="button" variant="outline" onClick={onReset}>
-              <X className="mr-2 h-4 w-4" />
+              <X className="mr-2 h-4 w-4" suppressHydrationWarning />
               Reset
             </Button>
             <Button type="submit">
-              <Filter className="mr-2 h-4 w-4" />
+              <Filter className="mr-2 h-4 w-4" suppressHydrationWarning />
               Filter
             </Button>
             <Button
@@ -248,9 +248,9 @@ export function LogFilters({
               onClick={() => setShowAdvanced((v) => !v)}
             >
               {showAdvanced ? (
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-4 w-4" suppressHydrationWarning />
               ) : (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-4 w-4" suppressHydrationWarning />
               )}
             </Button>
           </div>
