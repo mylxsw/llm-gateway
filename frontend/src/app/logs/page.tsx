@@ -1,6 +1,6 @@
 /**
- * 请求日志页面
- * 提供日志列表展示和多条件筛选查询
+ * Request Log Page
+ * Provides log list display and multi-condition filtering
  */
 
 'use client';
@@ -12,7 +12,7 @@ import { Pagination, LoadingSpinner, ErrorState, EmptyState } from '@/components
 import { useLogs, useProviders } from '@/lib/hooks';
 import { LogQueryParams } from '@/types';
 
-/** 默认筛选参数 */
+/** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
   page: 1,
   page_size: 20,
@@ -21,79 +21,88 @@ const DEFAULT_FILTERS: LogQueryParams = {
 };
 
 /**
- * 请求日志页面组件
+ * Request Log Page Component
  */
 export default function LogsPage() {
-  // 筛选参数状态
+  // Filter parameters state
   const [filters, setFilters] = useState<LogQueryParams>(DEFAULT_FILTERS);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useLogs(filters);
   const { data: providersData } = useProviders({ is_active: true });
 
-  // 执行搜索
+  // Execute Search
   const handleSearch = useCallback(() => {
-    // 重置页码到第一页
+    // Reset page to 1
     setFilters((prev) => ({ ...prev, page: 1 }));
     refetch();
   }, [refetch]);
 
-  // 重置筛选条件
+  // Reset Filters
   const handleReset = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
   }, []);
 
-  // 页码改变
+  // Page Change
   const handlePageChange = useCallback((page: number) => {
     setFilters((prev) => ({ ...prev, page }));
   }, []);
 
-  // 每页数量改变
+  // Page Size Change
   const handlePageSizeChange = useCallback((pageSize: number) => {
     setFilters((prev) => ({ ...prev, page_size: pageSize, page: 1 }));
   }, []);
 
+  // Handle filter change from LogFilters component
+  const handleFilterChange = useCallback((newFilters: Partial<LogQueryParams>) => {
+    setFilters((prev) => ({ ...prev, ...newFilters, page: 1 })); // Reset to page 1 on filter change
+  }, []);
+
+  // View Log Detail
+  const handleViewLog = useCallback((log: any) => {
+    // Navigate to log detail page
+    window.location.href = `/logs/${log.id}`;
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
+      {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">请求日志</h1>
+        <h1 className="text-2xl font-bold">Request Logs</h1>
         <p className="mt-1 text-muted-foreground">
-          查看代理请求日志，支持多条件筛选查询
+          View proxy request logs, supports multi-condition filtering
         </p>
       </div>
 
-      {/* 筛选器 */}
+      {/* Filters */}
       <LogFilters
         filters={filters}
-        onFiltersChange={setFilters}
+        onFilterChange={handleFilterChange}
         providers={providersData?.items || []}
-        onSearch={handleSearch}
-        onReset={handleReset}
       />
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>日志列表</CardTitle>
+          <CardTitle>Log List</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载日志列表失败"
+              message="Failed to load log list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
-            <EmptyState message="暂无符合条件的日志记录" />
+            <EmptyState message="No matching log records found" />
           )}
           
           {!isLoading && !isError && data && data.items.length > 0 && (
             <>
-              <LogList logs={data.items} />
+              <LogList logs={data.items} onView={handleViewLog} />
               <Pagination
                 page={filters.page || 1}
                 pageSize={filters.page_size || 20}

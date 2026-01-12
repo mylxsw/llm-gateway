@@ -1,6 +1,6 @@
 /**
- * 日志查询 API 接口
- * 对应后端 /admin/logs 路由
+ * Log Query API
+ * Corresponds to backend /admin/logs route
  */
 
 import { get } from './client';
@@ -14,14 +14,14 @@ import {
 const BASE_URL = '/admin/logs';
 
 /**
- * 查询请求日志列表
- * 支持多条件筛选、分页、排序
- * @param params - 查询参数
+ * Query Request Logs List
+ * Supports multi-condition filtering, pagination, sorting
+ * @param params - Query parameters
  */
 export async function getLogs(
   params?: LogQueryParams
 ): Promise<PaginatedResponse<RequestLog>> {
-  // 过滤掉 undefined 值
+  // Filter out undefined values
   const cleanParams = params
     ? Object.fromEntries(
         Object.entries(params).filter(([, v]) => v !== undefined && v !== '')
@@ -31,9 +31,9 @@ export async function getLogs(
 }
 
 /**
- * 获取日志详情
- * 包含完整的请求头、请求体、响应体、错误信息
- * @param id - 日志 ID
+ * Get Log Details
+ * Includes full request/response info
+ * @param id - Log ID
  */
 export async function getLogDetail(id: number): Promise<RequestLogDetail> {
   return get<RequestLogDetail>(`${BASE_URL}/${id}`);

@@ -1,5 +1,5 @@
 /**
- * 登录鉴权相关 API
+ * Auth Related API
  */
 
 import { get, post } from './client';
@@ -26,4 +26,3 @@ export async function login(username: string, password: string): Promise<LoginRe
 export async function logout(): Promise<{ ok: boolean }> {
   return post<{ ok: boolean }>('/auth/logout');
 }
-

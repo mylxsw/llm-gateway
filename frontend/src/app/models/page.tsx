@@ -1,6 +1,6 @@
 /**
- * 模型管理页面
- * 提供模型映射的列表展示和 CRUD 操作
+ * Model Management Page
+ * Provides model mapping list display and CRUD operations
  */
 
 'use client';
@@ -20,22 +20,22 @@ import {
 import { ModelMapping, ModelMappingCreate, ModelMappingUpdate } from '@/types';
 
 /**
- * 模型管理页面组件
+ * Model Management Page Component
  */
 export default function ModelsPage() {
-  // 分页状态
+  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // 表单对话框状态
+  // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ModelMapping | null>(null);
 
-  // 删除确认对话框状态
+  // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingModel, setDeletingModel] = useState<ModelMapping | null>(null);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useModels({
     page,
     page_size: pageSize,
@@ -46,45 +46,45 @@ export default function ModelsPage() {
   const updateMutation = useUpdateModel();
   const deleteMutation = useDeleteModel();
 
-  // 打开新建表单
+  // Open create form
   const handleCreate = () => {
     setEditingModel(null);
     setFormOpen(true);
   };
 
-  // 打开编辑表单
+  // Open edit form
   const handleEdit = (model: ModelMapping) => {
     setEditingModel(model);
     setFormOpen(true);
   };
 
-  // 打开删除确认
+  // Open delete confirmation
   const handleDelete = (model: ModelMapping) => {
     setDeletingModel(model);
     setDeleteDialogOpen(true);
   };
 
-  // 提交表单
+  // Submit form
   const handleSubmit = async (formData: ModelMappingCreate | ModelMappingUpdate) => {
     try {
       if (editingModel) {
-        // 更新
+        // Update
         await updateMutation.mutateAsync({
           requestedModel: editingModel.requested_model,
           data: formData as ModelMappingUpdate,
         });
       } else {
-        // 创建
+        // Create
         await createMutation.mutateAsync(formData as ModelMappingCreate);
       }
       setFormOpen(false);
       setEditingModel(null);
     } catch (error) {
-      console.error('保存失败:', error);
+      console.error('Save failed:', error);
     }
   };
 
-  // 确认删除
+  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!deletingModel) return;
     try {
@@ -92,45 +92,45 @@ export default function ModelsPage() {
       setDeleteDialogOpen(false);
       setDeletingModel(null);
     } catch (error) {
-      console.error('删除失败:', error);
+      console.error('Delete failed:', error);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
+      {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">模型管理</h1>
+          <h1 className="text-2xl font-bold">Model Management</h1>
           <p className="mt-1 text-muted-foreground">
-            配置模型映射规则和供应商
+            Configure model mapping rules and providers
           </p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          新增模型
+          Add Model
         </Button>
       </div>
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>模型映射列表</CardTitle>
+          <CardTitle>Model Mapping List</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载模型列表失败"
+              message="Failed to load model list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="暂无模型配置"
-              actionText="新增模型"
+              message="No model configurations found"
+              actionText="Add Model"
               onAction={handleCreate}
             />
           )}
@@ -154,7 +154,7 @@ export default function ModelsPage() {
         </CardContent>
       </Card>
 
-      {/* 新建/编辑表单 */}
+      {/* Create/Edit Form */}
       <ModelForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -163,13 +163,13 @@ export default function ModelsPage() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* 删除确认对话框 */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="删除模型映射"
-        description={`确定要删除模型「${deletingModel?.requested_model}」吗？这将同时删除所有关联的供应商配置。`}
-        confirmText="删除"
+        title="Delete Model Mapping"
+        description={`Are you sure you want to delete model "${deletingModel?.requested_model}"? This will also delete all associated provider configurations.`}
+        confirmText="Delete"
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

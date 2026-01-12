@@ -1,6 +1,6 @@
 /**
- * 供应商相关 React Query Hooks
- * 提供数据获取、缓存和状态管理
+ * Provider Related React Query Hooks
+ * Provides data fetching, caching and state management
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import {
   ProviderListParams,
 } from '@/types';
 
-/** 查询键常量 */
+/** Query Keys */
 const QUERY_KEYS = {
   all: ['providers'] as const,
   list: (params?: ProviderListParams) => [...QUERY_KEYS.all, 'list', params] as const,
@@ -26,8 +26,8 @@ const QUERY_KEYS = {
 };
 
 /**
- * 获取供应商列表 Hook
- * @param params - 查询参数
+ * Get Provider List Hook
+ * @param params - Query parameters
  */
 export function useProviders(params?: ProviderListParams) {
   return useQuery({
@@ -37,19 +37,19 @@ export function useProviders(params?: ProviderListParams) {
 }
 
 /**
- * 获取单个供应商详情 Hook
- * @param id - 供应商 ID
+ * Get Single Provider Detail Hook
+ * @param id - Provider ID
  */
 export function useProvider(id: number) {
   return useQuery({
     queryKey: QUERY_KEYS.detail(id),
     queryFn: () => getProvider(id),
-    enabled: id > 0, // 仅当 id 有效时执行查询
+    enabled: id > 0, // Only query when ID is valid
   });
 }
 
 /**
- * 创建供应商 Mutation Hook
+ * Create Provider Mutation Hook
  */
 export function useCreateProvider() {
   const queryClient = useQueryClient();
@@ -57,14 +57,14 @@ export function useCreateProvider() {
   return useMutation({
     mutationFn: (data: ProviderCreate) => createProvider(data),
     onSuccess: () => {
-      // 创建成功后，刷新列表缓存
+      // Refresh list cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
     },
   });
 }
 
 /**
- * 更新供应商 Mutation Hook
+ * Update Provider Mutation Hook
  */
 export function useUpdateProvider() {
   const queryClient = useQueryClient();
@@ -73,7 +73,7 @@ export function useUpdateProvider() {
     mutationFn: ({ id, data }: { id: number; data: ProviderUpdate }) =>
       updateProvider(id, data),
     onSuccess: (updatedProvider: Provider) => {
-      // 更新成功后，刷新列表和详情缓存
+      // Refresh list and detail cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       queryClient.setQueryData(
         QUERY_KEYS.detail(updatedProvider.id),
@@ -84,7 +84,7 @@ export function useUpdateProvider() {
 }
 
 /**
- * 删除供应商 Mutation Hook
+ * Delete Provider Mutation Hook
  */
 export function useDeleteProvider() {
   const queryClient = useQueryClient();
@@ -92,7 +92,7 @@ export function useDeleteProvider() {
   return useMutation({
     mutationFn: (id: number) => deleteProvider(id),
     onSuccess: () => {
-      // 删除成功后，刷新列表缓存
+      // Refresh list cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
     },
   });

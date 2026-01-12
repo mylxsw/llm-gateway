@@ -1,6 +1,6 @@
 /**
- * Badge 徽章组件
- * 用于显示状态、标签等
+ * Badge Component
+ * Used to display status, labels, etc.
  */
 
 import * as React from 'react';

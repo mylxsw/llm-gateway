@@ -1,12 +1,12 @@
 /**
- * Card 卡片组件
- * 用于内容分组展示
+ * Card Component
+ * Used for grouping content
  */
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/** 卡片容器 */
+/** Card Container */
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -22,7 +22,7 @@ const Card = React.forwardRef<
 ));
 Card.displayName = 'Card';
 
-/** 卡片头部 */
+/** Card Header */
 const CardHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -35,7 +35,7 @@ const CardHeader = React.forwardRef<
 ));
 CardHeader.displayName = 'CardHeader';
 
-/** 卡片标题 */
+/** Card Title */
 const CardTitle = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -48,7 +48,7 @@ const CardTitle = React.forwardRef<
 ));
 CardTitle.displayName = 'CardTitle';
 
-/** 卡片描述 */
+/** Card Description */
 const CardDescription = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -61,7 +61,7 @@ const CardDescription = React.forwardRef<
 ));
 CardDescription.displayName = 'CardDescription';
 
-/** 卡片内容 */
+/** Card Content */
 const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -70,7 +70,7 @@ const CardContent = React.forwardRef<
 ));
 CardContent.displayName = 'CardContent';
 
-/** 卡片底部 */
+/** Card Footer */
 const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>

@@ -1,5 +1,5 @@
 /**
- * React Query Hooks 统一导出
+ * React Query Hooks Unified Export
  */
 
 export * from './useProviders';

@@ -1,23 +1,23 @@
 /**
- * 工具函数集合
- * 包含样式合并、格式化等通用函数
+ * Utility Functions Collection
+ * Includes common functions like class name merging, formatting, etc.
  */
 
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 /**
- * 合并 Tailwind CSS 类名
- * 使用 clsx 处理条件类名，twMerge 处理冲突
+ * Merge Tailwind CSS class names
+ * Uses clsx for conditional classes and twMerge for handling conflicts
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 /**
- * 格式化日期时间
- * @param dateString - ISO 8601 格式的日期字符串
- * @param options - 格式化选项
+ * Format Date Time
+ * @param dateString - ISO 8601 date string
+ * @param options - Formatting options
  */
 export function formatDateTime(
   dateString: string | null | undefined,
@@ -45,12 +45,12 @@ export function formatDateTime(
     }
   }
   
-  return date.toLocaleString('zh-CN', dateOptions);
+  return date.toLocaleString('en-US', dateOptions);
 }
 
 /**
- * 格式化毫秒为可读时间
- * @param ms - 毫秒数
+ * Format milliseconds to readable duration
+ * @param ms - milliseconds
  */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '-';
@@ -67,17 +67,17 @@ export function formatDuration(ms: number | null | undefined): string {
 }
 
 /**
- * 格式化数字，添加千分位
+ * Format number with thousand separators
  */
 export function formatNumber(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-';
-  return num.toLocaleString('zh-CN');
+  return num.toLocaleString('en-US');
 }
 
 /**
- * 截断字符串
- * @param str - 原字符串
- * @param maxLength - 最大长度
+ * Truncate string
+ * @param str - Original string
+ * @param maxLength - Maximum length
  */
 export function truncate(
   str: string | null | undefined,
@@ -89,8 +89,8 @@ export function truncate(
 }
 
 /**
- * 复制文本到剪贴板
- * @param text - 要复制的文本
+ * Copy text to clipboard
+ * @param text - Text to copy
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -102,7 +102,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * 获取状态码对应的颜色类名
+ * Get color class name for status code
  */
 export function getStatusColor(status: number | null | undefined): string {
   if (status === null || status === undefined) return 'text-gray-500';
@@ -113,13 +113,13 @@ export function getStatusColor(status: number | null | undefined): string {
 }
 
 /**
- * 获取布尔状态对应的显示文本和颜色
+ * Get display text and color for boolean active status
  */
 export function getActiveStatus(isActive: boolean): {
   text: string;
   className: string;
 } {
   return isActive
-    ? { text: '启用', className: 'bg-green-100 text-green-800' }
-    : { text: '禁用', className: 'bg-gray-100 text-gray-800' };
+    ? { text: 'Active', className: 'bg-green-100 text-green-800' }
+    : { text: 'Inactive', className: 'bg-gray-100 text-gray-800' };
 }

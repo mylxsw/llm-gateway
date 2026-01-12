@@ -1,6 +1,6 @@
 /**
- * 模型-供应商映射表单组件
- * 用于为模型添加供应商配置
+ * Model-Provider Mapping Form Component
+ * Used for configuring providers for a model
  */
 
 'use client';
@@ -18,7 +18,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -37,23 +36,23 @@ import {
 } from '@/types';
 
 interface ModelProviderFormProps {
-  /** 是否显示对话框 */
+  /** Whether dialog is open */
   open: boolean;
-  /** 关闭对话框回调 */
+  /** Dialog close callback */
   onOpenChange: (open: boolean) => void;
-  /** 当前的请求模型名 */
+  /** Current requested model name */
   requestedModel: string;
-  /** 可选的供应商列表 */
+  /** Available provider list */
   providers: Provider[];
-  /** 编辑模式下的映射数据 */
+  /** Mapping data for edit mode */
   mapping?: ModelMappingProvider | null;
-  /** 提交回调 */
+  /** Submit callback */
   onSubmit: (data: ModelMappingProviderCreate | ModelMappingProviderUpdate) => void;
-  /** 是否加载中 */
+  /** Loading state */
   loading?: boolean;
 }
 
-/** 表单字段定义 */
+/** Form Field Definition */
 interface FormData {
   provider_id: string;
   target_model_name: string;
@@ -64,7 +63,7 @@ interface FormData {
 }
 
 /**
- * 模型-供应商映射表单组件
+ * Model-Provider Mapping Form Component
  */
 export function ModelProviderForm({
   open,
@@ -75,10 +74,10 @@ export function ModelProviderForm({
   onSubmit,
   loading = false,
 }: ModelProviderFormProps) {
-  // 判断是否为编辑模式
+  // Check if edit mode
   const isEdit = !!mapping;
   
-  // 表单控制
+  // Form control
   const {
     register,
     handleSubmit,
@@ -101,7 +100,7 @@ export function ModelProviderForm({
   const providerId = watch('provider_id');
   const isActive = watch('is_active');
 
-  // 编辑模式下，填充表单数据
+  // Fill form data in edit mode
   useEffect(() => {
     if (mapping) {
       reset({
@@ -124,10 +123,10 @@ export function ModelProviderForm({
     }
   }, [mapping, reset]);
 
-  // 提交表单
+  // Submit form
   const onFormSubmit = (data: FormData) => {
     if (isEdit) {
-      // 更新模式
+      // Update mode
       const submitData: ModelMappingProviderUpdate = {
         target_model_name: data.target_model_name,
         priority: data.priority,
@@ -139,7 +138,7 @@ export function ModelProviderForm({
       
       onSubmit(submitData);
     } else {
-      // 创建模式
+      // Create mode
       const submitData: ModelMappingProviderCreate = {
         requested_model: requestedModel,
         provider_id: Number(data.provider_id),
@@ -155,45 +154,34 @@ export function ModelProviderForm({
     }
   };
 
-  // 验证 JSON 格式
-  const validateJson = (value: string) => {
-    if (!value.trim()) return true;
-    try {
-      JSON.parse(value);
-      return true;
-    } catch {
-      return '请输入有效的 JSON 格式';
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? '编辑供应商配置' : '添加供应商配置'}
+            {isEdit ? 'Edit Provider Configuration' : 'Add Provider Configuration'}
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-          {/* 请求模型名（只读） */}
+          {/* Requested Model Name (Read Only) */}
           <div className="space-y-2">
-            <Label>请求模型名</Label>
+            <Label>Requested Model Name</Label>
             <Input value={requestedModel} disabled />
           </div>
 
-          {/* 供应商选择 */}
+          {/* Provider Selection */}
           <div className="space-y-2">
             <Label>
-              供应商 <span className="text-destructive">*</span>
+              Provider <span className="text-destructive">*</span>
             </Label>
             {providers.length === 0 && !isEdit ? (
               <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50">
-                暂无可用供应商，请先
+                No available providers, please
                 <Link href="/providers" className="text-primary hover:underline mx-1">
-                  创建供应商
+                  create a provider
                 </Link>
-                后再配置。
+                first.
               </div>
             ) : (
               <Select
@@ -202,7 +190,7 @@ export function ModelProviderForm({
                 disabled={isEdit}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="选择供应商" />
+                  <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
                 <SelectContent>
                   {providers.map((provider) => (
@@ -214,20 +202,20 @@ export function ModelProviderForm({
               </Select>
             )}
             {!providerId && !isEdit && providers.length > 0 && (
-              <p className="text-sm text-destructive">请选择供应商</p>
+              <p className="text-sm text-destructive">Please select a provider</p>
             )}
           </div>
 
-          {/* 目标模型名 */}
+          {/* Target Model Name */}
           <div className="space-y-2">
             <Label htmlFor="target_model_name">
-              目标模型名 <span className="text-destructive">*</span>
+              Target Model Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="target_model_name"
-              placeholder="该供应商使用的实际模型名，如 gpt-4-0613"
+              placeholder="Actual model name used by this provider, e.g. gpt-4-0613"
               {...register('target_model_name', {
-                required: '目标模型名不能为空',
+                required: 'Target model name is required',
               })}
             />
             {errors.target_model_name && (
@@ -237,20 +225,20 @@ export function ModelProviderForm({
             )}
           </div>
 
-          {/* 优先级和权重 */}
+          {/* Priority and Weight */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="priority">优先级</Label>
+              <Label htmlFor="priority">Priority</Label>
               <Input
                 id="priority"
                 type="number"
                 min={0}
                 {...register('priority', { valueAsNumber: true })}
               />
-              <p className="text-sm text-muted-foreground">数值越小优先级越高</p>
+              <p className="text-sm text-muted-foreground">Lower value means higher priority</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="weight">权重</Label>
+              <Label htmlFor="weight">Weight</Label>
               <Input
                 id="weight"
                 type="number"
@@ -260,9 +248,9 @@ export function ModelProviderForm({
             </div>
           </div>
 
-          {/* 供应商级规则 */}
+          {/* Provider Level Rules */}
           <div className="space-y-2">
-            <Label>供应商级规则</Label>
+            <Label>Provider Level Rules</Label>
             <Controller
               name="provider_rules"
               control={control}
@@ -275,9 +263,9 @@ export function ModelProviderForm({
             />
           </div>
 
-          {/* 状态 */}
+          {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">启用状态</Label>
+            <Label htmlFor="is_active">Enabled Status</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -292,13 +280,13 @@ export function ModelProviderForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              取消
+              Cancel
             </Button>
             <Button
               type="submit"
               disabled={loading || (!isEdit && !providerId)}
             >
-              {loading ? '保存中...' : '保存'}
+              {loading ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </form>

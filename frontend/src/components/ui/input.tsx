@@ -1,6 +1,6 @@
 /**
- * Input 组件
- * 基础输入框组件
+ * Input Component
+ * Basic input field component
  */
 
 import * as React from 'react';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 /**
- * Input 输入框组件
+ * Input Component
  */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, ...props }, ref) => {

@@ -1,14 +1,14 @@
 /**
- * 日志筛选组件
- * 提供多条件日志查询筛选器
+ * Log Filter Component
+ * Provides multi-condition filtering for log queries
  */
 
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
+import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -16,248 +16,189 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-import { LogQueryParams, Provider } from '@/types';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarIcon, Filter, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { LogQueryParams } from '@/types';
 
 interface LogFiltersProps {
-  /** 当前筛选参数 */
-  filters: LogQueryParams;
-  /** 筛选参数变更回调 */
-  onFiltersChange: (filters: LogQueryParams) => void;
-  /** 供应商列表（用于下拉选择） */
-  providers: Provider[];
-  /** 搜索按钮点击回调 */
-  onSearch: () => void;
-  /** 重置按钮点击回调 */
-  onReset: () => void;
+  /** Current filter values */
+  filters: Partial<LogQueryParams>;
+  /** Filter change callback */
+  onFilterChange: (filters: Partial<LogQueryParams>) => void;
+  /** Providers list (for dropdown) */
+  providers: Array<{ id: number; name: string }>;
 }
 
 /**
- * 日志筛选组件
+ * Log Filter Component
  */
 export function LogFilters({
   filters,
-  onFiltersChange,
+  onFilterChange,
   providers,
-  onSearch,
-  onReset,
 }: LogFiltersProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const { register, handleSubmit, reset, setValue, watch } = useForm<Partial<LogQueryParams>>({
+    defaultValues: filters,
+  });
 
-  // 更新单个筛选字段
-  const updateFilter = <K extends keyof LogQueryParams>(
-    key: K,
-    value: LogQueryParams[K]
-  ) => {
-    onFiltersChange({ ...filters, [key]: value });
+  const startTime = watch('start_time');
+  const endTime = watch('end_time');
+  const hasError = watch('has_error');
+
+  const onReset = () => {
+    reset({
+      page: 1,
+      page_size: filters.page_size,
+    });
+    onFilterChange({});
+  };
+
+  const onSubmit = (data: Partial<LogQueryParams>) => {
+    // Remove empty values
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined && v !== '')
+    );
+    onFilterChange(cleanData);
   };
 
   return (
-    <div className="space-y-4 rounded-lg border bg-card p-4">
-      {/* 第一行：时间范围 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="space-y-2">
-          <Label>开始时间</Label>
-          <Input
-            type="datetime-local"
-            value={filters.start_time || ''}
-            onChange={(e) => updateFilter('start_time', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>结束时间</Label>
-          <Input
-            type="datetime-local"
-            value={filters.end_time || ''}
-            onChange={(e) => updateFilter('end_time', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>请求模型</Label>
-          <Input
-            placeholder="模糊匹配"
-            value={filters.requested_model || ''}
-            onChange={(e) => updateFilter('requested_model', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>目标模型</Label>
-          <Input
-            placeholder="模糊匹配"
-            value={filters.target_model || ''}
-            onChange={(e) => updateFilter('target_model', e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* 第二行：供应商和状态 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <div className="space-y-2">
-          <Label>供应商</Label>
-          <Select
-            value={filters.provider_id ? String(filters.provider_id) : 'all'}
-            onValueChange={(value) =>
-              updateFilter('provider_id', value === 'all' ? undefined : Number(value))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="全部" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {providers.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>是否有错误</Label>
-          <Select
-            value={filters.has_error === undefined ? 'all' : String(filters.has_error)}
-            onValueChange={(value) =>
-              updateFilter('has_error', value === 'all' ? undefined : value === 'true')
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="全部" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              <SelectItem value="true">有错误</SelectItem>
-              <SelectItem value="false">无错误</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-end gap-2">
-          <Button onClick={onSearch} className="flex-1">
-            <Search className="mr-2 h-4 w-4" />
-            搜索
-          </Button>
-          <Button variant="outline" onClick={onReset}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            重置
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="shrink-0"
-          >
-            {showAdvanced ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* 高级筛选 */}
-      {showAdvanced && (
-        <div className="space-y-4 border-t pt-4">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>状态码范围</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.status_min || ''}
-                  onChange={(e) =>
-                    updateFilter('status_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.status_max || ''}
-                  onChange={(e) =>
-                    updateFilter('status_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>重试次数</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  min={0}
-                  value={filters.retry_count_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('retry_count_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  min={0}
-                  value={filters.retry_count_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('retry_count_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>API Key 名称</Label>
-              <Input
-                placeholder="模糊匹配"
-                value={filters.api_key_name || ''}
-                onChange={(e) => updateFilter('api_key_name', e.target.value)}
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mb-6 rounded-lg border bg-card p-4 shadow-sm"
+    >
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Date Range */}
+        <div className="flex gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  'w-full justify-start text-left font-normal',
+                  !startTime && 'text-muted-foreground'
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startTime ? (
+                  format(new Date(startTime), 'yyyy-MM-dd')
+                ) : (
+                  <span>Start Date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={startTime ? new Date(startTime) : undefined}
+                onSelect={(date) => 
+                  setValue('start_time', date ? date.toISOString() : undefined)
+                }
+                initialFocus
               />
-            </div>
-            <div className="space-y-2">
-              <Label>输入 Token 区间</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.input_tokens_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('input_tokens_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.input_tokens_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('input_tokens_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>总耗时区间 (ms)</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.total_time_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('total_time_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.total_time_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('total_time_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
-            </div>
-          </div>
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  'w-full justify-start text-left font-normal',
+                  !endTime && 'text-muted-foreground'
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endTime ? (
+                  format(new Date(endTime), 'yyyy-MM-dd')
+                ) : (
+                  <span>End Date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={endTime ? new Date(endTime) : undefined}
+                onSelect={(date) =>
+                  setValue('end_time', date ? date.toISOString() : undefined)
+                }
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
         </div>
-      )}
-    </div>
+
+        {/* Model */}
+        <Input
+          placeholder="Model Name (Requested/Target)"
+          {...register('requested_model')}
+        />
+
+        {/* Trace ID */}
+        <Input
+          placeholder="Trace ID"
+          {...register('trace_id')} // NOTE: Backend needs support or fuzzy search
+        />
+
+        {/* Provider */}
+        <Select
+          onValueChange={(value) => 
+            setValue('provider_id', value === 'all' ? undefined : Number(value))
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select Provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Providers</SelectItem>
+            {providers.map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Status */}
+        <Select
+          onValueChange={(value) => {
+            if (value === 'error') {
+              setValue('has_error', true);
+            } else if (value === 'success') {
+              setValue('has_error', false);
+            } else {
+              setValue('has_error', undefined);
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Request Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="success">Success</SelectItem>
+            <SelectItem value="error">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        
+        {/* Buttons */}
+        <div className="flex gap-2 lg:col-span-3 lg:justify-end">
+          <Button type="button" variant="outline" onClick={onReset}>
+            <X className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button type="submit">
+            <Filter className="mr-2 h-4 w-4" />
+            Filter
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }

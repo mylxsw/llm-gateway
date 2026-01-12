@@ -1,9 +1,9 @@
 /**
- * 表单验证工具
+ * Form Validation Utilities
  */
 
 /**
- * 验证 URL 格式
+ * Validate URL format
  */
 export function isValidUrl(url: string): boolean {
   try {
@@ -15,22 +15,26 @@ export function isValidUrl(url: string): boolean {
 }
 
 /**
- * 验证非空字符串
+ * Validate non-empty string
  */
 export function isNotEmpty(value: string | null | undefined): boolean {
   return value !== null && value !== undefined && value.trim().length > 0;
 }
 
 /**
- * 验证模型名格式（字母、数字、下划线、短横线、点）
+ * Validate model name format (letters, numbers, underscores, hyphens, dots)
  */
 export function isValidModelName(name: string): boolean {
   return /^[a-zA-Z0-9_\-\.]+$/.test(name);
 }
 
 /**
- * 验证 API Key 名称（允许中文、字母、数字、下划线、短横线、空格）
+ * Validate API Key name (allows Chinese, letters, numbers, underscores, hyphens, spaces)
  */
 export function isValidKeyName(name: string): boolean {
+  // Keeping chinese support in regex as user requested translation of content/UI, 
+  // but functionality logic should arguably support international characters if original did.
+  // However, prompts say "standard written English". 
+  // I will update regex comments to reflect capabilities, but functionality remains permissive.
   return /^[\u4e00-\u9fa5a-zA-Z0-9_\- ]+$/.test(name) && name.trim().length > 0;
 }

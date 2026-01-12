@@ -1,31 +1,31 @@
 /**
- * HTTP 客户端封装
- * 基于 axios 实现，提供统一的错误处理和请求拦截
+ * HTTP Client Wrapper
+ * Implemented based on axios, providing unified error handling and request interception.
  */
 
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types';
 
-/** API 基础地址，可通过环境变量配置 */
+/** API base URL, configurable via environment variables */
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 /**
- * 创建 axios 实例
- * 配置基础 URL 和默认请求头
+ * Create axios instance
+ * Configure base URL and default headers
  */
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30秒超时
+  timeout: 30000, // 30 seconds timeout
 });
 
 const ADMIN_TOKEN_STORAGE_KEY = 'lgw_admin_token';
 
 /**
- * 请求拦截器
- * 可在此处添加认证 token 等
+ * Request Interceptor
+ * Add authentication token here
  */
 apiClient.interceptors.request.use(
   (config) => {
@@ -44,8 +44,8 @@ apiClient.interceptors.request.use(
 );
 
 /**
- * 响应拦截器
- * 统一处理错误响应
+ * Response Interceptor
+ * Unified error response handling
  */
 apiClient.interceptors.response.use(
   (response) => response,
@@ -57,18 +57,18 @@ apiClient.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('auth:required'));
     }
 
-    // FastAPI 默认错误结构（HTTPException）
+    // FastAPI default error structure (HTTPException)
     const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
     if (typeof detail === 'string' && detail) {
       return Promise.reject(new Error(detail));
     }
 
-    // 提取错误信息
+    // Extract error message
     if (error.response?.data?.error) {
       const apiError = error.response.data.error;
-      return Promise.reject(new Error(apiError.message || '请求失败'));
+      return Promise.reject(new Error(apiError.message || 'Request failed'));
     }
-    return Promise.reject(new Error(error.message || '网络错误'));
+    return Promise.reject(new Error(error.message || 'Network error'));
   }
 );
 
@@ -88,10 +88,10 @@ export function clearStoredAdminToken() {
 }
 
 /**
- * 通用 GET 请求
- * @param url - 请求路径
- * @param params - 查询参数
- * @param config - 额外配置
+ * Generic GET Request
+ * @param url - Request path
+ * @param params - Query parameters
+ * @param config - Extra configuration
  */
 export async function get<T>(
   url: string,
@@ -103,10 +103,10 @@ export async function get<T>(
 }
 
 /**
- * 通用 POST 请求
- * @param url - 请求路径
- * @param data - 请求体
- * @param config - 额外配置
+ * Generic POST Request
+ * @param url - Request path
+ * @param data - Request body
+ * @param config - Extra configuration
  */
 export async function post<T>(
   url: string,
@@ -118,10 +118,10 @@ export async function post<T>(
 }
 
 /**
- * 通用 PUT 请求
- * @param url - 请求路径
- * @param data - 请求体
- * @param config - 额外配置
+ * Generic PUT Request
+ * @param url - Request path
+ * @param data - Request body
+ * @param config - Extra configuration
  */
 export async function put<T>(
   url: string,
@@ -133,9 +133,9 @@ export async function put<T>(
 }
 
 /**
- * 通用 DELETE 请求
- * @param url - 请求路径
- * @param config - 额外配置
+ * Generic DELETE Request
+ * @param url - Request path
+ * @param config - Extra configuration
  */
 export async function del<T>(
   url: string,

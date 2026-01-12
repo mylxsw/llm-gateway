@@ -1,9 +1,9 @@
 /**
- * 请求日志相关类型定义
- * 对应后端 request_logs 表
+ * Request Log Related Type Definitions
+ * Corresponds to backend request_logs table
  */
 
-/** 请求日志实体（列表展示用） */
+/** Request Log Entity (For List View) */
 export interface RequestLog {
   id: number;
   request_time: string;
@@ -23,9 +23,9 @@ export interface RequestLog {
   is_stream?: boolean;
 }
 
-/** 请求日志详情实体（包含完整请求/响应） */
+/** Request Log Detail Entity (Includes full request/response) */
 export interface RequestLogDetail extends RequestLog {
-  request_headers?: Record<string, string>;  // 已脱敏
+  request_headers?: Record<string, string>;  // Sanitized
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request_body?: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,43 +33,43 @@ export interface RequestLogDetail extends RequestLog {
   error_info?: string;
 }
 
-/** 日志查询参数 */
+/** Log Query Params */
 export interface LogQueryParams {
-  // 时间范围
+  // Time range
   start_time?: string;
   end_time?: string;
   
-  // 模型过滤
+  // Model filter
   requested_model?: string;
   target_model?: string;
   
-  // 供应商过滤
+  // Provider filter
   provider_id?: number;
   
-  // 状态码过滤
+  // Status code filter
   status_min?: number;
   status_max?: number;
   
-  // 错误过滤
+  // Error filter
   has_error?: boolean;
   
-  // API Key 过滤
+  // API Key filter
   api_key_id?: number;
   api_key_name?: string;
   
-  // 重试次数过滤
+  // Retry count filter
   retry_count_min?: number;
   retry_count_max?: number;
   
-  // Token 区间过滤
+  // Token range filter
   input_tokens_min?: number;
   input_tokens_max?: number;
   
-  // 耗时区间过滤
+  // Duration range filter
   total_time_min?: number;
   total_time_max?: number;
   
-  // 分页与排序
+  // Pagination and Sorting
   page?: number;
   page_size?: number;
   sort_by?: string;

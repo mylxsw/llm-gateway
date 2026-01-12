@@ -1,6 +1,6 @@
 /**
- * 模型映射列表组件
- * 展示模型映射数据表格
+ * Model Mapping List Component
+ * Displays model mapping data table
  */
 
 'use client';
@@ -22,16 +22,16 @@ import { ModelMapping } from '@/types';
 import { formatDateTime, getActiveStatus } from '@/lib/utils';
 
 interface ModelListProps {
-  /** 模型映射列表数据 */
+  /** Model mapping list data */
   models: ModelMapping[];
-  /** 编辑回调 */
+  /** Edit callback */
   onEdit: (model: ModelMapping) => void;
-  /** 删除回调 */
+  /** Delete callback */
   onDelete: (model: ModelMapping) => void;
 }
 
 /**
- * 模型映射列表组件
+ * Model Mapping List Component
  */
 export function ModelList({
   models,
@@ -42,13 +42,13 @@ export function ModelList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>请求模型名</TableHead>
-          <TableHead>策略</TableHead>
-          <TableHead>供应商数量</TableHead>
-          <TableHead>匹配规则</TableHead>
-          <TableHead>状态</TableHead>
-          <TableHead>更新时间</TableHead>
-          <TableHead className="text-right">操作</TableHead>
+          <TableHead>Requested Model Name</TableHead>
+          <TableHead>Strategy</TableHead>
+          <TableHead>Provider Count</TableHead>
+          <TableHead>Matching Rules</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Updated At</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -68,7 +68,7 @@ export function ModelList({
               <TableCell>
                 {model.matching_rules ? (
                   <Badge variant="outline" className="text-blue-600">
-                    已配置
+                    Configured
                   </Badge>
                 ) : (
                   <span className="text-muted-foreground">-</span>
@@ -83,7 +83,7 @@ export function ModelList({
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Link href={`/models/${encodeURIComponent(model.requested_model)}`}>
-                    <Button variant="ghost" size="icon" title="查看详情">
+                    <Button variant="ghost" size="icon" title="View Details">
                       <Eye className="h-4 w-4" />
                     </Button>
                   </Link>
@@ -91,7 +91,7 @@ export function ModelList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(model)}
-                    title="编辑"
+                    title="Edit"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -99,7 +99,7 @@ export function ModelList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(model)}
-                    title="删除"
+                    title="Delete"
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>

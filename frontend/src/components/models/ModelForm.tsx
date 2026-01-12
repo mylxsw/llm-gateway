@@ -1,6 +1,6 @@
 /**
- * 模型映射表单组件
- * 用于创建和编辑模型映射
+ * Model Mapping Form Component
+ * Used for creating and editing model mappings
  */
 
 'use client';
@@ -24,19 +24,19 @@ import { ModelMapping, ModelMappingCreate, ModelMappingUpdate, RuleSet } from '@
 import { isValidModelName } from '@/lib/utils';
 
 interface ModelFormProps {
-  /** 是否显示对话框 */
+  /** Whether dialog is open */
   open: boolean;
-  /** 关闭对话框回调 */
+  /** Dialog close callback */
   onOpenChange: (open: boolean) => void;
-  /** 编辑模式下的模型数据 */
+  /** Model data for edit mode */
   model?: ModelMapping | null;
-  /** 提交回调 */
+  /** Submit callback */
   onSubmit: (data: ModelMappingCreate | ModelMappingUpdate) => void;
-  /** 是否加载中 */
+  /** Loading state */
   loading?: boolean;
 }
 
-/** 表单字段定义 */
+/** Form Field Definition */
 interface FormData {
   requested_model: string;
   strategy: string;
@@ -46,7 +46,7 @@ interface FormData {
 }
 
 /**
- * 模型映射表单组件
+ * Model Mapping Form Component
  */
 export function ModelForm({
   open,
@@ -55,10 +55,10 @@ export function ModelForm({
   onSubmit,
   loading = false,
 }: ModelFormProps) {
-  // 判断是否为编辑模式
+  // Check if edit mode
   const isEdit = !!model;
   
-  // 表单控制
+  // Form control
   const {
     register,
     handleSubmit,
@@ -79,7 +79,7 @@ export function ModelForm({
 
   const isActive = watch('is_active');
 
-  // 编辑模式下，填充表单数据
+  // Fill form data in edit mode
   useEffect(() => {
     if (model) {
       reset({
@@ -102,41 +102,41 @@ export function ModelForm({
     }
   }, [model, reset]);
 
-  // 提交表单
+  // Submit form
   const onFormSubmit = (data: FormData) => {
     const submitData: ModelMappingCreate | ModelMappingUpdate = {
       strategy: data.strategy,
       is_active: data.is_active,
     };
     
-    // 创建时需要 requested_model
+    // requested_model required on creation
     if (!isEdit) {
       (submitData as ModelMappingCreate).requested_model = data.requested_model;
     }
     
-    // 规则直接赋值
+    // Assign rules directly
     submitData.matching_rules = data.matching_rules || undefined;
     
-    // 解析 JSON 字段
+    // Parse JSON field
     if (data.capabilities.trim()) {
       try {
         submitData.capabilities = JSON.parse(data.capabilities);
       } catch {
-        // 解析失败则忽略
+        // Ignore parse errors
       }
     }
     
     onSubmit(submitData);
   };
 
-  // 验证 JSON 格式
+  // Validate JSON format
   const validateJson = (value: string) => {
     if (!value.trim()) return true;
     try {
       JSON.parse(value);
       return true;
     } catch {
-      return '请输入有效的 JSON 格式';
+      return 'Please enter valid JSON format';
     }
   };
 
@@ -144,23 +144,23 @@ export function ModelForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑模型映射' : '新增模型映射'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Model Mapping' : 'New Model Mapping'}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-          {/* 请求模型名 */}
+          {/* Requested Model Name */}
           <div className="space-y-2">
             <Label htmlFor="requested_model">
-              请求模型名 <span className="text-destructive">*</span>
+              Requested Model Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="requested_model"
-              placeholder="例如: gpt-4, claude-3-opus"
+              placeholder="e.g.: gpt-4, claude-3-opus"
               disabled={isEdit}
               {...register('requested_model', {
-                required: !isEdit ? '请求模型名不能为空' : false,
+                required: !isEdit ? 'Requested model name is required' : false,
                 validate: !isEdit
-                  ? (v) => isValidModelName(v) || '模型名只能包含字母、数字、下划线、短横线和点'
+                  ? (v) => isValidModelName(v) || 'Model name can only contain letters, numbers, underscores, hyphens, and dots'
                   : undefined,
               })}
             />
@@ -171,14 +171,14 @@ export function ModelForm({
             )}
             {isEdit && (
               <p className="text-sm text-muted-foreground">
-                模型名为主键，不可修改
+                Model name is the primary key and cannot be modified
               </p>
             )}
           </div>
 
-          {/* 策略 */}
+          {/* Strategy */}
           <div className="space-y-2">
-            <Label htmlFor="strategy">选择策略</Label>
+            <Label htmlFor="strategy">Select Strategy</Label>
             <Input
               id="strategy"
               value="round_robin"
@@ -186,13 +186,13 @@ export function ModelForm({
               {...register('strategy')}
             />
             <p className="text-sm text-muted-foreground">
-              当前仅支持轮询策略 (round_robin)
+              Currently only supports Round Robin strategy (round_robin)
             </p>
           </div>
 
-          {/* 匹配规则 */}
+          {/* Matching Rules */}
           <div className="space-y-2">
-            <Label>匹配规则</Label>
+            <Label>Matching Rules</Label>
             <Controller
               name="matching_rules"
               control={control}
@@ -205,10 +205,10 @@ export function ModelForm({
             />
           </div>
 
-          {/* 功能描述 */}
+          {/* Capabilities Description */}
           <div className="space-y-2">
             <Label htmlFor="capabilities">
-              功能描述 <span className="text-muted-foreground">(JSON, 可选)</span>
+              Capabilities Description <span className="text-muted-foreground">(JSON, Optional)</span>
             </Label>
             <Textarea
               id="capabilities"
@@ -225,9 +225,9 @@ export function ModelForm({
             )}
           </div>
 
-          {/* 状态 */}
+          {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">启用状态</Label>
+            <Label htmlFor="is_active">Enabled Status</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -242,10 +242,10 @@ export function ModelForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              取消
+              Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? '保存中...' : '保存'}
+              {loading ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </form>

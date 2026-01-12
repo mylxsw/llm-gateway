@@ -1,9 +1,9 @@
 /**
- * 通用类型定义
- * 包含分页、错误响应等基础类型
+ * Common Type Definitions
+ * Includes base types like pagination, error response, etc.
  */
 
-/** 分页响应结构 */
+/** Pagination Response Structure */
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -11,7 +11,7 @@ export interface PaginatedResponse<T> {
   page_size: number;
 }
 
-/** API 错误响应结构 */
+/** API Error Response Structure */
 export interface ApiError {
   error: {
     message: string;
@@ -21,19 +21,19 @@ export interface ApiError {
   };
 }
 
-/** 分页查询参数 */
+/** Pagination Query Params */
 export interface PaginationParams {
   page?: number;
   page_size?: number;
 }
 
-/** 排序参数 */
+/** Sort Params */
 export interface SortParams {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
 }
 
-/** 规则操作符类型 */
+/** Rule Operator Type */
 export type RuleOperator = 
   | 'eq' 
   | 'ne' 
@@ -48,14 +48,14 @@ export type RuleOperator =
   | 'not_in' 
   | 'exists';
 
-/** 单条规则定义 */
+/** Single Rule Definition */
 export interface Rule {
   field: string;
   operator: RuleOperator;
   value: unknown;
 }
 
-/** 规则集定义 */
+/** Rule Set Definition */
 export interface RuleSet {
   rules: Rule[];
   logic?: 'AND' | 'OR';

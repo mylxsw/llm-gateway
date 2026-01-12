@@ -1,11 +1,11 @@
 /**
- * 日志详情页面
- * 展示单条日志的完整信息
+ * Log Detail Page
+ * Displays full information of a single log
  */
 
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -15,14 +15,24 @@ import { LoadingSpinner, ErrorState } from '@/components/common';
 import { useLogDetail } from '@/lib/hooks';
 
 /**
- * 日志详情页面组件
+ * Log Detail Page Component
  */
 export default function LogDetailPage() {
   const params = useParams();
   const logId = Number(params.id);
+  const [detailOpen, setDetailOpen] = useState(true);
 
-  // 数据查询
+  // Data query
   const { data: log, isLoading, isError, refetch } = useLogDetail(logId);
+
+  // Handle sheet open change
+  const handleDetailOpenChange = (open: boolean) => {
+    setDetailOpen(open);
+    if (!open) {
+      // Navigate back to logs list if detail view is closed
+      window.location.href = '/logs';
+    }
+  };
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -31,7 +41,7 @@ export default function LogDetailPage() {
   if (isError || !log) {
     return (
       <ErrorState
-        message="加载日志详情失败"
+        message="Failed to load log details"
         onRetry={() => refetch()}
       />
     );
@@ -39,7 +49,7 @@ export default function LogDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* 返回按钮和标题 */}
+      {/* Back Button and Title */}
       <div className="flex items-center gap-4">
         <Link href="/logs">
           <Button variant="ghost" size="icon">
@@ -47,15 +57,22 @@ export default function LogDetailPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">日志详情</h1>
+          <h1 className="text-2xl font-bold">Log Details</h1>
           <p className="mt-1 text-muted-foreground">
-            日志 ID: {log.id}
+            Log ID: {log.id}
           </p>
         </div>
       </div>
 
-      {/* 日志详情内容 */}
-      <LogDetail log={log} />
+      {/* Log Detail Content (Rendered as a Sheet) */}
+      <LogDetail log={log} open={detailOpen} onOpenChange={handleDetailOpenChange} />
+      
+      {/* Fallback content if Sheet is closed (though navigation usually happens) */}
+      {!detailOpen && (
+        <div className="flex justify-center p-8">
+          <Button onClick={() => setDetailOpen(true)}>Open Details</Button>
+        </div>
+      )}
     </div>
   );
 }

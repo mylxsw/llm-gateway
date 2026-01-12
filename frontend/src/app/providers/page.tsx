@@ -1,6 +1,6 @@
 /**
- * 供应商管理页面
- * 提供供应商的列表展示和 CRUD 操作
+ * Provider Management Page
+ * Provides provider list display and CRUD operations
  */
 
 'use client';
@@ -20,22 +20,22 @@ import {
 import { Provider, ProviderCreate, ProviderUpdate } from '@/types';
 
 /**
- * 供应商管理页面组件
+ * Provider Management Page Component
  */
 export default function ProvidersPage() {
-  // 分页状态
+  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // 表单对话框状态
+  // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  // 删除确认对话框状态
+  // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useProviders({
     page,
     page_size: pageSize,
@@ -46,45 +46,45 @@ export default function ProvidersPage() {
   const updateMutation = useUpdateProvider();
   const deleteMutation = useDeleteProvider();
 
-  // 打开新建表单
+  // Open create form
   const handleCreate = () => {
     setEditingProvider(null);
     setFormOpen(true);
   };
 
-  // 打开编辑表单
+  // Open edit form
   const handleEdit = (provider: Provider) => {
     setEditingProvider(provider);
     setFormOpen(true);
   };
 
-  // 打开删除确认
+  // Open delete confirmation
   const handleDelete = (provider: Provider) => {
     setDeletingProvider(provider);
     setDeleteDialogOpen(true);
   };
 
-  // 提交表单
+  // Submit form
   const handleSubmit = async (formData: ProviderCreate | ProviderUpdate) => {
     try {
       if (editingProvider) {
-        // 更新
+        // Update
         await updateMutation.mutateAsync({
           id: editingProvider.id,
           data: formData as ProviderUpdate,
         });
       } else {
-        // 创建
+        // Create
         await createMutation.mutateAsync(formData as ProviderCreate);
       }
       setFormOpen(false);
       setEditingProvider(null);
     } catch (error) {
-      console.error('保存失败:', error);
+      console.error('Save failed:', error);
     }
   };
 
-  // 确认删除
+  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!deletingProvider) return;
     try {
@@ -92,45 +92,45 @@ export default function ProvidersPage() {
       setDeleteDialogOpen(false);
       setDeletingProvider(null);
     } catch (error) {
-      console.error('删除失败:', error);
+      console.error('Delete failed:', error);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
+      {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">供应商管理</h1>
+          <h1 className="text-2xl font-bold">Provider Management</h1>
           <p className="mt-1 text-muted-foreground">
-            管理上游 AI 供应商配置
+            Manage upstream AI provider configurations
           </p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          新增供应商
+          Add Provider
         </Button>
       </div>
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>供应商列表</CardTitle>
+          <CardTitle>Provider List</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载供应商列表失败"
+              message="Failed to load provider list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="暂无供应商"
-              actionText="新增供应商"
+              message="No providers found"
+              actionText="Add Provider"
               onAction={handleCreate}
             />
           )}
@@ -154,7 +154,7 @@ export default function ProvidersPage() {
         </CardContent>
       </Card>
 
-      {/* 新建/编辑表单 */}
+      {/* Create/Edit Form */}
       <ProviderForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -163,13 +163,13 @@ export default function ProvidersPage() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* 删除确认对话框 */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="删除供应商"
-        description={`确定要删除供应商「${deletingProvider?.name}」吗？如果该供应商被模型引用，将无法删除。`}
-        confirmText="删除"
+        title="Delete Provider"
+        description={`Are you sure you want to delete provider "${deletingProvider?.name}"? It cannot be deleted if referenced by models.`}
+        confirmText="Delete"
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

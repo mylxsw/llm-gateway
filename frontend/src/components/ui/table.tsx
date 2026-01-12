@@ -1,12 +1,12 @@
 /**
- * Table 表格组件
- * 基础表格样式组件
+ * Table Component
+ * Basic table style component
  */
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-/** 表格容器 */
+/** Table Container */
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
@@ -21,7 +21,7 @@ const Table = React.forwardRef<
 ));
 Table.displayName = 'Table';
 
-/** 表头 */
+/** Table Header */
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -30,7 +30,7 @@ const TableHeader = React.forwardRef<
 ));
 TableHeader.displayName = 'TableHeader';
 
-/** 表体 */
+/** Table Body */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -43,7 +43,7 @@ const TableBody = React.forwardRef<
 ));
 TableBody.displayName = 'TableBody';
 
-/** 表尾 */
+/** Table Footer */
 const TableFooter = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -59,7 +59,7 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
-/** 表格行 */
+/** Table Row */
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
@@ -75,7 +75,7 @@ const TableRow = React.forwardRef<
 ));
 TableRow.displayName = 'TableRow';
 
-/** 表头单元格 */
+/** Table Header Cell */
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
@@ -91,7 +91,7 @@ const TableHead = React.forwardRef<
 ));
 TableHead.displayName = 'TableHead';
 
-/** 表体单元格 */
+/** Table Body Cell */
 const TableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
@@ -107,7 +107,7 @@ const TableCell = React.forwardRef<
 ));
 TableCell.displayName = 'TableCell';
 
-/** 表格标题 */
+/** Table Caption */
 const TableCaption = React.forwardRef<
   HTMLTableCaptionElement,
   React.HTMLAttributes<HTMLTableCaptionElement>
