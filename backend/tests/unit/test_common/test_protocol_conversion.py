@@ -107,6 +107,43 @@ def test_convert_response_anthropic_to_openai():
     assert converted["usage"]["completion_tokens"] == 2
 
 
+def test_convert_request_anthropic_to_anthropic_injects_default_max_tokens():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="anthropic",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "system": "You are helpful",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["model"] == "claude-3-5-sonnet"
+    assert out_body["max_tokens"] == 4096
+
+
+def test_convert_request_anthropic_to_anthropic_maps_max_completion_tokens():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="anthropic",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "system": "You are helpful",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_completion_tokens": 33,
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["model"] == "claude-3-5-sonnet"
+    assert out_body["max_tokens"] == 33
+
+
 async def _agen(chunks):
     for c in chunks:
         yield c
@@ -191,4 +228,3 @@ async def test_convert_stream_anthropic_to_openai():
     content_payloads = [p for p in payloads if p.strip() not in ("[DONE]", "")]
     chunk_obj = json.loads(next(p for p in content_payloads if "\"chat.completion.chunk\"" in p))
     assert chunk_obj["choices"][0]["delta"]["content"] == "Hi"
-

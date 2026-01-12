@@ -235,6 +235,12 @@ def convert_request_for_supplier(
     if request_protocol == supplier_protocol:
         new_body = copy.deepcopy(body)
         new_body["model"] = target_model
+        if request_protocol == ANTHROPIC_PROTOCOL and path == "/v1/messages":
+            if new_body.get("max_tokens") is None:
+                if new_body.get("max_completion_tokens") is not None:
+                    new_body["max_tokens"] = new_body["max_completion_tokens"]
+                else:
+                    new_body["max_tokens"] = 4096
         return path, new_body
 
     if request_protocol == OPENAI_PROTOCOL and supplier_protocol == ANTHROPIC_PROTOCOL:
@@ -252,7 +258,7 @@ def convert_request_for_supplier(
         if "max_tokens" not in optional_params and "max_completion_tokens" in optional_params:
             optional_params["max_tokens"] = optional_params["max_completion_tokens"]
         if "max_tokens" not in optional_params:
-            optional_params["max_tokens"] = 1024
+            optional_params["max_tokens"] = 4096
 
         anthropic_body = AnthropicConfig().transform_request(
             model=target_model,
