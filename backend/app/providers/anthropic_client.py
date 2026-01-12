@@ -77,6 +77,7 @@ class AnthropicClient(ProviderClient):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        response_mode: str = "parsed",
     ) -> ProviderResponse:
         """
         转发请求到 Anthropic 兼容供应商
@@ -125,11 +126,14 @@ class AnthropicClient(ProviderClient):
                 
                 timer.mark_first_byte()
                 
-                response_body = response.text
-                try:
-                    response_body = response.json()
-                except json.JSONDecodeError:
-                    pass
+                if response_mode == "raw":
+                    response_body: Any = response.content
+                else:
+                    response_body = response.text
+                    try:
+                        response_body = response.json()
+                    except json.JSONDecodeError:
+                        pass
                 
                 timer.stop()
                 

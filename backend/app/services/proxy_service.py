@@ -20,6 +20,7 @@ from app.common.protocol_conversion import (
     convert_request_for_supplier,
     convert_response_for_user,
     convert_stream_for_user,
+    normalize_protocol,
 )
 from app.common.token_counter import get_token_counter
 from app.common.utils import generate_trace_id
@@ -225,6 +226,7 @@ class ProxyService:
                     body=body,
                     target_model=candidate.target_model,
                 )
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
                 return await client.forward(
                     base_url=candidate.base_url,
                     api_key=candidate.api_key,
@@ -233,6 +235,7 @@ class ProxyService:
                     headers=headers,
                     body=supplier_body,
                     target_model=candidate.target_model,
+                    response_mode="raw" if same_protocol else "parsed",
                 )
             except Exception as e:
                 error_msg = str(e)
@@ -260,12 +263,14 @@ class ProxyService:
 
         if result.response.body is not None and result.final_provider is not None:
             try:
-                result.response.body = convert_response_for_user(
-                    request_protocol=request_protocol,
-                    supplier_protocol=result.final_provider.protocol,
-                    body=result.response.body,
-                    target_model=result.final_provider.target_model,
-                )
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(result.final_provider.protocol)
+                if not same_protocol:
+                    result.response.body = convert_response_for_user(
+                        request_protocol=request_protocol,
+                        supplier_protocol=result.final_provider.protocol,
+                        body=result.response.body,
+                        target_model=result.final_provider.target_model,
+                    )
             except Exception as e:
                 error_msg = str(e)
                 logger.error(
@@ -326,7 +331,11 @@ class ProxyService:
             response_body=(
                 json.dumps(result.response.body, ensure_ascii=False)
                 if isinstance(result.response.body, (dict, list))
-                else result.response.body
+                else (
+                    result.response.body.decode("utf-8", errors="ignore")
+                    if isinstance(result.response.body, (bytes, bytearray))
+                    else result.response.body
+                )
             )
             if result.response.body is not None
             else None,
@@ -463,13 +472,18 @@ class ProxyService:
                         yield chunk
 
                 try:
-                    async for out_chunk in convert_stream_for_user(
-                        request_protocol=request_protocol,
-                        supplier_protocol=candidate.protocol,
-                        upstream=upstream_bytes(),
-                        model=candidate.target_model,
-                    ):
-                        yield out_chunk, first_resp
+                    same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                    if same_protocol:
+                        async for chunk in upstream_bytes():
+                            yield chunk, first_resp
+                    else:
+                        async for out_chunk in convert_stream_for_user(
+                            request_protocol=request_protocol,
+                            supplier_protocol=candidate.protocol,
+                            upstream=upstream_bytes(),
+                            model=candidate.target_model,
+                        ):
+                            yield out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
                     logger.error(

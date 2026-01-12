@@ -41,6 +41,7 @@ class OpenAIClient(ProviderClient):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        response_mode: str = "parsed",
     ) -> ProviderResponse:
         """
         转发请求到 OpenAI 兼容供应商
@@ -93,12 +94,14 @@ class OpenAIClient(ProviderClient):
                 
                 timer.mark_first_byte()
                 
-                # 读取响应体
-                response_body = response.text
-                try:
-                    response_body = response.json()
-                except json.JSONDecodeError:
-                    pass
+                if response_mode == "raw":
+                    response_body: Any = response.content
+                else:
+                    response_body = response.text
+                    try:
+                        response_body = response.json()
+                    except json.JSONDecodeError:
+                        pass
                 
                 timer.stop()
                 

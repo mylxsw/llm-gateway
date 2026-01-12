@@ -7,7 +7,7 @@ Anthropic 兼容代理接口
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 
 from app.api.deps import CurrentApiKey, ProxyServiceDep
 from app.common.errors import AppError
@@ -92,6 +92,17 @@ async def messages(
         
         # 返回响应
         if response.is_success:
+            if isinstance(response.body, (bytes, bytearray)):
+                return Response(
+                    content=response.body,
+                    status_code=response.status_code,
+                    media_type=response.headers.get("content-type", "application/json"),
+                    headers={
+                        "X-Trace-ID": log_info.get("trace_id", ""),
+                        "X-Target-Model": log_info.get("target_model", ""),
+                        "X-Provider": log_info.get("provider_name", ""),
+                    },
+                )
             return JSONResponse(
                 content=response.body,
                 status_code=response.status_code,

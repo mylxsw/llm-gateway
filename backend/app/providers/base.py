@@ -58,6 +58,7 @@ class ProviderClient(ABC):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        response_mode: str = "parsed",
     ) -> ProviderResponse:
         """
         转发请求到上游供应商
