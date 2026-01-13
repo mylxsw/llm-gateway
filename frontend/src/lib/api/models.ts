@@ -1,6 +1,6 @@
 /**
  * Model Mapping API
- * Corresponds to backend /admin/models and /admin/model-providers routes
+ * Corresponds to backend /api/admin/models and /api/admin/model-providers routes
  */
 
 import { get, post, put, del } from './client';
@@ -16,8 +16,8 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const MODELS_URL = '/admin/models';
-const MODEL_PROVIDERS_URL = '/admin/model-providers';
+const MODELS_URL = '/api/admin/models';
+const MODEL_PROVIDERS_URL = '/api/admin/model-providers';
 
 // ============ Model Mapping CRUD ============
 

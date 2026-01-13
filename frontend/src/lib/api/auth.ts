@@ -16,13 +16,13 @@ export interface LoginResponse {
 }
 
 export async function getAuthStatus(): Promise<AuthStatusResponse> {
-  return get<AuthStatusResponse>('/auth/status');
+  return get<AuthStatusResponse>('/api/auth/status');
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
-  return post<LoginResponse>('/auth/login', { username, password });
+  return post<LoginResponse>('/api/auth/login', { username, password });
 }
 
 export async function logout(): Promise<{ ok: boolean }> {
-  return post<{ ok: boolean }>('/auth/logout');
+  return post<{ ok: boolean }>('/api/auth/logout');
 }

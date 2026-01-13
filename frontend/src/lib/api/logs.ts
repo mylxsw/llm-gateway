@@ -1,6 +1,6 @@
 /**
  * Log Query API
- * Corresponds to backend /admin/logs route
+ * Corresponds to backend /api/admin/logs route
  */
 
 import { get } from './client';
@@ -11,7 +11,7 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const BASE_URL = '/admin/logs';
+const BASE_URL = '/api/admin/logs';
 
 /**
  * Query Request Logs List

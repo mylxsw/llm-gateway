@@ -5,10 +5,14 @@ FastAPI application main entry, including router registration and application co
 """
 
 from contextlib import asynccontextmanager
+import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.logging_config import setup_logging
@@ -117,14 +121,49 @@ async def root():
 app.include_router(openai_router)
 app.include_router(anthropic_router)
 
-# Auth Router
-app.include_router(auth_router)
+# Admin/Auth API (prefixed) — keep proxy endpoints (/v1/...) unchanged.
+api_router = APIRouter(prefix="/api")
+api_router.include_router(auth_router)
+api_router.include_router(providers_router)
+api_router.include_router(models_router)
+api_router.include_router(api_keys_router)
+api_router.include_router(logs_router)
+app.include_router(api_router)
 
-# Register Admin Routers
-app.include_router(providers_router)
-app.include_router(models_router)
-app.include_router(api_keys_router)
-app.include_router(logs_router)
+class FrontendStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code != 404:
+            return response
+
+        # Never serve SPA fallback for API/proxy paths.
+        if path == "api" or path.startswith("api/"):
+            return response
+        if path == "v1" or path.startswith("v1/"):
+            return response
+
+        # Serve /foo as /foo.html (Next static export).
+        if path and "." not in Path(path).name:
+            html_path = Path(self.directory) / f"{path}.html"
+            if html_path.exists():
+                return await super().get_response(f"{path}.html", scope)
+
+        # Serve /foo as /foo/index.html when exporting directories.
+        if path and "." not in Path(path).name:
+            index_path = Path(self.directory) / path / "index.html"
+            if index_path.exists():
+                return await super().get_response(f"{path}/index.html", scope)
+
+        # SPA fallback (keeps the dashboard usable on refresh / direct-link).
+        return await super().get_response("index.html", scope)
+
+
+repo_root = Path(__file__).resolve().parents[3]
+default_frontend_dist = repo_root / "frontend" / "out"
+frontend_dist_dir = Path(os.getenv("FRONTEND_DIST_DIR", str(default_frontend_dist)))
+
+if frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists():
+    app.mount("/", FrontendStaticFiles(directory=str(frontend_dist_dir), html=True), name="frontend")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 /**
  * Provider API
- * Corresponds to backend /admin/providers route
+ * Corresponds to backend /api/admin/providers route
  */
 
 import { get, post, put, del } from './client';
@@ -12,7 +12,7 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const BASE_URL = '/admin/providers';
+const BASE_URL = '/api/admin/providers';
 
 /**
  * Get Provider List

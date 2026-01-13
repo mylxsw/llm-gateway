@@ -5,9 +5,9 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import React, { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,54 +46,51 @@ function protocolLabel(protocol: ProtocolType) {
   }
 }
 
-/**
- * Model Detail Page Component
- */
 export default function ModelDetailPage() {
-  const params = useParams();
-  const requestedModel = decodeURIComponent(params.model as string);
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <ModelDetailContent />
+    </Suspense>
+  );
+}
 
-  // Form dialog state
+function ModelDetailContent() {
+  const searchParams = useSearchParams();
+  const requestedModelParam = searchParams.get('model');
+  const requestedModel = requestedModelParam ? decodeURIComponent(requestedModelParam) : '';
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingMapping, setEditingMapping] = useState<ModelMappingProvider | null>(null);
 
-  // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingMapping, setDeletingMapping] = useState<ModelMappingProvider | null>(null);
 
-  // Data query
   const { data: model, isLoading, isError, refetch } = useModel(requestedModel);
-  // Get all providers, do not filter by active status, for configuration
   const { data: providersData } = useProviders();
   const providersById = useMemo(() => {
     const entries = providersData?.items?.map((p) => [p.id, p] as const) ?? [];
     return new Map(entries);
   }, [providersData?.items]);
 
-  // Mutations
   const createMutation = useCreateModelProvider();
   const updateMutation = useUpdateModelProvider();
   const deleteMutation = useDeleteModelProvider();
 
-  // Open create form
   const handleAddProvider = () => {
     setEditingMapping(null);
     setFormOpen(true);
   };
 
-  // Open edit form
   const handleEditMapping = (mapping: ModelMappingProvider) => {
     setEditingMapping(mapping);
     setFormOpen(true);
   };
 
-  // Open delete confirmation
   const handleDeleteMapping = (mapping: ModelMappingProvider) => {
     setDeletingMapping(mapping);
     setDeleteDialogOpen(true);
   };
 
-  // Submit form
   const handleSubmit = async (
     formData: ModelMappingProviderCreate | ModelMappingProviderUpdate
   ) => {
@@ -115,7 +112,6 @@ export default function ModelDetailPage() {
     }
   };
 
-  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!deletingMapping) return;
     try {
@@ -128,9 +124,18 @@ export default function ModelDetailPage() {
     }
   };
 
-  if (isLoading) {
-    return <LoadingSpinner />;
+  if (!requestedModel) {
+    return (
+      <ErrorState
+        message="Missing model parameter"
+        onRetry={() => {
+          window.location.href = '/models';
+        }}
+      />
+    );
   }
+
+  if (isLoading) return <LoadingSpinner />;
 
   if (isError || !model) {
     return (
@@ -145,7 +150,6 @@ export default function ModelDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Button and Title */}
       <div className="flex items-center gap-4">
         <Link href="/models">
           <Button variant="ghost" size="icon">
@@ -158,7 +162,6 @@ export default function ModelDetailPage() {
         </div>
       </div>
 
-      {/* Basic Info */}
       <Card>
         <CardHeader>
           <CardTitle>Basic Information</CardTitle>
@@ -185,7 +188,6 @@ export default function ModelDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Matching Rules */}
       {model.matching_rules && (
         <Card>
           <CardHeader>
@@ -197,7 +199,6 @@ export default function ModelDetailPage() {
         </Card>
       )}
 
-      {/* Capabilities Description */}
       {model.capabilities && (
         <Card>
           <CardHeader>
@@ -209,7 +210,6 @@ export default function ModelDetailPage() {
         </Card>
       )}
 
-      {/* Provider Configuration */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Provider Configuration</CardTitle>
@@ -289,7 +289,10 @@ export default function ModelDetailPage() {
                             onClick={() => handleDeleteMapping(mapping)}
                             title="Delete"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
+                            <Trash2
+                              className="h-4 w-4 text-destructive"
+                              suppressHydrationWarning
+                            />
                           </Button>
                         </div>
                       </TableCell>
@@ -306,7 +309,6 @@ export default function ModelDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Provider Config Form */}
       <ModelProviderForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -317,7 +319,6 @@ export default function ModelDetailPage() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}

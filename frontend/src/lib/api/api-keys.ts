@@ -1,6 +1,6 @@
 /**
  * API Key API
- * Corresponds to backend /admin/api-keys route
+ * Corresponds to backend /api/admin/api-keys route
  */
 
 import { get, post, put, del } from './client';
@@ -12,7 +12,7 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const BASE_URL = '/admin/api-keys';
+const BASE_URL = '/api/admin/api-keys';
 
 /**
  * Get API Key List

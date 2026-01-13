@@ -7,7 +7,7 @@ import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types';
 
 /** API base URL, configurable via environment variables */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
 
 /**
  * Create axios instance
@@ -53,7 +53,7 @@ apiClient.interceptors.response.use(
     const statusCode = error.response?.status;
     const url = error.config?.url || '';
 
-    if (typeof window !== 'undefined' && statusCode === 401 && !url.includes('/auth/')) {
+    if (typeof window !== 'undefined' && statusCode === 401 && !url.includes('/api/auth/')) {
       window.dispatchEvent(new CustomEvent('auth:required'));
     }
 

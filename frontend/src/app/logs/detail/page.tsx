@@ -5,29 +5,28 @@
 
 'use client';
 
-import React from 'react';
-import { useParams } from 'next/navigation';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { LogDetail } from '@/components/logs';
 import { LoadingSpinner, ErrorState } from '@/components/common';
 import { useLogDetail } from '@/lib/hooks';
 
-/**
- * Log Detail Page Component
- */
 export default function LogDetailPage() {
-  const params = useParams();
-  const idParam = params?.id;
-  const logId = Number(Array.isArray(idParam) ? idParam[0] : idParam);
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <LogDetailContent />
+    </Suspense>
+  );
+}
 
-  // Data query
+function LogDetailContent() {
+  const searchParams = useSearchParams();
+  const logId = Number(searchParams.get('id'));
+
   const { data: log, isLoading, isError, refetch } = useLogDetail(logId);
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
 
   if (!Number.isFinite(logId)) {
     return (
@@ -40,6 +39,8 @@ export default function LogDetailPage() {
     );
   }
 
+  if (isLoading) return <LoadingSpinner />;
+
   if (isError || !log) {
     return (
       <ErrorState
@@ -51,7 +52,6 @@ export default function LogDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back Button and Title */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/logs">
@@ -61,14 +61,11 @@ export default function LogDetailPage() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold">Log Details</h1>
-            <p className="mt-1 text-muted-foreground">
-              Log ID: {log.id}
-            </p>
+            <p className="mt-1 text-muted-foreground">Log ID: {log.id}</p>
           </div>
         </div>
       </div>
 
-      {/* Log Detail Content (Rendered as a page) */}
       <LogDetail log={log} />
     </div>
   );

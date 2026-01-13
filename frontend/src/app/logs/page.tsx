@@ -84,8 +84,7 @@ export default function LogsPage() {
 
   // View Log Detail
   const handleViewLog = useCallback((log: RequestLog) => {
-    // Navigate to log detail page
-    window.location.href = `/logs/${log.id}`;
+    window.location.href = `/logs/detail?id=${encodeURIComponent(String(log.id))}`;
   }, []);
 
   return (

@@ -82,7 +82,9 @@ export function ModelList({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
-                  <Link href={`/models/${encodeURIComponent(model.requested_model)}`}>
+                  <Link
+                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}`}
+                  >
                     <Button variant="ghost" size="icon" title="View Details">
                       <Eye className="h-4 w-4" suppressHydrationWarning />
                     </Button>
