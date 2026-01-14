@@ -54,9 +54,9 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="flex w-64 flex-col border-r bg-white">
+    <div className="flex w-64 flex-col border-r border-border bg-card text-card-foreground">
       {/* Logo and Title */}
-      <div className="flex h-16 items-center border-b px-6">
+      <div className="flex h-16 items-center border-b border-border px-6">
         <Settings className="h-6 w-6 text-primary" suppressHydrationWarning />
         <span className="ml-3 text-lg font-semibold">LLM Gateway</span>
       </div>
@@ -76,7 +76,7 @@ export function Sidebar() {
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               )}
             >
               <Icon className="h-5 w-5" suppressHydrationWarning />
@@ -87,7 +87,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer Info */}
-      <div className="border-t px-6 py-4">
+      <div className="border-t border-border px-6 py-4">
         <p className="text-xs text-muted-foreground">
           LLM Gateway v1.0.0
         </p>

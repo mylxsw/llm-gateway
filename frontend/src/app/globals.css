@@ -5,6 +5,9 @@
 
 @import "tailwindcss";
 
+/* Make `dark:` respond to `.dark` class (Tailwind v4) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* CSS 变量定义 - 浅色主题 */
 :root {
   --background: 0 0% 100%;
@@ -27,6 +30,7 @@
   --input: 240 5.9% 90%;
   --ring: 240 5.9% 10%;
   --radius: 0.5rem;
+  color-scheme: light;
 }
 
 /* 深色主题（可选） */
@@ -50,6 +54,7 @@
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
   --ring: 240 4.9% 83.9%;
+  color-scheme: dark;
 }
 
 /* Tailwind 主题配置 */

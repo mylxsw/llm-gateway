@@ -4,11 +4,13 @@
  */
 
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
 import { AuthGate } from "@/components/auth";
+import { ThemeToggle } from "@/components/common/ThemeToggle";
 
 // Configure Sans-serif Font
 const geistSans = Geist({
@@ -39,6 +41,25 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(function () {
+  try {
+    var key = 'theme';
+    var stored = localStorage.getItem(key);
+    var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var theme = (stored === 'dark' || stored === 'light') ? stored : (systemDark ? 'dark' : 'light');
+    var root = document.documentElement;
+    if (theme === 'dark') root.classList.add('dark'); else root.classList.remove('dark');
+    root.dataset.theme = theme;
+  } catch (e) {}
+})();`,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
@@ -49,10 +70,11 @@ export default function RootLayout({
             {/* Sidebar Navigation */}
             <Sidebar />
             {/* Main Content Area */}
-            <main className="flex-1 overflow-auto bg-gray-50 p-6">
+            <main className="flex-1 overflow-auto bg-muted/30 p-6">
               {children}
             </main>
           </div>
+          <ThemeToggle />
         </Providers>
       </body>
     </html>

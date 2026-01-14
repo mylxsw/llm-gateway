@@ -107,11 +107,11 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  * Get color class name for status code
  */
 export function getStatusColor(status: number | null | undefined): string {
-  if (status === null || status === undefined) return 'text-gray-500';
-  if (status >= 200 && status < 300) return 'text-green-600';
-  if (status >= 400 && status < 500) return 'text-yellow-600';
-  if (status >= 500) return 'text-red-600';
-  return 'text-gray-500';
+  if (status === null || status === undefined) return 'text-muted-foreground';
+  if (status >= 200 && status < 300) return 'text-green-600 dark:text-green-400';
+  if (status >= 400 && status < 500) return 'text-yellow-600 dark:text-yellow-400';
+  if (status >= 500) return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
 }
 
 /**
@@ -122,6 +122,6 @@ export function getActiveStatus(isActive: boolean): {
   className: string;
 } {
   return isActive
-    ? { text: 'Active', className: 'bg-green-100 text-green-800' }
-    : { text: 'Inactive', className: 'bg-gray-100 text-gray-800' };
+    ? { text: 'Active', className: 'border-transparent bg-green-500/15 text-green-700 dark:text-green-300' }
+    : { text: 'Inactive', className: 'bg-muted text-muted-foreground' };
 }
