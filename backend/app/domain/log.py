@@ -1,7 +1,7 @@
 """
-请求日志领域模型
+Request Log Domain Model
 
-定义请求日志相关的数据传输对象（DTO）。
+Defines Request Log related Data Transfer Objects (DTOs).
 """
 
 from datetime import datetime
@@ -11,69 +11,69 @@ from pydantic import BaseModel, Field
 
 
 class RequestLogBase(BaseModel):
-    """请求日志基础模型"""
+    """Request Log Base Model"""
     
-    # 请求时间
-    request_time: datetime = Field(..., description="请求时间")
+    # Request Time
+    request_time: datetime = Field(..., description="Request Time")
     # API Key ID
     api_key_id: Optional[int] = Field(None, description="API Key ID")
-    # API Key 名称
-    api_key_name: Optional[str] = Field(None, description="API Key 名称")
-    # 请求模型名
-    requested_model: Optional[str] = Field(None, description="请求模型名")
-    # 目标模型名
-    target_model: Optional[str] = Field(None, description="目标模型名")
-    # 供应商 ID
-    provider_id: Optional[int] = Field(None, description="供应商 ID")
-    # 供应商名称
-    provider_name: Optional[str] = Field(None, description="供应商名称")
+    # API Key Name
+    api_key_name: Optional[str] = Field(None, description="API Key Name")
+    # Requested Model Name
+    requested_model: Optional[str] = Field(None, description="Requested Model Name")
+    # Target Model Name
+    target_model: Optional[str] = Field(None, description="Target Model Name")
+    # Provider ID
+    provider_id: Optional[int] = Field(None, description="Provider ID")
+    # Provider Name
+    provider_name: Optional[str] = Field(None, description="Provider Name")
 
 
 class RequestLogCreate(RequestLogBase):
-    """创建请求日志模型"""
+    """Create Request Log Model"""
     
-    # 重试次数
-    retry_count: int = Field(0, description="重试次数")
-    # 首字节延迟（毫秒）
-    first_byte_delay_ms: Optional[int] = Field(None, description="首字节延迟")
-    # 总耗时（毫秒）
-    total_time_ms: Optional[int] = Field(None, description="总耗时")
-    # 输入 Token 数
-    input_tokens: Optional[int] = Field(None, description="输入 Token 数")
-    # 输出 Token 数
-    output_tokens: Optional[int] = Field(None, description="输出 Token 数")
-    # 请求头（已脱敏）
-    request_headers: Optional[dict[str, Any]] = Field(None, description="请求头")
-    # 请求体
-    request_body: Optional[dict[str, Any]] = Field(None, description="请求体")
-    # 响应状态码
-    response_status: Optional[int] = Field(None, description="响应状态码")
-    # 响应体
-    response_body: Optional[str] = Field(None, description="响应体")
-    # 错误信息
-    error_info: Optional[str] = Field(None, description="错误信息")
-    # 匹配到的供应商数量
-    matched_provider_count: Optional[int] = Field(None, description="匹配到的供应商数量")
-    # 追踪 ID
-    trace_id: Optional[str] = Field(None, description="追踪 ID")
-    # 是否为流式请求
-    is_stream: bool = Field(False, description="是否为流式请求")
+    # Retry Count
+    retry_count: int = Field(0, description="Retry Count")
+    # First Byte Delay (ms)
+    first_byte_delay_ms: Optional[int] = Field(None, description="First Byte Delay")
+    # Total Time (ms)
+    total_time_ms: Optional[int] = Field(None, description="Total Time")
+    # Input Token Count
+    input_tokens: Optional[int] = Field(None, description="Input Token Count")
+    # Output Token Count
+    output_tokens: Optional[int] = Field(None, description="Output Token Count")
+    # Request Headers (Sanitized)
+    request_headers: Optional[dict[str, Any]] = Field(None, description="Request Headers")
+    # Request Body
+    request_body: Optional[dict[str, Any]] = Field(None, description="Request Body")
+    # Response Status Code
+    response_status: Optional[int] = Field(None, description="Response Status Code")
+    # Response Body
+    response_body: Optional[str] = Field(None, description="Response Body")
+    # Error Info
+    error_info: Optional[str] = Field(None, description="Error Info")
+    # Matched Provider Count
+    matched_provider_count: Optional[int] = Field(None, description="Matched Provider Count")
+    # Trace ID
+    trace_id: Optional[str] = Field(None, description="Trace ID")
+    # Is Stream Request
+    is_stream: bool = Field(False, description="Is Stream Request")
 
 
 class RequestLogModel(RequestLogCreate):
-    """请求日志完整模型"""
+    """Request Log Complete Model"""
     
-    id: int = Field(..., description="日志 ID")
+    id: int = Field(..., description="Log ID")
     
     class Config:
         from_attributes = True
 
 
 class RequestLogResponse(RequestLogBase):
-    """请求日志响应模型（列表展示）"""
+    """Request Log Response Model (List View)"""
     
-    id: int = Field(..., description="日志 ID")
-    retry_count: int = Field(0, description="重试次数")
+    id: int = Field(..., description="Log ID")
+    retry_count: int = Field(0, description="Retry Count")
     matched_provider_count: Optional[int] = None
     first_byte_delay_ms: Optional[int] = None
     total_time_ms: Optional[int] = None
@@ -88,45 +88,45 @@ class RequestLogResponse(RequestLogBase):
 
 
 class RequestLogDetailResponse(RequestLogModel):
-    """请求日志详情响应模型"""
+    """Request Log Detail Response Model"""
 
-    response_body: Optional[Any] = Field(None, description="响应体（自动解析 JSON）")
+    response_body: Optional[Any] = Field(None, description="Response Body (Auto-parsed JSON)")
     
     class Config:
         from_attributes = True
 
 
 class RequestLogQuery(BaseModel):
-    """请求日志查询条件"""
+    """Request Log Query Conditions"""
     
-    # 时间范围
-    start_time: Optional[datetime] = Field(None, description="开始时间")
-    end_time: Optional[datetime] = Field(None, description="结束时间")
-    # 模型过滤
-    requested_model: Optional[str] = Field(None, description="请求模型（模糊匹配）")
-    target_model: Optional[str] = Field(None, description="目标模型（模糊匹配）")
-    # 供应商过滤
-    provider_id: Optional[int] = Field(None, description="供应商 ID")
-    # 状态码过滤
-    status_min: Optional[int] = Field(None, description="最小状态码")
-    status_max: Optional[int] = Field(None, description="最大状态码")
-    # 是否有错误
-    has_error: Optional[bool] = Field(None, description="是否有错误")
-    # API Key 过滤
+    # Time Range
+    start_time: Optional[datetime] = Field(None, description="Start Time")
+    end_time: Optional[datetime] = Field(None, description="End Time")
+    # Model Filter
+    requested_model: Optional[str] = Field(None, description="Requested Model (Fuzzy Match)")
+    target_model: Optional[str] = Field(None, description="Target Model (Fuzzy Match)")
+    # Provider Filter
+    provider_id: Optional[int] = Field(None, description="Provider ID")
+    # Status Code Filter
+    status_min: Optional[int] = Field(None, description="Min Status Code")
+    status_max: Optional[int] = Field(None, description="Max Status Code")
+    # Error Filter
+    has_error: Optional[bool] = Field(None, description="Has Error")
+    # API Key Filter
     api_key_id: Optional[int] = Field(None, description="API Key ID")
-    api_key_name: Optional[str] = Field(None, description="API Key 名称")
-    # 重试次数过滤
-    retry_count_min: Optional[int] = Field(None, description="最小重试次数")
-    retry_count_max: Optional[int] = Field(None, description="最大重试次数")
-    # Token 过滤
-    input_tokens_min: Optional[int] = Field(None, description="最小输入 Token")
-    input_tokens_max: Optional[int] = Field(None, description="最大输入 Token")
-    # 耗时过滤
-    total_time_min: Optional[int] = Field(None, description="最小耗时（毫秒）")
-    total_time_max: Optional[int] = Field(None, description="最大耗时（毫秒）")
-    # 分页
-    page: int = Field(1, ge=1, description="页码")
-    page_size: int = Field(20, ge=1, le=100, description="每页数量")
-    # 排序
-    sort_by: str = Field("request_time", description="排序字段")
-    sort_order: str = Field("desc", pattern="^(asc|desc)$", description="排序方向")
+    api_key_name: Optional[str] = Field(None, description="API Key Name")
+    # Retry Count Filter
+    retry_count_min: Optional[int] = Field(None, description="Min Retry Count")
+    retry_count_max: Optional[int] = Field(None, description="Max Retry Count")
+    # Token Filter
+    input_tokens_min: Optional[int] = Field(None, description="Min Input Tokens")
+    input_tokens_max: Optional[int] = Field(None, description="Max Input Tokens")
+    # Time Filter
+    total_time_min: Optional[int] = Field(None, description="Min Total Time (ms)")
+    total_time_max: Optional[int] = Field(None, description="Max Total Time (ms)")
+    # Pagination
+    page: int = Field(1, ge=1, description="Page Number")
+    page_size: int = Field(20, ge=1, le=100, description="Items Per Page")
+    # Sorting
+    sort_by: str = Field("request_time", description="Sort Field")
+    sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort Order")

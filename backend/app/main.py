@@ -1,63 +1,73 @@
 """
-LLM Gateway 应用入口
+LLM Gateway Application Entry Point
 
-FastAPI 应用主入口，包含路由注册和应用配置。
+FastAPI application main entry, including router registration and application configuration.
 """
 
 from contextlib import asynccontextmanager
+import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.logging_config import setup_logging
 from app.db.session import init_db
 from app.common.errors import AppError
 from app.api.proxy import openai_router, anthropic_router
 from app.api.admin import providers_router, models_router, api_keys_router, logs_router
+from app.api.auth import router as auth_router
 from app.scheduler import start_scheduler, shutdown_scheduler
 
 
-# 应用生命周期管理
+# Initialize logging configuration
+setup_logging()
+
+
+# Application Lifecycle Management
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    应用生命周期管理
+    Application Lifecycle Management
 
-    启动时初始化数据库，关闭时清理资源。
+    Initialize database on startup, clean up resources on shutdown.
     """
-    # 启动时
+    # Startup
     await init_db()
     start_scheduler()
     yield
-    # 关闭时
+    # Shutdown
     shutdown_scheduler()
 
 
-# 创建 FastAPI 应用
+# Create FastAPI application
 settings = get_settings()
 app = FastAPI(
     title=settings.APP_NAME,
-    description="兼容 OpenAI/Anthropic 的 LLM 代理网关服务",
+    description="LLM Proxy Gateway Service compatible with OpenAI/Anthropic",
     version="0.1.0",
     lifespan=lifespan,
 )
 
-# 配置 CORS
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_origins=["*"],  # Should restrict specific domains in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# 全局异常处理
+# Global Exception Handler
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError):
     """
-    处理应用自定义异常
+    Handle application custom exceptions
     """
     return JSONResponse(
         status_code=exc.status_code,
@@ -68,7 +78,7 @@ async def app_error_handler(request: Request, exc: AppError):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """
-    处理未捕获的异常
+    Handle uncaught exceptions
     """
     return JSONResponse(
         status_code=500,
@@ -82,13 +92,13 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# 健康检查端点
+# Health Check Endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
-    健康检查
+    Health Check
     
-    用于服务存活探测。
+    Used for service liveness probe.
     """
     return {"status": "healthy"}
 
@@ -96,26 +106,64 @@ async def health_check():
 @app.get("/", tags=["Health"])
 async def root():
     """
-    根路径
+    Root Path
     
-    返回服务基本信息。
+    Returns basic service information.
     """
     return {
         "name": settings.APP_NAME,
         "version": "0.1.0",
-        "description": "LLM Gateway - 模型路由与代理服务",
+        "description": "LLM Gateway - Model Routing & Proxy Service",
     }
 
 
-# 注册代理路由
+# Register Proxy Routers
 app.include_router(openai_router)
 app.include_router(anthropic_router)
 
-# 注册管理路由
-app.include_router(providers_router)
-app.include_router(models_router)
-app.include_router(api_keys_router)
-app.include_router(logs_router)
+# Admin/Auth API (prefixed) — keep proxy endpoints (/v1/...) unchanged.
+api_router = APIRouter(prefix="/api")
+api_router.include_router(auth_router)
+api_router.include_router(providers_router)
+api_router.include_router(models_router)
+api_router.include_router(api_keys_router)
+api_router.include_router(logs_router)
+app.include_router(api_router)
+
+class FrontendStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code != 404:
+            return response
+
+        # Never serve SPA fallback for API/proxy paths.
+        if path == "api" or path.startswith("api/"):
+            return response
+        if path == "v1" or path.startswith("v1/"):
+            return response
+
+        # Serve /foo as /foo.html (Next static export).
+        if path and "." not in Path(path).name:
+            html_path = Path(self.directory) / f"{path}.html"
+            if html_path.exists():
+                return await super().get_response(f"{path}.html", scope)
+
+        # Serve /foo as /foo/index.html when exporting directories.
+        if path and "." not in Path(path).name:
+            index_path = Path(self.directory) / path / "index.html"
+            if index_path.exists():
+                return await super().get_response(f"{path}/index.html", scope)
+
+        # SPA fallback (keeps the dashboard usable on refresh / direct-link).
+        return await super().get_response("index.html", scope)
+
+
+repo_root = Path(__file__).resolve().parents[3]
+default_frontend_dist = repo_root / "frontend" / "out"
+frontend_dist_dir = Path(os.getenv("FRONTEND_DIST_DIR", str(default_frontend_dist)))
+
+if frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists():
+    app.mount("/", FrontendStaticFiles(directory=str(frontend_dist_dir), html=True), name="frontend")
 
 
 if __name__ == "__main__":

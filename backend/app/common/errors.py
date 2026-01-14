@@ -1,7 +1,7 @@
 """
-错误定义模块
+Error Definitions
 
-定义应用中使用的自定义异常类，统一错误处理。
+Defines custom exception classes used in the application for unified error handling.
 """
 
 from typing import Any, Optional
@@ -9,9 +9,9 @@ from typing import Any, Optional
 
 class AppError(Exception):
     """
-    应用基础异常类
+    Application Base Exception
     
-    所有自定义异常的基类，包含错误消息、类型和代码。
+    Base class for all custom exceptions, containing error message, type, and code.
     """
     
     def __init__(
@@ -23,14 +23,14 @@ class AppError(Exception):
         status_code: int = 500,
     ):
         """
-        初始化异常
+        Initialize exception
         
         Args:
-            message: 错误消息
-            error_type: 错误类型
-            code: 错误代码
-            details: 额外错误详情
-            status_code: HTTP 状态码
+            message: Error message
+            error_type: Error type
+            code: Error code
+            details: Extra error details
+            status_code: HTTP status code
         """
         super().__init__(message)
         self.message = message
@@ -41,10 +41,10 @@ class AppError(Exception):
     
     def to_dict(self) -> dict[str, Any]:
         """
-        转换为字典格式（用于 API 响应）
+        Convert to dictionary format (for API response)
         
         Returns:
-            dict: 错误信息字典
+            dict: Error information dictionary
         """
         result = {
             "error": {
@@ -60,9 +60,9 @@ class AppError(Exception):
 
 class AuthenticationError(AppError):
     """
-    认证错误
+    Authentication Error
     
-    当 API Key 无效或已禁用时抛出。
+    Raised when API Key is invalid or disabled.
     """
     
     def __init__(
@@ -82,9 +82,9 @@ class AuthenticationError(AppError):
 
 class NotFoundError(AppError):
     """
-    资源不存在错误
+    Resource Not Found Error
     
-    当请求的资源（如模型、供应商）不存在时抛出。
+    Raised when requested resource (e.g., model, provider) does not exist.
     """
     
     def __init__(
@@ -104,9 +104,9 @@ class NotFoundError(AppError):
 
 class ConflictError(AppError):
     """
-    资源冲突错误
+    Resource Conflict Error
     
-    当资源已存在（如重名）或被引用无法删除时抛出。
+    Raised when resource already exists (e.g., duplicate name) or cannot be deleted due to references.
     """
     
     def __init__(
@@ -126,9 +126,9 @@ class ConflictError(AppError):
 
 class ValidationError(AppError):
     """
-    参数校验错误
+    Parameter Validation Error
     
-    当请求参数不符合要求时抛出。
+    Raised when request parameters do not meet requirements.
     """
     
     def __init__(
@@ -148,9 +148,9 @@ class ValidationError(AppError):
 
 class UpstreamError(AppError):
     """
-    上游服务错误
+    Upstream Service Error
     
-    当上游供应商返回错误或全部失败时抛出。
+    Raised when upstream provider returns an error or all providers fail.
     """
     
     def __init__(
@@ -171,9 +171,9 @@ class UpstreamError(AppError):
 
 class ServiceError(AppError):
     """
-    服务错误
+    Service Error
     
-    当服务内部处理出错（如无可用供应商）时抛出。
+    Raised when internal service processing fails (e.g., no available provider).
     """
     
     def __init__(

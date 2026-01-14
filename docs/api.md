@@ -1,67 +1,67 @@
-# LLM Gateway API 文档
+# LLM Gateway API Documentation
 
-## 概述
+## Overview
 
-本文档定义了 LLM Gateway 的前后端接口规范。
+This document defines the interface specifications for the LLM Gateway backend and frontend.
 
 - **Base URL**: `http://localhost:8000`
-- **认证方式**: API 代理接口使用 `Authorization: Bearer <api_key>` 认证
-- **数据格式**: JSON
+- **Authentication**: Proxy APIs use `Authorization: Bearer <api_key>` authentication.
+- **Data Format**: JSON
 
 ---
 
-## 一、代理接口 (Proxy API)
+## I. Proxy API
 
-### ⚠️ 透传原则（重要）
+### ⚠️ Pass-through Principle (Important)
 
-**所有代理接口必须遵循严格的透传原则：**
+**All proxy interfaces must strictly adhere to the pass-through principle:**
 
-1. **请求透传**：
-   - 客户端发送的请求体（body）**原样转发**到上游供应商
-   - **仅修改 `model` 字段**为目标模型名（target_model）
-   - 其他所有字段（messages、temperature、max_tokens、tools、stream 等）**不做任何修改**
-   - 请求头（headers）中除鉴权相关字段外，**原样转发**
+1.  **Request Pass-through**:
+    -   The request body sent by the client is **forwarded as-is** to the upstream provider.
+    -   **Only the `model` field is modified** to the target model name (`target_model`).
+    -   All other fields (messages, temperature, max_tokens, tools, stream, etc.) are **not modified**.
+    -   Request headers (headers) are **forwarded as-is**, except for authentication-related fields.
 
-2. **响应透传**：
-   - 上游供应商返回的响应**原样返回**给客户端
-   - **不修改**响应体中的任何字段
-   - **不修改**响应头
+2.  **Response Pass-through**:
+    -   The response returned by the upstream provider is **returned as-is** to the client.
+    -   **Do not modify** any fields in the response body.
+    -   **Do not modify** response headers.
 
-3. **URL 路由**：
-   - 根据请求路径和供应商协议，将请求转发到正确的上游 URL
-   - 例如：`/v1/chat/completions` → `{provider.base_url}/v1/chat/completions`
+3.  **URL Routing**:
+    -   Forward requests to the correct upstream URL based on the request path and provider protocol.
+    -   Example: `/v1/chat/completions` → `{provider.base_url}/v1/chat/completions`
 
-4. **实现要点**：
-   ```python
-   # 伪代码示例
-   def forward_request(request_body, target_model, provider):
-       # 仅替换 model 字段
-       forwarded_body = request_body.copy()
-       forwarded_body["model"] = target_model
-       
-       # 其他字段保持不变
-       # ❌ 不要做: forwarded_body["temperature"] = 0.7
-       # ❌ 不要做: forwarded_body["max_tokens"] = min(request_body["max_tokens"], 4096)
-       # ✅ 正确: 直接使用 request_body 中的原始值
-       
-       return forward_to_provider(provider.base_url, forwarded_body)
-   ```
+4.  **Implementation Points**:
+    ```python
+    # Pseudo-code example
+    def forward_request(request_body, target_model, provider):
+        # Only replace model field
+        forwarded_body = request_body.copy()
+        forwarded_body["model"] = target_model
+        
+        # Other fields remain unchanged
+        # ❌ Do not do: forwarded_body["temperature"] = 0.7
+        # ❌ Do not do: forwarded_body["max_tokens"] = min(request_body["max_tokens"], 4096)
+        # ✅ Correct: Directly use original values from request_body
+        
+        return forward_to_provider(provider.base_url, forwarded_body)
+    ```
 
 ---
 
-### 1.1 OpenAI 兼容接口
+### 1.1 OpenAI Compatible Interface
 
 #### POST /v1/chat/completions
 
-Chat Completions 代理接口
+Chat Completions Proxy Interface
 
-**请求头**
+**Request Headers**
 ```
 Authorization: Bearer <api_key>
 Content-Type: application/json
 ```
 
-**请求体** (与 OpenAI 格式一致)
+**Request Body** (Consistent with OpenAI format)
 ```json
 {
   "model": "gpt-4",
@@ -75,7 +75,7 @@ Content-Type: application/json
 }
 ```
 
-**响应** (与 OpenAI 格式一致)
+**Response** (Consistent with OpenAI format)
 ```json
 {
   "id": "chatcmpl-xxx",
@@ -100,7 +100,7 @@ Content-Type: application/json
 }
 ```
 
-**错误响应**
+**Error Response**
 ```json
 {
   "error": {
@@ -115,9 +115,9 @@ Content-Type: application/json
 
 #### POST /v1/completions
 
-Text Completions 代理接口
+Text Completions Proxy Interface
 
-**请求体**
+**Request Body**
 ```json
 {
   "model": "gpt-3.5-turbo-instruct",
@@ -130,9 +130,9 @@ Text Completions 代理接口
 
 #### POST /v1/embeddings
 
-Embeddings 代理接口
+Embeddings Proxy Interface
 
-**请求体**
+**Request Body**
 ```json
 {
   "model": "text-embedding-ada-002",
@@ -142,13 +142,13 @@ Embeddings 代理接口
 
 ---
 
-### 1.2 Anthropic 兼容接口
+### 1.2 Anthropic Compatible Interface
 
 #### POST /v1/messages
 
-Anthropic Messages 代理接口
+Anthropic Messages Proxy Interface
 
-**请求头**
+**Request Headers**
 ```
 Authorization: Bearer <api_key>
 Content-Type: application/json
@@ -156,7 +156,7 @@ x-api-key: <api_key>
 anthropic-version: 2023-06-01
 ```
 
-**请求体**
+**Request Body**
 ```json
 {
   "model": "claude-3-opus-20240229",
@@ -167,7 +167,7 @@ anthropic-version: 2023-06-01
 }
 ```
 
-**响应**
+**Response**
 ```json
 {
   "id": "msg_xxx",
@@ -190,22 +190,22 @@ anthropic-version: 2023-06-01
 
 ---
 
-## 二、管理接口 (Admin API)
+## II. Admin API
 
-### 2.1 供应商管理
+### 2.1 Provider Management
 
 #### GET /admin/providers
 
-获取供应商列表
+Get Provider List
 
-**查询参数**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| is_active | boolean | 否 | 过滤激活状态 |
-| page | int | 否 | 页码，默认 1 |
-| page_size | int | 否 | 每页数量，默认 20 |
+**Query Parameters**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| is_active | boolean | No | Filter by active status |
+| page | int | No | Page number, default 1 |
+| page_size | int | No | Items per page, default 20 |
 
-**响应**
+**Response**
 ```json
 {
   "items": [
@@ -230,9 +230,9 @@ anthropic-version: 2023-06-01
 
 #### GET /admin/providers/{id}
 
-获取单个供应商详情
+Get Single Provider Details
 
-**响应**
+**Response**
 ```json
 {
   "id": 1,
@@ -240,7 +240,7 @@ anthropic-version: 2023-06-01
   "base_url": "https://api.openai.com",
   "protocol": "openai",
   "api_type": "chat",
-  "api_key": "sk-***...***",  // 脱敏显示
+  "api_key": "sk-***...***",  // Sanitized display
   "is_active": true,
   "created_at": "2024-01-01T00:00:00Z",
   "updated_at": "2024-01-01T00:00:00Z"
@@ -251,9 +251,9 @@ anthropic-version: 2023-06-01
 
 #### POST /admin/providers
 
-创建供应商
+Create Provider
 
-**请求体**
+**Request Body**
 ```json
 {
   "name": "OpenAI Official",
@@ -265,17 +265,17 @@ anthropic-version: 2023-06-01
 }
 ```
 
-**字段说明**
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| name | string | 是 | 供应商名称，唯一 |
-| base_url | string | 是 | 接口地址 |
-| protocol | string | 是 | 协议类型: openai / anthropic |
-| api_type | string | 是 | API 类型: chat / completion / embedding |
-| api_key | string | 否 | 供应商 API Key |
-| is_active | boolean | 否 | 是否激活，默认 true |
+**Field Description**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| name | string | Yes | Provider name, unique |
+| base_url | string | Yes | Interface address |
+| protocol | string | Yes | Protocol type: openai / anthropic |
+| api_type | string | Yes | API type: chat / completion / embedding |
+| api_key | string | No | Provider API Key |
+| is_active | boolean | No | Active status, default true |
 
-**响应**: 201 Created
+**Response**: 201 Created
 ```json
 {
   "id": 1,
@@ -293,9 +293,9 @@ anthropic-version: 2023-06-01
 
 #### PUT /admin/providers/{id}
 
-更新供应商
+Update Provider
 
-**请求体**
+**Request Body**
 ```json
 {
   "name": "OpenAI Official Updated",
@@ -304,17 +304,17 @@ anthropic-version: 2023-06-01
 }
 ```
 
-**响应**: 200 OK
+**Response**: 200 OK
 
 ---
 
 #### DELETE /admin/providers/{id}
 
-删除供应商
+Delete Provider
 
-**响应**: 204 No Content
+**Response**: 204 No Content
 
-**错误响应** (被引用时)
+**Error Response** (When referenced)
 ```json
 {
   "error": {
@@ -326,20 +326,20 @@ anthropic-version: 2023-06-01
 
 ---
 
-### 2.2 模型映射管理
+### 2.2 Model Mapping Management
 
 #### GET /admin/models
 
-获取模型映射列表
+Get Model Mapping List
 
-**查询参数**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| is_active | boolean | 否 | 过滤激活状态 |
-| page | int | 否 | 页码，默认 1 |
-| page_size | int | 否 | 每页数量，默认 20 |
+**Query Parameters**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| is_active | boolean | No | Filter by active status |
+| page | int | No | Page number, default 1 |
+| page_size | int | No | Items per page, default 20 |
 
-**响应**
+**Response**
 ```json
 {
   "items": [
@@ -364,9 +364,9 @@ anthropic-version: 2023-06-01
 
 #### GET /admin/models/{requested_model}
 
-获取单个模型映射详情（含供应商配置）
+Get Single Model Mapping Details (Includes Provider Config)
 
-**响应**
+**Response**
 ```json
 {
   "requested_model": "gpt-4",
@@ -409,9 +409,9 @@ anthropic-version: 2023-06-01
 
 #### POST /admin/models
 
-创建模型映射
+Create Model Mapping
 
-**请求体**
+**Request Body**
 ```json
 {
   "requested_model": "gpt-4",
@@ -426,24 +426,24 @@ anthropic-version: 2023-06-01
 }
 ```
 
-**字段说明**
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| requested_model | string | 是 | 请求模型名，主键 |
-| strategy | string | 否 | 选择策略，默认 round_robin |
-| matching_rules | object | 否 | 模型级匹配规则 |
-| capabilities | object | 否 | 模型能力描述 |
-| is_active | boolean | 否 | 是否激活，默认 true |
+**Field Description**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| requested_model | string | Yes | Requested model name, Primary Key |
+| strategy | string | No | Selection strategy, default round_robin |
+| matching_rules | object | No | Model level matching rules |
+| capabilities | object | No | Model capabilities description |
+| is_active | boolean | No | Active status, default true |
 
-**响应**: 201 Created
+**Response**: 201 Created
 
 ---
 
 #### PUT /admin/models/{requested_model}
 
-更新模型映射
+Update Model Mapping
 
-**请求体**
+**Request Body**
 ```json
 {
   "matching_rules": {
@@ -459,26 +459,26 @@ anthropic-version: 2023-06-01
 
 #### DELETE /admin/models/{requested_model}
 
-删除模型映射（同时删除关联的供应商配置）
+Delete Model Mapping (Simultaneously deletes associated provider configurations)
 
-**响应**: 204 No Content
+**Response**: 204 No Content
 
 ---
 
-### 2.3 模型-供应商映射管理
+### 2.3 Model-Provider Mapping Management
 
 #### GET /admin/model-providers
 
-获取所有模型-供应商映射
+Get All Model-Provider Mappings
 
-**查询参数**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| requested_model | string | 否 | 按模型过滤 |
-| provider_id | int | 否 | 按供应商过滤 |
-| is_active | boolean | 否 | 过滤激活状态 |
+**Query Parameters**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| requested_model | string | No | Filter by model |
+| provider_id | int | No | Filter by provider |
+| is_active | boolean | No | Filter by active status |
 
-**响应**
+**Response**
 ```json
 {
   "items": [
@@ -504,9 +504,9 @@ anthropic-version: 2023-06-01
 
 #### POST /admin/model-providers
 
-创建模型-供应商映射
+Create Model-Provider Mapping
 
-**请求体**
+**Request Body**
 ```json
 {
   "requested_model": "gpt-4",
@@ -523,26 +523,26 @@ anthropic-version: 2023-06-01
 }
 ```
 
-**字段说明**
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| requested_model | string | 是 | 请求模型名 |
-| provider_id | int | 是 | 供应商 ID |
-| target_model_name | string | 是 | 目标模型名（该供应商使用的实际模型） |
-| provider_rules | object | 否 | 供应商级匹配规则 |
-| priority | int | 否 | 优先级，默认 0 |
-| weight | int | 否 | 权重，默认 1 |
-| is_active | boolean | 否 | 是否激活，默认 true |
+**Field Description**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| requested_model | string | Yes | Requested model name |
+| provider_id | int | Yes | Provider ID |
+| target_model_name | string | Yes | Target model name (Actual model used by provider) |
+| provider_rules | object | No | Provider level matching rules |
+| priority | int | No | Priority, default 0 |
+| weight | int | No | Weight, default 1 |
+| is_active | boolean | No | Active status, default true |
 
-**响应**: 201 Created
+**Response**: 201 Created
 
 ---
 
 #### PUT /admin/model-providers/{id}
 
-更新模型-供应商映射
+Update Model-Provider Mapping
 
-**请求体**
+**Request Body**
 ```json
 {
   "target_model_name": "gpt-4-turbo",
@@ -555,33 +555,33 @@ anthropic-version: 2023-06-01
 
 #### DELETE /admin/model-providers/{id}
 
-删除模型-供应商映射
+Delete Model-Provider Mapping
 
-**响应**: 204 No Content
+**Response**: 204 No Content
 
 ---
 
-### 2.4 API Key 管理
+### 2.4 API Key Management
 
 #### GET /admin/api-keys
 
-获取 API Key 列表
+Get API Key List
 
-**查询参数**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| is_active | boolean | 否 | 过滤激活状态 |
-| page | int | 否 | 页码，默认 1 |
-| page_size | int | 否 | 每页数量，默认 20 |
+**Query Parameters**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| is_active | boolean | No | Filter by active status |
+| page | int | No | Page number, default 1 |
+| page_size | int | No | Items per page, default 20 |
 
-**响应**
+**Response**
 ```json
 {
   "items": [
     {
       "id": 1,
       "key_name": "Production Key",
-      "key_value": "lgw-***...***",  // 脱敏显示
+      "key_value": "lgw-***...***",  // Sanitized display
       "is_active": true,
       "created_at": "2024-01-01T00:00:00Z",
       "last_used_at": "2024-01-10T12:00:00Z"
@@ -597,9 +597,9 @@ anthropic-version: 2023-06-01
 
 #### GET /admin/api-keys/{id}
 
-获取单个 API Key 详情
+Get Single API Key Details
 
-**响应**
+**Response**
 ```json
 {
   "id": 1,
@@ -615,36 +615,36 @@ anthropic-version: 2023-06-01
 
 #### POST /admin/api-keys
 
-创建 API Key
+Create API Key
 
-**请求体**
+**Request Body**
 ```json
 {
   "key_name": "Production Key"
 }
 ```
 
-**响应**: 201 Created
+**Response**: 201 Created
 ```json
 {
   "id": 1,
   "key_name": "Production Key",
-  "key_value": "lgw-xxxxxxxxxxxxxxxxxxxx",  // 完整显示，仅此一次
+  "key_value": "lgw-xxxxxxxxxxxxxxxxxxxx",  // Full display, only this time
   "is_active": true,
   "created_at": "2024-01-01T00:00:00Z",
   "last_used_at": null
 }
 ```
 
-> **注意**: `key_value` 仅在创建时完整返回，后续查询将脱敏显示
+> **Note**: `key_value` is only returned in full upon creation, subsequent queries will display it sanitized.
 
 ---
 
 #### PUT /admin/api-keys/{id}
 
-更新 API Key
+Update API Key
 
-**请求体**
+**Request Body**
 ```json
 {
   "key_name": "Production Key Updated",
@@ -656,43 +656,43 @@ anthropic-version: 2023-06-01
 
 #### DELETE /admin/api-keys/{id}
 
-删除 API Key
+Delete API Key
 
-**响应**: 204 No Content
+**Response**: 204 No Content
 
 ---
 
-### 2.5 日志查询
+### 2.5 Log Query
 
 #### GET /admin/logs
 
-查询请求日志
+Query Request Logs
 
-**查询参数**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| start_time | datetime | 否 | 开始时间 (ISO 8601) |
-| end_time | datetime | 否 | 结束时间 (ISO 8601) |
-| requested_model | string | 否 | 请求模型 (模糊匹配) |
-| target_model | string | 否 | 目标模型 (模糊匹配) |
-| provider_id | int | 否 | 供应商 ID |
-| status_min | int | 否 | 最小状态码 |
-| status_max | int | 否 | 最大状态码 |
-| has_error | boolean | 否 | 是否有错误 |
-| api_key_id | int | 否 | API Key ID |
-| api_key_name | string | 否 | API Key 名称 |
-| retry_count_min | int | 否 | 最小重试次数 |
-| retry_count_max | int | 否 | 最大重试次数 |
-| input_tokens_min | int | 否 | 最小输入 Token |
-| input_tokens_max | int | 否 | 最大输入 Token |
-| total_time_min | int | 否 | 最小耗时 (ms) |
-| total_time_max | int | 否 | 最大耗时 (ms) |
-| page | int | 否 | 页码，默认 1 |
-| page_size | int | 否 | 每页数量，默认 20 |
-| sort_by | string | 否 | 排序字段，默认 request_time |
-| sort_order | string | 否 | 排序方向: asc / desc，默认 desc |
+**Query Parameters**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| start_time | datetime | No | Start time (ISO 8601) |
+| end_time | datetime | No | End time (ISO 8601) |
+| requested_model | string | No | Request model (Fuzzy match) |
+| target_model | string | No | Target model (Fuzzy match) |
+| provider_id | int | No | Provider ID |
+| status_min | int | No | Min status code |
+| status_max | int | No | Max status code |
+| has_error | boolean | No | Has error |
+| api_key_id | int | No | API Key ID |
+| api_key_name | string | No | API Key Name |
+| retry_count_min | int | No | Min retry count |
+| retry_count_max | int | No | Max retry count |
+| input_tokens_min | int | No | Min input tokens |
+| input_tokens_max | int | No | Max input tokens |
+| total_time_min | int | No | Min total time (ms) |
+| total_time_max | int | No | Max total time (ms) |
+| page | int | No | Page number, default 1 |
+| page_size | int | No | Items per page, default 20 |
+| sort_by | string | No | Sort field, default request_time |
+| sort_order | string | No | Sort order: asc / desc, default desc |
 
-**响应**
+**Response**
 ```json
 {
   "items": [
@@ -724,9 +724,9 @@ anthropic-version: 2023-06-01
 
 #### GET /admin/logs/{id}
 
-获取日志详情
+Get Log Details
 
-**响应**
+**Response**
 ```json
 {
   "id": 1,
@@ -765,97 +765,97 @@ anthropic-version: 2023-06-01
 
 ---
 
-## 三、错误码定义
+## III. Error Code Definition
 
-### HTTP 状态码
+### HTTP Status Codes
 
-| 状态码 | 说明 |
-|--------|------|
-| 200 | 成功 |
-| 201 | 创建成功 |
-| 204 | 删除成功 |
-| 400 | 请求参数错误 |
-| 401 | 认证失败 |
-| 403 | 权限不足 |
-| 404 | 资源不存在 |
-| 409 | 资源冲突（如重名） |
-| 422 | 请求体校验失败 |
-| 500 | 服务器内部错误 |
-| 502 | 上游服务错误 |
-| 503 | 服务不可用 |
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 201 | Created Successfully |
+| 204 | Deleted Successfully |
+| 400 | Bad Request |
+| 401 | Authentication Failed |
+| 403 | Forbidden |
+| 404 | Resource Not Found |
+| 409 | Resource Conflict (e.g., Duplicate Name) |
+| 422 | Request Body Validation Failed |
+| 500 | Internal Server Error |
+| 502 | Upstream Service Error |
+| 503 | Service Unavailable |
 
-### 错误响应格式
+### Error Response Format
 
 ```json
 {
   "error": {
-    "message": "错误描述",
+    "message": "Error Description",
     "type": "error_type",
     "code": "error_code",
-    "details": {}  // 可选，额外错误信息
+    "details": {}  // Optional, extra error info
   }
 }
 ```
 
-### 错误码列表
+### Error Code List
 
-| code | type | 说明 |
-|------|------|------|
-| invalid_api_key | authentication_error | API Key 无效 |
-| api_key_disabled | authentication_error | API Key 已禁用 |
-| model_not_found | not_found_error | 模型未配置 |
-| no_available_provider | service_error | 无可用供应商 |
-| all_providers_failed | upstream_error | 所有供应商均失败 |
-| provider_in_use | conflict_error | 供应商被引用 |
-| duplicate_name | conflict_error | 名称重复 |
-| validation_error | validation_error | 请求参数校验失败 |
+| code | type | Description |
+|------|------|-------------|
+| invalid_api_key | authentication_error | Invalid API Key |
+| api_key_disabled | authentication_error | API Key Disabled |
+| model_not_found | not_found_error | Model Not Configured |
+| no_available_provider | service_error | No Available Provider |
+| all_providers_failed | upstream_error | All Providers Failed |
+| provider_in_use | conflict_error | Provider Referenced |
+| duplicate_name | conflict_error | Duplicate Name |
+| validation_error | validation_error | Request Parameter Validation Failed |
 
 ---
 
-## 四、规则格式定义
+## IV. Rule Format Definition
 
-### 规则结构
+### Rule Structure
 
 ```typescript
 interface Rule {
-  field: string;      // 字段路径
-  operator: string;   // 操作符
-  value: any;         // 匹配值
+  field: string;      // Field path
+  operator: string;   // Operator
+  value: any;         // Match value
 }
 
 interface RuleSet {
   rules: Rule[];
-  logic?: "AND" | "OR";  // 默认 AND
+  logic?: "AND" | "OR";  // Default AND
 }
 ```
 
-### 字段路径
+### Field Paths
 
-| 路径前缀 | 说明 | 示例 |
-|----------|------|------|
-| model | 当前请求模型 | model |
-| headers.* | 请求头字段 | headers.x-priority |
-| body.* | 请求体字段 | body.temperature |
-| token_usage.* | Token 统计 | token_usage.input_tokens |
+| Path Prefix | Description | Example |
+|-------------|-------------|---------|
+| model | Current request model | model |
+| headers.* | Request header field | headers.x-priority |
+| body.* | Request body field | body.temperature |
+| token_usage.* | Token statistics | token_usage.input_tokens |
 
-### 操作符
+### Operators
 
-| 操作符 | 说明 | 值类型 |
-|--------|------|--------|
-| eq | 等于 | any |
-| ne | 不等于 | any |
-| gt | 大于 | number |
-| gte | 大于等于 | number |
-| lt | 小于 | number |
-| lte | 小于等于 | number |
-| contains | 包含 | string |
-| not_contains | 不包含 | string |
-| regex | 正则匹配 | string (正则表达式) |
-| in | 在列表中 | array |
-| not_in | 不在列表中 | array |
-| exists | 字段存在 | boolean |
+| Operator | Description | Value Type |
+|----------|-------------|------------|
+| eq | Equal | any |
+| ne | Not Equal | any |
+| gt | Greater Than | number |
+| gte | Greater Than or Equal | number |
+| lt | Less Than | number |
+| lte | Less Than or Equal | number |
+| contains | Contains | string |
+| not_contains | Not Contains | string |
+| regex | Regex Match | string (Regular Expression) |
+| in | In List | array |
+| not_in | Not In List | array |
+| exists | Field Exists | boolean |
 
-### 规则示例
+### Rule Example
 
 ```json
 {
@@ -871,7 +871,7 @@ interface RuleSet {
 
 ---
 
-## 五、TypeScript 类型定义 (前端)
+## V. TypeScript Type Definitions (Frontend)
 
 ```typescript
 // Provider

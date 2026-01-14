@@ -1,6 +1,6 @@
 /**
- * 模型映射 API 接口
- * 对应后端 /admin/models 和 /admin/model-providers 路由
+ * Model Mapping API
+ * Corresponds to backend /api/admin/models and /api/admin/model-providers routes
  */
 
 import { get, post, put, del } from './client';
@@ -16,14 +16,14 @@ import {
   PaginatedResponse,
 } from '@/types';
 
-const MODELS_URL = '/admin/models';
-const MODEL_PROVIDERS_URL = '/admin/model-providers';
+const MODELS_URL = '/api/admin/models';
+const MODEL_PROVIDERS_URL = '/api/admin/model-providers';
 
-// ============ 模型映射 CRUD ============
+// ============ Model Mapping CRUD ============
 
 /**
- * 获取模型映射列表
- * @param params - 查询参数
+ * Get Model Mapping List
+ * @param params - Query parameters
  */
 export async function getModels(
   params?: ModelListParams
@@ -32,25 +32,25 @@ export async function getModels(
 }
 
 /**
- * 获取单个模型映射详情（含供应商配置）
- * @param requestedModel - 请求模型名
+ * Get Single Model Mapping Details (including provider configurations)
+ * @param requestedModel - Requested model name
  */
 export async function getModel(requestedModel: string): Promise<ModelMapping> {
   return get<ModelMapping>(`${MODELS_URL}/${encodeURIComponent(requestedModel)}`);
 }
 
 /**
- * 创建模型映射
- * @param data - 创建数据
+ * Create Model Mapping
+ * @param data - Creation data
  */
 export async function createModel(data: ModelMappingCreate): Promise<ModelMapping> {
   return post<ModelMapping>(MODELS_URL, data);
 }
 
 /**
- * 更新模型映射
- * @param requestedModel - 请求模型名
- * @param data - 更新数据
+ * Update Model Mapping
+ * @param requestedModel - Requested model name
+ * @param data - Update data
  */
 export async function updateModel(
   requestedModel: string,
@@ -60,18 +60,18 @@ export async function updateModel(
 }
 
 /**
- * 删除模型映射（同时删除关联的供应商配置）
- * @param requestedModel - 请求模型名
+ * Delete Model Mapping (Cascades delete associated provider configurations)
+ * @param requestedModel - Requested model name
  */
 export async function deleteModel(requestedModel: string): Promise<void> {
   return del<void>(`${MODELS_URL}/${encodeURIComponent(requestedModel)}`);
 }
 
-// ============ 模型-供应商映射 CRUD ============
+// ============ Model-Provider Mapping CRUD ============
 
 /**
- * 获取模型-供应商映射列表
- * @param params - 查询参数
+ * Get Model-Provider Mapping List
+ * @param params - Query parameters
  */
 export async function getModelProviders(
   params?: ModelProviderListParams
@@ -83,8 +83,8 @@ export async function getModelProviders(
 }
 
 /**
- * 创建模型-供应商映射
- * @param data - 创建数据
+ * Create Model-Provider Mapping
+ * @param data - Creation data
  */
 export async function createModelProvider(
   data: ModelMappingProviderCreate
@@ -93,9 +93,9 @@ export async function createModelProvider(
 }
 
 /**
- * 更新模型-供应商映射
- * @param id - 映射 ID
- * @param data - 更新数据
+ * Update Model-Provider Mapping
+ * @param id - Mapping ID
+ * @param data - Update data
  */
 export async function updateModelProvider(
   id: number,
@@ -105,9 +105,24 @@ export async function updateModelProvider(
 }
 
 /**
- * 删除模型-供应商映射
- * @param id - 映射 ID
+ * Delete Model-Provider Mapping
+ * @param id - Mapping ID
  */
 export async function deleteModelProvider(id: number): Promise<void> {
   return del<void>(`${MODEL_PROVIDERS_URL}/${id}`);
+}
+
+/**
+ * Export Models
+ */
+export async function exportModels(): Promise<any[]> {
+  return get<any[]>(`${MODELS_URL}/export`);
+}
+
+/**
+ * Import Models
+ * @param data - List of models to import
+ */
+export async function importModels(data: any[]): Promise<{success: number; skipped: number; errors: string[]}> {
+  return post<{success: number; skipped: number; errors: string[]}>(`${MODELS_URL}/import`, data);
 }

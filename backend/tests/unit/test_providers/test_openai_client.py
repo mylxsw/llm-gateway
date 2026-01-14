@@ -73,3 +73,35 @@ async def test_openai_client_forward_url_construction_with_duplicate_v1():
         # Expectation: base_url + (path - /v1)
         # https://api.openai.com/v1 + /chat/completions
         assert call_args.kwargs["url"] == "https://api.openai.com/v1/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_openai_client_forward_raw_passthrough_body_bytes():
+    client = OpenAIClient()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_response = MagicMock(
+            status_code=200,
+            headers={"content-type": "application/json"},
+            text='{"id": "ignored"}',
+            content=b'{"id":"raw"}',
+        )
+        mock_response.json.side_effect = AssertionError("json() should not be called in raw mode")
+        mock_client.request.return_value = mock_response
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        resp = await client.forward(
+            base_url="https://api.openai.com",
+            api_key="sk-test",
+            path="/v1/chat/completions",
+            method="POST",
+            headers={},
+            body={"model": "gpt-3.5-turbo"},
+            target_model="gpt-3.5-turbo",
+            response_mode="raw",
+        )
+
+        assert isinstance(resp, ProviderResponse)
+        assert resp.status_code == 200
+        assert resp.body == b'{"id":"raw"}'

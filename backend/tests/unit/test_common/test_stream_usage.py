@@ -1,5 +1,5 @@
 """
-Streaming usage 解析单元测试
+Streaming Usage Parsing Unit Tests
 """
 
 from app.common.stream_usage import StreamUsageAccumulator
@@ -52,3 +52,30 @@ def test_anthropic_stream_accumulates_text_and_uses_output_tokens():
     assert result.output_text == "Hi"
     assert result.output_tokens == 9
 
+
+def test_openai_stream_includes_tool_calls_in_output_text():
+    acc = StreamUsageAccumulator(protocol="openai", model="gpt-4")
+    chunks = [
+        b"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]}}]}\n\n",
+        b"data: [DONE]\n\n",
+    ]
+    for c in chunks:
+        acc.feed(c)
+
+    result = acc.finalize()
+    assert "call_1" in result.output_text
+    assert "\"function\"" in result.output_text
+
+
+def test_openai_stream_includes_legacy_function_call_in_output_text():
+    acc = StreamUsageAccumulator(protocol="openai", model="gpt-4")
+    chunks = [
+        b"data: {\"choices\":[{\"delta\":{\"function_call\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"BJ\\\"}\"}}}]}\n\n",
+        b"data: [DONE]\n\n",
+    ]
+    for c in chunks:
+        acc.feed(c)
+
+    result = acc.finalize()
+    assert "get_weather" in result.output_text
+    assert "arguments" in result.output_text

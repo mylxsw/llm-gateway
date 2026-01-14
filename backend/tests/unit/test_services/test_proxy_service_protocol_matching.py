@@ -32,7 +32,7 @@ class FakeProviderRepo:
 
 
 @pytest.mark.asyncio
-async def test_resolve_candidates_filters_by_request_protocol_openai_vs_anthropic():
+async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
     now = datetime.utcnow()
     model_mapping = ModelMapping(
         requested_model="test-model",
@@ -110,8 +110,8 @@ async def test_resolve_candidates_filters_by_request_protocol_openai_vs_anthropi
         body={"model": "test-model", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert openai_protocol == "openai"
-    assert [c.provider_id for c in openai_candidates] == [1]
-    assert {c.protocol for c in openai_candidates} == {"openai"}
+    assert {c.provider_id for c in openai_candidates} == {1, 2}
+    assert {c.protocol for c in openai_candidates} == {"openai", "anthropic"}
 
     _, anthropic_candidates, _, anthropic_protocol = await service._resolve_candidates(
         requested_model="test-model",
@@ -120,65 +120,5 @@ async def test_resolve_candidates_filters_by_request_protocol_openai_vs_anthropi
         body={"model": "test-model", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert anthropic_protocol == "anthropic"
-    assert [c.provider_id for c in anthropic_candidates] == [2]
-    assert {c.protocol for c in anthropic_candidates} == {"anthropic"}
-
-
-@pytest.mark.asyncio
-async def test_resolve_candidates_raises_when_no_provider_matches_protocol():
-    now = datetime.utcnow()
-    model_mapping = ModelMapping(
-        requested_model="test-model",
-        strategy="round_robin",
-        matching_rules=None,
-        capabilities=None,
-        is_active=True,
-        created_at=now,
-        updated_at=now,
-    )
-    provider_mappings = [
-        ModelMappingProviderResponse(
-            id=1,
-            requested_model="test-model",
-            provider_id=1,
-            provider_name="p-anthropic",
-            target_model_name="claude-3-5-sonnet",
-            provider_rules=None,
-            priority=0,
-            weight=1,
-            is_active=True,
-            created_at=now,
-            updated_at=now,
-        ),
-    ]
-
-    providers = {
-        1: Provider(
-            id=1,
-            name="p-anthropic",
-            base_url="https://example.com",
-            protocol="anthropic",
-            api_type="chat",
-            api_key="sk-anthropic",
-            is_active=True,
-            created_at=now,
-            updated_at=now,
-        ),
-    }
-
-    service = ProxyService(
-        model_repo=FakeModelRepo(model_mapping, provider_mappings),
-        provider_repo=FakeProviderRepo(providers),
-        log_repo=AsyncMock(),
-    )
-
-    with pytest.raises(ServiceError) as exc:
-        await service._resolve_candidates(
-            requested_model="test-model",
-            request_protocol="openai",
-            headers={},
-            body={"model": "test-model", "messages": [{"role": "user", "content": "hi"}]},
-        )
-    assert exc.value.code == "no_available_provider"
-    assert "protocol 'openai'" in exc.value.message
-
+    assert {c.provider_id for c in anthropic_candidates} == {1, 2}
+    assert {c.protocol for c in anthropic_candidates} == {"openai", "anthropic"}

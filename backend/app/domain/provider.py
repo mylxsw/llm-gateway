@@ -1,7 +1,7 @@
 """
-供应商领域模型
+Provider Domain Model
 
-定义供应商相关的数据传输对象（DTO）。
+Defines Provider related Data Transfer Objects (DTOs).
 """
 
 from datetime import datetime
@@ -11,60 +11,70 @@ from pydantic import BaseModel, Field, HttpUrl
 
 
 class ProviderBase(BaseModel):
-    """供应商基础模型"""
+    """Provider Base Model"""
     
-    # 供应商名称
-    name: str = Field(..., min_length=1, max_length=100, description="供应商名称")
-    # 接口基础地址
-    base_url: str = Field(..., description="接口基础地址")
-    # 协议类型：openai 或 anthropic
-    protocol: str = Field(..., pattern="^(openai|anthropic)$", description="协议类型")
-    # API 类型：chat / completion / embedding
-    api_type: str = Field(..., description="API 类型")
+    # Provider Name
+    name: str = Field(..., min_length=1, max_length=100, description="Provider Name")
+    # Base URL
+    base_url: str = Field(..., description="Base URL")
+    # Protocol Type: openai or anthropic
+    protocol: str = Field(..., pattern="^(openai|anthropic)$", description="Protocol Type")
+    # API Type: chat / completion / embedding
+    api_type: str = Field(..., description="API Type")
+    # Extra Headers
+    extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
 
 
 class ProviderCreate(ProviderBase):
-    """创建供应商请求模型"""
+    """Create Provider Request Model"""
     
-    # 供应商的 API Key（可选）
-    api_key: Optional[str] = Field(None, description="供应商 API Key")
-    # 是否激活
-    is_active: bool = Field(True, description="是否激活")
+    # Provider API Key (Optional)
+    api_key: Optional[str] = Field(None, description="Provider API Key")
+    # Is Active
+    is_active: bool = Field(True, description="Is Active")
 
 
 class ProviderUpdate(BaseModel):
-    """更新供应商请求模型（所有字段可选）"""
+    """Update Provider Request Model (All fields optional)"""
     
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     base_url: Optional[str] = None
     protocol: Optional[str] = Field(None, pattern="^(openai|anthropic)$")
     api_type: Optional[str] = None
     api_key: Optional[str] = None
+    extra_headers: Optional[dict[str, str]] = None
     is_active: Optional[bool] = None
 
 
 class Provider(ProviderBase):
-    """供应商完整模型"""
+    """Provider Complete Model"""
     
-    id: int = Field(..., description="供应商 ID")
-    api_key: Optional[str] = Field(None, description="供应商 API Key")
-    is_active: bool = Field(True, description="是否激活")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    id: int = Field(..., description="Provider ID")
+    api_key: Optional[str] = Field(None, description="Provider API Key")
+    extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    is_active: bool = Field(True, description="Is Active")
+    created_at: datetime = Field(..., description="Creation Time")
+    updated_at: datetime = Field(..., description="Update Time")
     
     class Config:
         from_attributes = True
 
 
 class ProviderResponse(ProviderBase):
-    """供应商响应模型（API Key 脱敏）"""
+    """Provider Response Model (API Key Sanitized)"""
     
-    id: int = Field(..., description="供应商 ID")
-    # API Key 脱敏显示
-    api_key: Optional[str] = Field(None, description="供应商 API Key（脱敏）")
-    is_active: bool = Field(True, description="是否激活")
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
+    id: int = Field(..., description="Provider ID")
+    # API Key Sanitized Display
+    api_key: Optional[str] = Field(None, description="Provider API Key (Sanitized)")
+    extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    is_active: bool = Field(True, description="Is Active")
+    created_at: datetime = Field(..., description="Creation Time")
+    updated_at: datetime = Field(..., description="Update Time")
     
     class Config:
         from_attributes = True
+
+
+class ProviderExport(ProviderCreate):
+    """Provider Export Model (Includes API Key)"""
+    pass

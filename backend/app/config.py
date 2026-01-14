@@ -1,8 +1,8 @@
 """
-配置管理模块
+Configuration Management Module
 
-通过环境变量或 .env 文件配置应用参数。
-支持 SQLite（默认）和 PostgreSQL 两种数据库。
+Configures application parameters via environment variables or .env file.
+Supports SQLite (default) and PostgreSQL databases.
 """
 
 from functools import lru_cache
@@ -13,41 +13,48 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    应用配置类
+    Application Configuration Class
     
-    所有配置项均可通过环境变量覆盖，环境变量名与字段名一致（大写）。
+    All configuration items can be overridden by environment variables, with names matching fields (uppercase).
     """
     
-    # 应用配置
+    # Application Config
     APP_NAME: str = "LLM Gateway"
     DEBUG: bool = False
     
-    # 数据库配置
-    # 支持 "sqlite" 或 "postgresql"
+    # Database Config
+    # Supports "sqlite" or "postgresql"
     DATABASE_TYPE: Literal["sqlite", "postgresql"] = "sqlite"
-    # SQLite 默认数据库路径，PostgreSQL 需要完整连接字符串
+    # SQLite default database path, PostgreSQL requires full connection string
     DATABASE_URL: str = "sqlite+aiosqlite:///./llm_gateway.db"
     
-    # 重试配置
-    # 同供应商最大重试次数（状态码 >= 500 时触发）
+    # Retry Config
+    # Max retries on same provider (triggered when status code >= 500)
     RETRY_MAX_ATTEMPTS: int = 3
-    # 重试间隔（毫秒）
+    # Retry interval (ms)
     RETRY_DELAY_MS: int = 1000
     
-    # HTTP 客户端配置
-    # 请求超时时间（秒）
+    # HTTP Client Config
+    # Request timeout (seconds)
     HTTP_TIMEOUT: int = 60
     
-    # API Key 配置
-    # 生成的 API Key 前缀
+    # API Key Config
+    # Generated API Key prefix
     API_KEY_PREFIX: str = "lgw-"
-    # API Key 长度（不含前缀）
+    # API Key length (excluding prefix)
     API_KEY_LENGTH: int = 32
 
-    # 日志清理配置
-    # 日志保留天数（默认 7 天）
+    # Admin Login Authentication
+    # Enables login authentication when both ADMIN_USERNAME and ADMIN_PASSWORD are set; otherwise, login is not required.
+    ADMIN_USERNAME: str | None = None
+    ADMIN_PASSWORD: str | None = None
+    # Admin login token TTL (seconds)
+    ADMIN_TOKEN_TTL_SECONDS: int = 86400
+
+    # Log Cleanup Config
+    # Log retention days (default 7 days)
     LOG_RETENTION_DAYS: int = 7
-    # 日志清理执行时间（小时，0-23，默认 4 点即凌晨）
+    # Log cleanup execution hour (0-23, default 4 AM)
     LOG_CLEANUP_HOUR: int = 4
 
     model_config = SettingsConfigDict(
@@ -60,11 +67,11 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """
-    获取应用配置（单例模式）
+    Get application configuration (Singleton)
     
-    使用 lru_cache 确保配置只加载一次，提高性能。
+    Uses lru_cache to ensure configuration is loaded only once, improving performance.
     
     Returns:
-        Settings: 应用配置实例
+        Settings: Application configuration instance
     """
     return Settings()

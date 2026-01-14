@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-llm_gateway}
+      POSTGRES_USER: ${POSTGRES_USER:-llm_gateway}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-llm_gateway_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-gateway:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: ${DEBUG:-false}
+      DATABASE_TYPE: ${DATABASE_TYPE:-postgresql}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://llm_gateway:llm_gateway_password@postgres:5432/llm_gateway}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

@@ -1,7 +1,7 @@
 """
-Streaming 响应解析与 token 统计
+Streaming Response Parsing and Token Counting
 
-用于在上游返回 SSE（text/event-stream）时，从流中提取增量文本并统计输出 token。
+Used when upstream returns SSE (text/event-stream) to extract incremental text from the stream and count output tokens.
 """
 
 from __future__ import annotations
@@ -15,11 +15,11 @@ from app.common.token_counter import get_token_counter
 
 class SSEDecoder:
     """
-    简单的 SSE 解码器：将 bytes 流切分为 event block，并提取其中的 data 字段。
+    Simple SSE Decoder: Splits bytes stream into event blocks and extracts data fields.
 
-    - 以空行（\\n\\n）作为 event 边界
-    - 支持 CRLF（\\r\\n）
-    - 仅解析 data: 行，其他字段忽略
+    - Uses empty line (\n\n) as event boundary
+    - Supports CRLF (\r\n)
+    - Only parses data: lines, ignores other fields
     """
 
     def __init__(self) -> None:
@@ -27,14 +27,14 @@ class SSEDecoder:
 
     def feed(self, chunk: bytes) -> list[str]:
         """
-        追加 bytes，并返回本次解析出的 data payload 列表（每个 event 对应一个字符串）。
+        Append bytes and return list of parsed data payloads (one string per event).
         """
         if not chunk:
             return []
 
         data = (self._buf + chunk).replace(b"\r\n", b"\n")
         parts = data.split(b"\n\n")
-        self._buf = parts.pop()  # 保留最后一个未完整的 event
+        self._buf = parts.pop()  # Keep last incomplete event
 
         payloads: list[str] = []
         for event in parts:
@@ -73,11 +73,11 @@ class StreamUsageResult:
 
 class StreamUsageAccumulator:
     """
-    从 SSE 流中提取输出文本并统计 token。
+    Extract output text and count tokens from SSE stream.
 
-    说明：
-    - 优先使用上游在 stream 中返回的 usage.output_tokens / usage.completion_tokens（如果存在）
-    - 否则使用本地 tokenizer 对聚合后的输出文本进行统计
+    Explanation:
+    - Prioritize usage.output_tokens / usage.completion_tokens returned by upstream in stream (if present)
+    - Otherwise use local tokenizer to count aggregated output text
     """
 
     def __init__(self, protocol: str, model: str, preview_chars: int = 4096) -> None:
@@ -167,6 +167,14 @@ class StreamUsageAccumulator:
                         self._text_parts.append(json.dumps(tool_calls, ensure_ascii=False))
                     except Exception:
                         pass
+
+                # Legacy OpenAI streaming function calling: choices[].delta.function_call
+                function_call = delta.get("function_call")
+                if function_call:
+                    try:
+                        self._text_parts.append(json.dumps(function_call, ensure_ascii=False))
+                    except Exception:
+                        pass
                 continue
 
             # Text Completions stream: choices[].text
@@ -177,7 +185,7 @@ class StreamUsageAccumulator:
     def _handle_anthropic_event(self, data: dict[str, Any]) -> None:
         event_type = data.get("type")
 
-        # usage 可能出现在 message_delta / message_start 中
+        # usage may appear in message_delta / message_start
         usage: Optional[dict[str, Any]] = None
         if isinstance(data.get("usage"), dict):
             usage = data.get("usage")
@@ -200,8 +208,7 @@ class StreamUsageAccumulator:
                     self._text_parts.append(text)
             return
 
-        # 兼容旧格式：直接带 completion 字段
+        # Compatible with old format: carry completion field directly
         completion = data.get("completion")
         if isinstance(completion, str) and completion:
             self._text_parts.append(completion)
-

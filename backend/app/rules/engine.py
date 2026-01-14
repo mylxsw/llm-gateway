@@ -1,7 +1,7 @@
 """
-规则引擎核心模块
+Rule Engine Core Module
 
-提供规则引擎的主要功能，包括规则匹配和候选供应商输出。
+Provides the main functionality of the rule engine, including rule matching and candidate provider output.
 """
 
 from typing import Optional
@@ -15,18 +15,18 @@ from app.domain.provider import Provider
 
 class RuleEngine:
     """
-    规则引擎
+    Rule Engine
     
-    负责根据上下文评估所有规则，输出匹配的候选供应商列表。
+    Responsible for evaluating all rules based on context and outputting a list of matching candidate providers.
     
-    工作流程：
-    1. 检查模型级规则（model_mapping.matching_rules）
-    2. 对每个供应商检查供应商级规则（provider_mapping.provider_rules）
-    3. 返回所有通过的供应商及其 target_model
+    Workflow:
+    1. Check model-level rules (model_mapping.matching_rules)
+    2. Check provider-level rules for each provider (provider_mapping.provider_rules)
+    3. Return all matching providers and their target_model
     """
     
     def __init__(self):
-        """初始化规则引擎"""
+        """Initialize Rule Engine"""
         self.evaluator = RuleEvaluator()
     
     async def evaluate(
@@ -37,40 +37,40 @@ class RuleEngine:
         providers: dict[int, Provider],
     ) -> list[CandidateProvider]:
         """
-        评估所有规则，返回候选供应商列表
+        Evaluate all rules, return list of candidate providers
         
         Args:
-            context: 规则上下文
-            model_mapping: 模型映射配置
-            provider_mappings: 模型-供应商映射列表
-            providers: 供应商字典（provider_id -> Provider）
+            context: Rule context
+            model_mapping: Model mapping configuration
+            provider_mappings: List of model-provider mappings
+            providers: Provider dictionary (provider_id -> Provider)
         
         Returns:
-            list[CandidateProvider]: 候选供应商列表（按优先级排序）
+            list[CandidateProvider]: List of candidate providers (sorted by priority)
         """
         candidates: list[CandidateProvider] = []
         
-        # 1. 检查模型级规则
+        # 1. Check model-level rules
         model_rules = RuleSet.from_dict(model_mapping.matching_rules)
         if not self.evaluator.evaluate_ruleset(model_rules, context):
-            # 模型级规则不通过，直接返回空列表
+            # Model-level rules failed, return empty list immediately
             return candidates
         
-        # 2. 对每个供应商检查供应商级规则
+        # 2. Check provider-level rules for each provider
         for pm in provider_mappings:
-            # 跳过未激活的映射
+            # Skip inactive mappings
             if not pm.is_active:
                 continue
             
-            # 获取供应商信息
+            # Get provider info
             provider = providers.get(pm.provider_id)
             if not provider or not provider.is_active:
                 continue
             
-            # 检查供应商级规则
+            # Check provider-level rules
             provider_rules = RuleSet.from_dict(pm.provider_rules)
             if self.evaluator.evaluate_ruleset(provider_rules, context):
-                # 规则通过，添加到候选列表
+                # Rules passed, add to candidate list
                 candidates.append(
                     CandidateProvider(
                         provider_id=provider.id,
@@ -78,13 +78,14 @@ class RuleEngine:
                         base_url=provider.base_url,
                         protocol=provider.protocol,
                         api_key=provider.api_key,
+                        extra_headers=provider.extra_headers,
                         target_model=pm.target_model_name,
                         priority=pm.priority,
                         weight=pm.weight,
                     )
                 )
         
-        # 3. 按优先级排序（数值越小优先级越高）
+        # 3. Sort by priority (lower value means higher priority)
         candidates.sort(key=lambda c: (c.priority, c.provider_id))
         
         return candidates
@@ -97,18 +98,18 @@ class RuleEngine:
         providers: dict[int, Provider],
     ) -> list[CandidateProvider]:
         """
-        同步版本的规则评估（用于测试或同步场景）
+        Synchronous version of rule evaluation (for testing or synchronous scenarios)
         
-        参数和返回值与 evaluate 相同。
+        Arguments and return values are same as evaluate.
         """
         candidates: list[CandidateProvider] = []
         
-        # 1. 检查模型级规则
+        # 1. Check model-level rules
         model_rules = RuleSet.from_dict(model_mapping.matching_rules)
         if not self.evaluator.evaluate_ruleset(model_rules, context):
             return candidates
         
-        # 2. 对每个供应商检查供应商级规则
+        # 2. Check provider-level rules for each provider
         for pm in provider_mappings:
             if not pm.is_active:
                 continue
@@ -126,13 +127,14 @@ class RuleEngine:
                         base_url=provider.base_url,
                         protocol=provider.protocol,
                         api_key=provider.api_key,
+                        extra_headers=provider.extra_headers,
                         target_model=pm.target_model_name,
                         priority=pm.priority,
                         weight=pm.weight,
                     )
                 )
         
-        # 3. 按优先级排序
+        # 3. Sort by priority
         candidates.sort(key=lambda c: (c.priority, c.provider_id))
         
         return candidates

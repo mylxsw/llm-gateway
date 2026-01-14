@@ -1,5 +1,5 @@
 """
-SQLAlchemy Repository 实现模块初始化
+SQLAlchemy Repository Implementation Module Initialization
 """
 
 from app.repositories.sqlalchemy.provider_repo import SQLAlchemyProviderRepository

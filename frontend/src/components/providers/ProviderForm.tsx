@@ -1,12 +1,13 @@
 /**
- * 供应商表单组件
- * 用于创建和编辑供应商
+ * Provider Form Component
+ * Used for creating and editing providers
  */
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,19 +30,19 @@ import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types'
 import { isValidUrl, isNotEmpty } from '@/lib/utils';
 
 interface ProviderFormProps {
-  /** 是否显示对话框 */
+  /** Whether dialog is open */
   open: boolean;
-  /** 关闭对话框回调 */
+  /** Dialog close callback */
   onOpenChange: (open: boolean) => void;
-  /** 编辑模式下的供应商数据 */
+  /** Provider data for edit mode */
   provider?: Provider | null;
-  /** 提交回调 */
+  /** Submit callback */
   onSubmit: (data: ProviderCreate | ProviderUpdate) => void;
-  /** 是否加载中 */
+  /** Loading state */
   loading?: boolean;
 }
 
-/** 表单字段定义 */
+/** Form Field Definition */
 interface FormData {
   name: string;
   base_url: string;
@@ -51,13 +52,13 @@ interface FormData {
   is_active: boolean;
 }
 
-/** 协议选项 */
+/** Protocol Options */
 const PROTOCOL_OPTIONS: { value: ProtocolType; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
 ];
 
-/** API 类型选项 */
+/** API Type Options */
 const API_TYPE_OPTIONS = [
   { value: 'chat', label: 'Chat Completions' },
   { value: 'completion', label: 'Text Completions' },
@@ -65,7 +66,7 @@ const API_TYPE_OPTIONS = [
 ];
 
 /**
- * 供应商表单组件
+ * Provider Form Component
  */
 export function ProviderForm({
   open,
@@ -74,10 +75,10 @@ export function ProviderForm({
   onSubmit,
   loading = false,
 }: ProviderFormProps) {
-  // 判断是否为编辑模式
+  // Check if edit mode
   const isEdit = !!provider;
   
-  // 表单控制
+  // Form control
   const {
     register,
     handleSubmit,
@@ -96,11 +97,33 @@ export function ProviderForm({
     },
   });
 
-  // 监听表单值变化
+  // Watch form values
   const protocol = watch('protocol');
   const isActive = watch('is_active');
+  
+  // Extra headers state
+  const [extraHeaders, setExtraHeaders] = useState<{ key: string; value: string }[]>([]);
 
-  // 编辑模式下，填充表单数据
+  // Add header
+  const addHeader = () => {
+    setExtraHeaders([...extraHeaders, { key: '', value: '' }]);
+  };
+
+  // Remove header
+  const removeHeader = (index: number) => {
+    const newHeaders = [...extraHeaders];
+    newHeaders.splice(index, 1);
+    setExtraHeaders(newHeaders);
+  };
+
+  // Update header
+  const updateHeader = (index: number, field: 'key' | 'value', value: string) => {
+    const newHeaders = [...extraHeaders];
+    newHeaders[index][field] = value;
+    setExtraHeaders(newHeaders);
+  };
+
+  // Fill form data in edit mode
   useEffect(() => {
     if (provider) {
       reset({
@@ -108,9 +131,21 @@ export function ProviderForm({
         base_url: provider.base_url,
         protocol: provider.protocol,
         api_type: provider.api_type,
-        api_key: '', // API Key 不回显
+        api_key: '', // API Key not echoed
         is_active: provider.is_active,
       });
+      
+      // Fill extra headers
+      if (provider.extra_headers) {
+        setExtraHeaders(
+          Object.entries(provider.extra_headers).map(([key, value]) => ({
+            key,
+            value,
+          }))
+        );
+      } else {
+        setExtraHeaders([]);
+      }
     } else {
       reset({
         name: '',
@@ -120,21 +155,31 @@ export function ProviderForm({
         api_key: '',
         is_active: true,
       });
+      setExtraHeaders([]);
     }
   }, [provider, reset]);
 
-  // 提交表单
+  // Submit form
   const onFormSubmit = (data: FormData) => {
-    // 过滤掉空字符串
+    // Handle extra headers
+    const headers: Record<string, string> = {};
+    extraHeaders.forEach(({ key, value }) => {
+      if (key && value) {
+        headers[key] = value;
+      }
+    });
+
+    // Filter out empty strings
     const submitData: ProviderCreate | ProviderUpdate = {
       name: data.name,
       base_url: data.base_url,
       protocol: data.protocol,
       api_type: data.api_type,
       is_active: data.is_active,
+      extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
     };
     
-    // 只有填写了 API Key 才提交
+    // Only submit API Key if filled
     if (data.api_key) {
       submitData.api_key = data.api_key;
     }
@@ -146,21 +191,21 @@ export function ProviderForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑供应商' : '新增供应商'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Provider' : 'New Provider'}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-          {/* 名称 */}
+          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">
-              名称 <span className="text-destructive">*</span>
+              Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
-              placeholder="请输入供应商名称"
+              placeholder="Enter provider name"
               {...register('name', {
-                required: '名称不能为空',
-                validate: (v) => isNotEmpty(v) || '名称不能为空',
+                required: 'Name is required',
+                validate: (v) => isNotEmpty(v) || 'Name cannot be empty',
               })}
             />
             {errors.name && (
@@ -168,17 +213,17 @@ export function ProviderForm({
             )}
           </div>
 
-          {/* 接口地址 */}
+          {/* Base URL */}
           <div className="space-y-2">
             <Label htmlFor="base_url">
-              接口地址 <span className="text-destructive">*</span>
+              Base URL <span className="text-destructive">*</span>
             </Label>
             <Input
               id="base_url"
               placeholder="https://api.openai.com"
               {...register('base_url', {
-                required: '接口地址不能为空',
-                validate: (v) => isValidUrl(v) || '请输入有效的 URL',
+                required: 'Base URL is required',
+                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
               })}
             />
             {errors.base_url && (
@@ -186,17 +231,17 @@ export function ProviderForm({
             )}
           </div>
 
-          {/* 协议类型 */}
+          {/* Protocol Type */}
           <div className="space-y-2">
             <Label>
-              协议类型 <span className="text-destructive">*</span>
+              Protocol Type <span className="text-destructive">*</span>
             </Label>
             <Select
               value={protocol}
               onValueChange={(value: ProtocolType) => setValue('protocol', value)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="选择协议类型" />
+                <SelectValue placeholder="Select Protocol Type" />
               </SelectTrigger>
               <SelectContent>
                 {PROTOCOL_OPTIONS.map((option) => (
@@ -208,17 +253,17 @@ export function ProviderForm({
             </Select>
           </div>
 
-          {/* API 类型 */}
+          {/* API Type */}
           <div className="space-y-2">
             <Label htmlFor="api_type">
-              API 类型 <span className="text-destructive">*</span>
+              API Type <span className="text-destructive">*</span>
             </Label>
             <Select
               value={watch('api_type')}
               onValueChange={(value) => setValue('api_type', value)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="选择 API 类型" />
+                <SelectValue placeholder="Select API Type" />
               </SelectTrigger>
               <SelectContent>
                 {API_TYPE_OPTIONS.map((option) => (
@@ -233,19 +278,70 @@ export function ProviderForm({
           {/* API Key */}
           <div className="space-y-2">
             <Label htmlFor="api_key">
-              API Key {!isEdit && <span className="text-muted-foreground">(可选)</span>}
+              API Key {!isEdit && <span className="text-muted-foreground">(Optional)</span>}
             </Label>
             <Input
               id="api_key"
               type="password"
-              placeholder={isEdit ? '留空则不修改' : '请输入供应商 API Key'}
+              placeholder={isEdit ? 'Leave blank to keep unchanged' : 'Enter provider API Key'}
               {...register('api_key')}
             />
           </div>
 
-          {/* 状态 */}
+          {/* Extra Headers */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Extra Headers</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addHeader}
+                className="h-8 px-2"
+              >
+                <Plus className="mr-1 h-3 w-3" suppressHydrationWarning />
+                Add
+              </Button>
+            </div>
+            
+            {extraHeaders.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No extra headers, click button above to add.
+              </p>
+            )}
+
+            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {extraHeaders.map((header, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Key"
+                    value={header.key}
+                    onChange={(e) => updateHeader(index, 'key', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    placeholder="Value"
+                    value={header.value}
+                    onChange={(e) => updateHeader(index, 'value', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeHeader(index)}
+                    className="h-9 w-9 text-destructive hover:text-destructive/90"
+                  >
+                    <Trash2 className="h-4 w-4" suppressHydrationWarning />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">启用状态</Label>
+            <Label htmlFor="is_active">Enabled Status</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -260,10 +356,10 @@ export function ProviderForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              取消
+              Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? '保存中...' : '保存'}
+              {loading ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </form>

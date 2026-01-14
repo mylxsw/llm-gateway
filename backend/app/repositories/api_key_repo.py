@@ -1,129 +1,74 @@
 """
-API Key Repository 接口
+API Key Repository Interface
 
-定义 API Key 数据访问的抽象接口。
+Defines the data access interface for API Keys.
 """
 
 from abc import ABC, abstractmethod
+from typing import Optional, List, Tuple
 from datetime import datetime
-from typing import Optional
 
 from app.domain.api_key import ApiKeyModel, ApiKeyCreate, ApiKeyUpdate
 
 
 class ApiKeyRepository(ABC):
-    """
-    API Key Repository 抽象类
-    
-    定义 API Key 数据访问的所有操作接口。
-    """
+    """API Key Repository Interface"""
     
     @abstractmethod
     async def create(self, data: ApiKeyCreate, key_value: str) -> ApiKeyModel:
         """
-        创建 API Key
+        Create API Key
         
         Args:
-            data: 创建数据
-            key_value: 生成的 key 值
-        
+            data: Creation data
+            key_value: Generated key value (token)
+            
         Returns:
-            ApiKeyModel: 创建后的 API Key
+            ApiKeyModel: Created API Key model
         """
         pass
     
     @abstractmethod
     async def get_by_id(self, id: int) -> Optional[ApiKeyModel]:
-        """
-        根据 ID 获取 API Key
-        
-        Args:
-            id: API Key ID
-        
-        Returns:
-            Optional[ApiKeyModel]: API Key 或 None
-        """
+        """Get API Key by ID"""
         pass
     
     @abstractmethod
     async def get_by_key_value(self, key_value: str) -> Optional[ApiKeyModel]:
-        """
-        根据 key 值获取 API Key（用于鉴权）
-        
-        Args:
-            key_value: key 值
-        
-        Returns:
-            Optional[ApiKeyModel]: API Key 或 None
-        """
-        pass
-    
-    @abstractmethod
-    async def get_by_name(self, key_name: str) -> Optional[ApiKeyModel]:
-        """
-        根据名称获取 API Key
-        
-        Args:
-            key_name: key 名称
-        
-        Returns:
-            Optional[ApiKeyModel]: API Key 或 None
-        """
+        """Get API Key by Key Value (for authentication)"""
         pass
     
     @abstractmethod
     async def get_all(
-        self,
-        is_active: Optional[bool] = None,
-        page: int = 1,
+        self, 
+        page: int = 1, 
         page_size: int = 20,
-    ) -> tuple[list[ApiKeyModel], int]:
+        is_active: Optional[bool] = None
+    ) -> Tuple[List[ApiKeyModel], int]:
         """
-        获取 API Key 列表
+        Get API Key List (Pagination)
         
         Args:
-            is_active: 过滤激活状态
-            page: 页码
-            page_size: 每页数量
-        
+            page: Page number
+            page_size: Items per page
+            is_active: Filter by active status
+            
         Returns:
-            tuple[list[ApiKeyModel], int]: (API Key 列表, 总数)
+            Tuple[List[ApiKeyModel], int]: (List, Total count)
         """
         pass
     
     @abstractmethod
     async def update(self, id: int, data: ApiKeyUpdate) -> Optional[ApiKeyModel]:
-        """
-        更新 API Key
-        
-        Args:
-            id: API Key ID
-            data: 更新数据
-        
-        Returns:
-            Optional[ApiKeyModel]: 更新后的 API Key 或 None
-        """
+        """Update API Key"""
         pass
     
     @abstractmethod
-    async def update_last_used(self, id: int) -> None:
-        """
-        更新 API Key 的最后使用时间
-        
-        Args:
-            id: API Key ID
-        """
+    async def update_last_used(self, id: int, last_used_at: datetime) -> None:
+        """Update Last Used Time"""
         pass
     
     @abstractmethod
     async def delete(self, id: int) -> bool:
-        """
-        删除 API Key
-        
-        Args:
-            id: API Key ID
-        
-        Returns:
-            bool: 是否删除成功
-        """
+        """Delete API Key"""
         pass

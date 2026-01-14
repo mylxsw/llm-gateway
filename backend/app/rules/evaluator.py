@@ -1,7 +1,7 @@
 """
-规则评估器模块
+Rule Evaluator Module
 
-提供规则评估的核心逻辑。
+Provides the core logic for rule evaluation.
 """
 
 import re
@@ -13,42 +13,42 @@ from app.rules.models import Rule, RuleSet
 
 class RuleEvaluator:
     """
-    规则评估器
+    Rule Evaluator
     
-    负责评估单条规则和规则集的匹配情况。
+    Responsible for evaluating the matching status of single rules and rule sets.
     
-    支持的操作符：
-    - eq: 等于
-    - ne: 不等于
-    - gt: 大于
-    - gte: 大于等于
-    - lt: 小于
-    - lte: 小于等于
-    - contains: 包含（字符串）
-    - not_contains: 不包含（字符串）
-    - regex: 正则匹配
-    - in: 在列表中
-    - not_in: 不在列表中
-    - exists: 字段存在
+    Supported operators:
+    - eq: Equal
+    - ne: Not Equal
+    - gt: Greater Than
+    - gte: Greater Than or Equal
+    - lt: Less Than
+    - lte: Less Than or Equal
+    - contains: Contains (string)
+    - not_contains: Not Contains (string)
+    - regex: Regular Expression Match
+    - in: In List
+    - not_in: Not In List
+    - exists: Field Exists
     """
     
     def evaluate_rule(self, rule: Rule, context: RuleContext) -> bool:
         """
-        评估单条规则
+        Evaluate a single rule
         
         Args:
-            rule: 规则
-            context: 规则上下文
+            rule: Rule
+            context: Rule context
         
         Returns:
-            bool: 规则是否匹配
+            bool: Whether the rule matches
         """
-        # 获取字段值
+        # Get field value
         actual_value = context.get_value(rule.field)
         expected_value = rule.value
         operator = rule.operator.lower()
         
-        # 根据操作符评估
+        # Evaluate based on operator
         try:
             if operator == "eq":
                 return self._evaluate_eq(actual_value, expected_value)
@@ -75,26 +75,26 @@ class RuleEvaluator:
             elif operator == "exists":
                 return self._evaluate_exists(actual_value, expected_value)
             else:
-                # 未知操作符，默认不匹配
+                # Unknown operator, default not match
                 return False
         except Exception:
-            # 评估出错，默认不匹配
+            # Evaluation error, default not match
             return False
     
     def evaluate_ruleset(
         self, ruleset: Optional[RuleSet], context: RuleContext
     ) -> bool:
         """
-        评估规则集
+        Evaluate a rule set
         
         Args:
-            ruleset: 规则集
-            context: 规则上下文
+            ruleset: Rule set
+            context: Rule context
         
         Returns:
-            bool: 规则集是否匹配
+            bool: Whether the rule set matches
         """
-        # 空规则集默认通过
+        # Empty rule set passes by default
         if ruleset is None or ruleset.is_empty():
             return True
         
@@ -102,57 +102,57 @@ class RuleEvaluator:
         
         if ruleset.logic == "OR":
             return any(results)
-        else:  # AND（默认）
+        else:  # AND (default)
             return all(results)
     
-    # ============ 操作符实现 ============
+    # ============ Operator Implementation ============
     
     def _evaluate_eq(self, actual: Any, expected: Any) -> bool:
-        """等于"""
+        """Equal"""
         return actual == expected
     
     def _evaluate_ne(self, actual: Any, expected: Any) -> bool:
-        """不等于"""
+        """Not Equal"""
         return actual != expected
     
     def _evaluate_gt(self, actual: Any, expected: Any) -> bool:
-        """大于"""
+        """Greater Than"""
         if actual is None:
             return False
         return actual > expected
     
     def _evaluate_gte(self, actual: Any, expected: Any) -> bool:
-        """大于等于"""
+        """Greater Than or Equal"""
         if actual is None:
             return False
         return actual >= expected
     
     def _evaluate_lt(self, actual: Any, expected: Any) -> bool:
-        """小于"""
+        """Less Than"""
         if actual is None:
             return False
         return actual < expected
     
     def _evaluate_lte(self, actual: Any, expected: Any) -> bool:
-        """小于等于"""
+        """Less Than or Equal"""
         if actual is None:
             return False
         return actual <= expected
     
     def _evaluate_contains(self, actual: Any, expected: Any) -> bool:
-        """包含（字符串）"""
+        """Contains (string)"""
         if actual is None or not isinstance(actual, str):
             return False
         return str(expected) in actual
     
     def _evaluate_not_contains(self, actual: Any, expected: Any) -> bool:
-        """不包含（字符串）"""
+        """Not Contains (string)"""
         if actual is None or not isinstance(actual, str):
             return True
         return str(expected) not in actual
     
     def _evaluate_regex(self, actual: Any, expected: Any) -> bool:
-        """正则匹配"""
+        """Regular Expression Match"""
         if actual is None or not isinstance(actual, str):
             return False
         try:
@@ -162,21 +162,21 @@ class RuleEvaluator:
             return False
     
     def _evaluate_in(self, actual: Any, expected: Any) -> bool:
-        """在列表中"""
+        """In List"""
         if not isinstance(expected, (list, tuple)):
             return False
         return actual in expected
     
     def _evaluate_not_in(self, actual: Any, expected: Any) -> bool:
-        """不在列表中"""
+        """Not In List"""
         if not isinstance(expected, (list, tuple)):
             return True
         return actual not in expected
     
     def _evaluate_exists(self, actual: Any, expected: Any) -> bool:
-        """字段存在"""
+        """Field Exists"""
         exists = actual is not None
-        # expected 为 True 时检查存在，为 False 时检查不存在
+        # When expected is True, check exists; when False, check not exists
         if expected:
             return exists
         return not exists

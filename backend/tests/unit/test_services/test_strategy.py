@@ -1,5 +1,5 @@
 """
-轮询策略单元测试
+Round Robin Strategy Unit Tests
 """
 
 import pytest
@@ -9,10 +9,10 @@ from app.rules.models import CandidateProvider
 
 
 class TestRoundRobinStrategy:
-    """轮询策略测试"""
+    """Round Robin Strategy Tests"""
     
     def setup_method(self):
-        """测试前准备"""
+        """Setup before test"""
         self.strategy = RoundRobinStrategy()
         self.candidates = [
             CandidateProvider(
@@ -46,51 +46,51 @@ class TestRoundRobinStrategy:
     
     @pytest.mark.asyncio
     async def test_select_round_robin(self):
-        """测试轮询选择"""
+        """Test round robin selection"""
         self.strategy.reset()
         
-        # 第一次选择
+        # 1st selection
         selected = await self.strategy.select(self.candidates, "test-model")
         assert selected.provider_id == 1
         
-        # 第二次选择
+        # 2nd selection
         selected = await self.strategy.select(self.candidates, "test-model")
         assert selected.provider_id == 2
         
-        # 第三次选择
+        # 3rd selection
         selected = await self.strategy.select(self.candidates, "test-model")
         assert selected.provider_id == 3
         
-        # 第四次选择（回到第一个）
+        # 4th selection (loop back to first)
         selected = await self.strategy.select(self.candidates, "test-model")
         assert selected.provider_id == 1
     
     @pytest.mark.asyncio
     async def test_select_empty_candidates(self):
-        """测试空候选列表"""
+        """Test empty candidate list"""
         selected = await self.strategy.select([], "test-model")
         assert selected is None
     
     @pytest.mark.asyncio
     async def test_select_model_isolation(self):
-        """测试不同模型的计数器隔离"""
+        """Test model counter isolation"""
         self.strategy.reset()
         
-        # model-a 的选择
+        # model-a selection
         selected_a = await self.strategy.select(self.candidates, "model-a")
         assert selected_a.provider_id == 1
         
-        # model-b 的第一次选择（从头开始）
+        # model-b first selection (start from beginning)
         selected_b = await self.strategy.select(self.candidates, "model-b")
         assert selected_b.provider_id == 1
         
-        # model-a 的第二次选择
+        # model-a second selection
         selected_a = await self.strategy.select(self.candidates, "model-a")
         assert selected_a.provider_id == 2
     
     @pytest.mark.asyncio
     async def test_get_next(self):
-        """测试获取下一个供应商"""
+        """Test get next provider"""
         current = self.candidates[0]
         next_provider = await self.strategy.get_next(
             self.candidates, "test-model", current
@@ -105,7 +105,7 @@ class TestRoundRobinStrategy:
     
     @pytest.mark.asyncio
     async def test_get_next_single_candidate(self):
-        """测试只有一个候选时获取下一个"""
+        """Test get next with single candidate"""
         single = [self.candidates[0]]
         next_provider = await self.strategy.get_next(
             single, "test-model", single[0]
@@ -114,21 +114,21 @@ class TestRoundRobinStrategy:
     
     @pytest.mark.asyncio
     async def test_concurrent_selection(self):
-        """测试并发选择的安全性"""
+        """Test concurrent selection safety"""
         self.strategy.reset()
         
-        # 并发执行 100 次选择
+        # Execute 100 selections concurrently
         tasks = [
             self.strategy.select(self.candidates, "concurrent-test")
             for _ in range(100)
         ]
         results = await asyncio.gather(*tasks)
         
-        # 验证结果分布（应该大致均匀）
+        # Verify result distribution (should be roughly even)
         counts = {1: 0, 2: 0, 3: 0}
         for result in results:
             counts[result.provider_id] += 1
         
-        # 每个供应商应该被选择约 33 次
+        # Each provider should be selected roughly 33 times
         for provider_id, count in counts.items():
             assert 20 <= count <= 50, f"Provider {provider_id} selected {count} times"

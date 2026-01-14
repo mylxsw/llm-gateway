@@ -3,6 +3,7 @@
  */
 
 export * from './client';
+export * from './auth';
 export * from './providers';
 export * from './models';
 export * from './api-keys';

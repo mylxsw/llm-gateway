@@ -1,17 +1,17 @@
 """
-日志查询 API
+Log Query API
 
-提供请求日志的查询接口。
+Provides request log query endpoints.
 """
 
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import LogServiceDep
+from app.api.deps import LogServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
@@ -21,11 +21,15 @@ from app.domain.log import (
     RequestLogDetailResponse,
 )
 
-router = APIRouter(prefix="/admin/logs", tags=["Admin - Logs"])
+router = APIRouter(
+    prefix="/admin/logs",
+    tags=["Admin - Logs"],
+    dependencies=[Depends(require_admin_auth)],
+)
 
 
 class PaginatedLogResponse(BaseModel):
-    """日志分页响应"""
+    """Log Pagination Response"""
     items: list[RequestLogResponse]
     total: int
     page: int
@@ -33,7 +37,7 @@ class PaginatedLogResponse(BaseModel):
 
 
 class CleanupResponse(BaseModel):
-    """日志清理响应"""
+    """Log Cleanup Response"""
     deleted_count: int
     message: str
 
@@ -41,31 +45,31 @@ class CleanupResponse(BaseModel):
 @router.get("", response_model=PaginatedLogResponse)
 async def list_logs(
     service: LogServiceDep,
-    start_time: Optional[datetime] = Query(None, description="开始时间"),
-    end_time: Optional[datetime] = Query(None, description="结束时间"),
-    requested_model: Optional[str] = Query(None, description="请求模型（模糊匹配）"),
-    target_model: Optional[str] = Query(None, description="目标模型（模糊匹配）"),
-    provider_id: Optional[int] = Query(None, description="供应商 ID"),
-    status_min: Optional[int] = Query(None, description="最小状态码"),
-    status_max: Optional[int] = Query(None, description="最大状态码"),
-    has_error: Optional[bool] = Query(None, description="是否有错误"),
+    start_time: Optional[datetime] = Query(None, description="Start Time"),
+    end_time: Optional[datetime] = Query(None, description="End Time"),
+    requested_model: Optional[str] = Query(None, description="Requested Model (Fuzzy Match)"),
+    target_model: Optional[str] = Query(None, description="Target Model (Fuzzy Match)"),
+    provider_id: Optional[int] = Query(None, description="Provider ID"),
+    status_min: Optional[int] = Query(None, description="Min Status Code"),
+    status_max: Optional[int] = Query(None, description="Max Status Code"),
+    has_error: Optional[bool] = Query(None, description="Has Error"),
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
-    api_key_name: Optional[str] = Query(None, description="API Key 名称"),
-    retry_count_min: Optional[int] = Query(None, description="最小重试次数"),
-    retry_count_max: Optional[int] = Query(None, description="最大重试次数"),
-    input_tokens_min: Optional[int] = Query(None, description="最小输入 Token"),
-    input_tokens_max: Optional[int] = Query(None, description="最大输入 Token"),
-    total_time_min: Optional[int] = Query(None, description="最小耗时（毫秒）"),
-    total_time_max: Optional[int] = Query(None, description="最大耗时（毫秒）"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    sort_by: str = Query("request_time", description="排序字段"),
-    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="排序方向"),
+    api_key_name: Optional[str] = Query(None, description="API Key Name"),
+    retry_count_min: Optional[int] = Query(None, description="Min Retry Count"),
+    retry_count_max: Optional[int] = Query(None, description="Max Retry Count"),
+    input_tokens_min: Optional[int] = Query(None, description="Min Input Tokens"),
+    input_tokens_max: Optional[int] = Query(None, description="Max Input Tokens"),
+    total_time_min: Optional[int] = Query(None, description="Min Total Time (ms)"),
+    total_time_max: Optional[int] = Query(None, description="Max Total Time (ms)"),
+    page: int = Query(1, ge=1, description="Page Number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items Per Page"),
+    sort_by: str = Query("request_time", description="Sort Field"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort Order"),
 ):
     """
-    查询请求日志列表
+    Query request log list
     
-    支持多条件过滤、分页和排序。
+    Supports multi-condition filtering, pagination, and sorting.
     """
     try:
         query = RequestLogQuery(
@@ -108,9 +112,9 @@ async def get_log(
     service: LogServiceDep,
 ):
     """
-    获取日志详情
+    Get Log Details
     
-    包含完整的请求/响应信息（authorization 已脱敏）。
+    Includes full request/response info (authorization sanitized).
     """
     try:
         log = await service.get_by_id(log_id)
@@ -127,12 +131,12 @@ async def get_log(
 @router.post("/cleanup", response_model=CleanupResponse)
 async def cleanup_logs(
     service: LogServiceDep,
-    days: Optional[int] = Query(None, ge=1, description="保留天数（默认使用配置值）"),
+    days: Optional[int] = Query(None, ge=1, description="Retention days (defaults to config)"),
 ):
     """
-    手动触发日志清理
+    Manually trigger log cleanup
 
-    删除指定天数之前的日志。如果不指定天数，则使用配置的默认保留天数。
+    Deletes logs older than specified days. If days not specified, uses configured default retention days.
     """
     try:
         settings = get_settings()

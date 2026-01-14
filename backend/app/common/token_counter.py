@@ -1,7 +1,7 @@
 """
-Token 计数器模块
+Token Counter Module
 
-提供不同协议（OpenAI、Anthropic）的 Token 计数实现。
+Provides Token counting implementations for different protocols (OpenAI, Anthropic).
 """
 
 import json
@@ -17,52 +17,52 @@ except ImportError:
 
 class TokenCounter(ABC):
     """
-    Token 计数器抽象基类
+    Token Counter Abstract Base Class
     
-    定义 Token 计数的标准接口，由具体实现类提供计算逻辑。
+    Defines the standard interface for Token counting, with concrete implementations provided by subclasses.
     """
     
     @abstractmethod
     def count_tokens(self, text: str, model: str = "") -> int:
         """
-        计算文本的 Token 数量
+        Count tokens in text
         
         Args:
-            text: 要计算的文本
-            model: 模型名称（不同模型可能使用不同的 tokenizer）
+            text: Text to count
+            model: Model name (different models may use different tokenizers)
         
         Returns:
-            int: Token 数量
+            int: Token count
         """
         pass
     
     @abstractmethod
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
-        计算消息列表的 Token 数量
+        Count tokens in a message list
         
         Args:
-            messages: 消息列表，格式如 [{"role": "user", "content": "Hello"}]
-            model: 模型名称
+            messages: Message list, e.g., [{"role": "user", "content": "Hello"}]
+            model: Model name
         
         Returns:
-            int: Token 数量
+            int: Token count
         """
         pass
 
 
 class OpenAITokenCounter(TokenCounter):
     """
-    OpenAI Token 计数器
+    OpenAI Token Counter
     
-    使用 tiktoken 库进行精确的 Token 计数。
-    支持 GPT-3.5、GPT-4 等模型。
+    Uses tiktoken library for precise Token counting.
+    Supports models like GPT-3.5, GPT-4.
     """
     
-    # 默认使用的编码
+    # Default encoding
     DEFAULT_ENCODING = "cl100k_base"
     
-    # 模型到编码的映射
+    # Map models to encodings
     MODEL_ENCODING_MAP = {
         "gpt-4": "cl100k_base",
         "gpt-4-32k": "cl100k_base",
@@ -73,30 +73,30 @@ class OpenAITokenCounter(TokenCounter):
     }
     
     def __init__(self):
-        """初始化计数器"""
+        """Initialize Counter"""
         self._encodings: dict[str, Any] = {}
     
     def _get_encoding(self, model: str) -> Any:
         """
-        获取模型对应的编码器
+        Get encoder for model
         
         Args:
-            model: 模型名称
+            model: Model name
         
         Returns:
-            tiktoken 编码器实例
+            tiktoken encoder instance
         """
         if not TIKTOKEN_AVAILABLE:
             return None
         
-        # 查找模型对应的编码
+        # Find encoding for model
         encoding_name = self.DEFAULT_ENCODING
         for model_prefix, enc_name in self.MODEL_ENCODING_MAP.items():
             if model.startswith(model_prefix):
                 encoding_name = enc_name
                 break
         
-        # 缓存编码器
+        # Cache encoder
         if encoding_name not in self._encodings:
             self._encodings[encoding_name] = tiktoken.get_encoding(encoding_name)
         
@@ -104,17 +104,17 @@ class OpenAITokenCounter(TokenCounter):
     
     def count_tokens(self, text: str, model: str = "") -> int:
         """
-        计算文本的 Token 数量
+        Count tokens in text
         
-        使用 tiktoken 进行精确计算。如果 tiktoken 不可用，
-        则使用估算方法（约4个字符一个 token）。
+        Uses tiktoken for precise calculation. If tiktoken is unavailable,
+        uses estimation (approx. 4 chars per token).
         
         Args:
-            text: 要计算的文本
-            model: 模型名称
+            text: Text to count
+            model: Model name
         
         Returns:
-            int: Token 数量
+            int: Token count
         """
         if not text:
             return 0
@@ -123,28 +123,28 @@ class OpenAITokenCounter(TokenCounter):
         if encoding:
             return len(encoding.encode(text))
         
-        # 降级估算：平均4个字符一个 token
+        # Fallback estimation: average 4 chars per token
         return len(text) // 4
     
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
-        计算消息列表的 Token 数量
+        Count tokens in a message list
         
-        按照 OpenAI 的消息格式计算，包含角色和内容的 overhead。
+        Calculates based on OpenAI message format, including role and content overhead.
         
         Args:
-            messages: 消息列表
-            model: 模型名称
+            messages: Message list
+            model: Model name
         
         Returns:
-            int: Token 数量
+            int: Token count
         """
         if not messages:
             return 0
         
-        # 每条消息的 overhead
+        # Overhead per message
         tokens_per_message = 4  # <|start|>role<|separator|>content<|end|>
-        tokens_per_name = -1  # 如果有 name 字段
+        tokens_per_name = -1  # If there's a name field
         
         total_tokens = 0
         for message in messages:
@@ -153,63 +153,63 @@ class OpenAITokenCounter(TokenCounter):
                 if isinstance(value, str):
                     total_tokens += self.count_tokens(value, model)
                 elif isinstance(value, list):
-                    # 处理 content 为数组的情况（多模态）
+                    # Handle content as array (multimodal)
                     for item in value:
                         if isinstance(item, dict) and "text" in item:
                             total_tokens += self.count_tokens(item["text"], model)
                 if key == "name":
                     total_tokens += tokens_per_name
         
-        total_tokens += 3  # 每个回复的 priming
+        total_tokens += 3  # Every reply is primed with <|start|>assistant<|message|>
         return total_tokens
 
 
 class AnthropicTokenCounter(TokenCounter):
     """
-    Anthropic Token 计数器
+    Anthropic Token Counter
     
-    Anthropic 使用自己的 tokenizer，这里提供估算实现。
-    实际项目中建议集成 Anthropic 的官方 tokenizer。
+    Anthropic uses its own tokenizer; providing estimation here.
+    Ideally, integrate Anthropic's official tokenizer.
     """
     
     def count_tokens(self, text: str, model: str = "") -> int:
         """
-        计算文本的 Token 数量
+        Count tokens in text
         
-        使用估算方法，Anthropic 的 tokenizer 与 OpenAI 类似，
-        但具体实现可能略有不同。
+        Uses estimation method. Anthropic's tokenizer is similar to OpenAI's
+        but implementation details may differ.
         
         Args:
-            text: 要计算的文本
-            model: 模型名称
+            text: Text to count
+            model: Model name
         
         Returns:
-            int: Token 数量（估算值）
+            int: Token count (Estimated)
         """
         if not text:
             return 0
         
-        # 估算：平均4个字符一个 token
-        # TODO: 集成 Anthropic 官方 tokenizer 以获得精确计数
+        # Estimation: average 4 chars per token
+        # TODO: Integrate Anthropic official tokenizer for precise counting
         return len(text) // 4
     
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
-        计算消息列表的 Token 数量
+        Count tokens in a message list
         
         Args:
-            messages: 消息列表
-            model: 模型名称
+            messages: Message list
+            model: Model name
         
         Returns:
-            int: Token 数量（估算值）
+            int: Token count (Estimated)
         """
         if not messages:
             return 0
         
         total_tokens = 0
         for message in messages:
-            # Anthropic 消息格式
+            # Anthropic message format
             role = message.get("role", "")
             content = message.get("content", "")
             
@@ -218,12 +218,12 @@ class AnthropicTokenCounter(TokenCounter):
             if isinstance(content, str):
                 total_tokens += self.count_tokens(content, model)
             elif isinstance(content, list):
-                # 处理 content 为数组的情况
+                # Handle content as array
                 for item in content:
                     if isinstance(item, dict) and "text" in item:
                         total_tokens += self.count_tokens(item["text"], model)
             
-            # 消息 overhead
+            # Message overhead
             total_tokens += 4
         
         return total_tokens
@@ -231,13 +231,13 @@ class AnthropicTokenCounter(TokenCounter):
 
 def get_token_counter(protocol: str) -> TokenCounter:
     """
-    获取指定协议的 Token 计数器
+    Get Token Counter for specified protocol
     
     Args:
-        protocol: 协议类型，"openai" 或 "anthropic"
+        protocol: Protocol type, "openai" or "anthropic"
     
     Returns:
-        TokenCounter: 对应的计数器实例
+        TokenCounter: Corresponding counter instance
     """
     if protocol.lower() == "anthropic":
         return AnthropicTokenCounter()

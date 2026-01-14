@@ -1,7 +1,7 @@
 """
-模型映射领域模型
+Model Mapping Domain Model
 
-定义模型映射和模型-供应商映射相关的数据传输对象（DTO）。
+Defines Model Mapping and Model-Provider Mapping related Data Transfer Objects (DTOs).
 """
 
 from datetime import datetime
@@ -11,29 +11,29 @@ from pydantic import BaseModel, Field
 
 
 class ModelMappingBase(BaseModel):
-    """模型映射基础模型"""
+    """Model Mapping Base Model"""
     
-    # 请求模型名（主键）
+    # Requested Model Name (Primary Key)
     requested_model: str = Field(
-        ..., min_length=1, max_length=100, description="请求模型名"
+        ..., min_length=1, max_length=100, description="Requested Model Name"
     )
-    # 选择策略，当前仅支持 round_robin
-    strategy: str = Field("round_robin", description="选择策略")
+    # Selection Strategy, currently only supports round_robin
+    strategy: str = Field("round_robin", description="Selection Strategy")
 
 
 class ModelMappingCreate(ModelMappingBase):
-    """创建模型映射请求模型"""
+    """Create Model Mapping Request Model"""
     
-    # 模型级匹配规则
-    matching_rules: Optional[dict[str, Any]] = Field(None, description="匹配规则")
-    # 模型能力描述
-    capabilities: Optional[dict[str, Any]] = Field(None, description="模型能力")
-    # 是否激活
-    is_active: bool = Field(True, description="是否激活")
+    # Model Level Matching Rules
+    matching_rules: Optional[dict[str, Any]] = Field(None, description="Matching Rules")
+    # Model Capabilities Description
+    capabilities: Optional[dict[str, Any]] = Field(None, description="Model Capabilities")
+    # Is Active
+    is_active: bool = Field(True, description="Is Active")
 
 
 class ModelMappingUpdate(BaseModel):
-    """更新模型映射请求模型"""
+    """Update Model Mapping Request Model"""
     
     strategy: Optional[str] = None
     matching_rules: Optional[dict[str, Any]] = None
@@ -42,7 +42,7 @@ class ModelMappingUpdate(BaseModel):
 
 
 class ModelMapping(ModelMappingBase):
-    """模型映射完整模型"""
+    """Model Mapping Complete Model"""
     
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
@@ -55,45 +55,45 @@ class ModelMapping(ModelMappingBase):
 
 
 class ModelMappingResponse(ModelMapping):
-    """模型映射响应模型（含供应商数量）"""
+    """Model Mapping Response Model (Includes Provider Count)"""
     
-    # 关联的供应商数量
-    provider_count: int = Field(0, description="关联供应商数量")
-    # 关联的供应商列表（详情查询时返回）
+    # Associated Provider Count
+    provider_count: int = Field(0, description="Associated Provider Count")
+    # Associated Provider List (Returned in detail query)
     providers: Optional[list["ModelMappingProviderResponse"]] = None
     
     class Config:
         from_attributes = True
 
 
-# ============ 模型-供应商映射 ============
+# ============ Model-Provider Mapping ============
 
 class ModelMappingProviderBase(BaseModel):
-    """模型-供应商映射基础模型"""
+    """Model-Provider Mapping Base Model"""
     
-    # 请求模型名
-    requested_model: str = Field(..., description="请求模型名")
-    # 供应商 ID
-    provider_id: int = Field(..., description="供应商 ID")
-    # 目标模型名（该供应商使用的实际模型）
-    target_model_name: str = Field(..., min_length=1, max_length=100, description="目标模型名")
+    # Requested Model Name
+    requested_model: str = Field(..., description="Requested Model Name")
+    # Provider ID
+    provider_id: int = Field(..., description="Provider ID")
+    # Target Model Name (Actual model used by this provider)
+    target_model_name: str = Field(..., min_length=1, max_length=100, description="Target Model Name")
 
 
 class ModelMappingProviderCreate(ModelMappingProviderBase):
-    """创建模型-供应商映射请求模型"""
+    """Create Model-Provider Mapping Request Model"""
     
-    # 供应商级匹配规则
-    provider_rules: Optional[dict[str, Any]] = Field(None, description="供应商级规则")
-    # 优先级（数值越小优先级越高）
-    priority: int = Field(0, description="优先级")
-    # 权重
-    weight: int = Field(1, ge=1, description="权重")
-    # 是否激活
-    is_active: bool = Field(True, description="是否激活")
+    # Provider Level Matching Rules
+    provider_rules: Optional[dict[str, Any]] = Field(None, description="Provider Level Rules")
+    # Priority (Lower value means higher priority)
+    priority: int = Field(0, description="Priority")
+    # Weight
+    weight: int = Field(1, ge=1, description="Weight")
+    # Is Active
+    is_active: bool = Field(True, description="Is Active")
 
 
 class ModelMappingProviderUpdate(BaseModel):
-    """更新模型-供应商映射请求模型"""
+    """Update Model-Provider Mapping Request Model"""
     
     target_model_name: Optional[str] = Field(None, min_length=1, max_length=100)
     provider_rules: Optional[dict[str, Any]] = None
@@ -103,7 +103,7 @@ class ModelMappingProviderUpdate(BaseModel):
 
 
 class ModelMappingProvider(ModelMappingProviderBase):
-    """模型-供应商映射完整模型"""
+    """Model-Provider Mapping Complete Model"""
     
     id: int
     provider_rules: Optional[dict[str, Any]] = None
@@ -118,16 +118,31 @@ class ModelMappingProvider(ModelMappingProviderBase):
 
 
 class ModelMappingProviderResponse(ModelMappingProvider):
-    """模型-供应商映射响应模型（含供应商名称）"""
+    """Model-Provider Mapping Response Model (Includes Provider Name)"""
     
-    # 供应商名称
-    provider_name: str = Field("", description="供应商名称")
-    # 供应商协议类型：openai 或 anthropic
-    provider_protocol: Optional[str] = Field(None, description="供应商协议类型")
+    # Provider Name
+    provider_name: str = Field("", description="Provider Name")
+    # Provider Protocol Type: openai or anthropic
+    provider_protocol: Optional[str] = Field(None, description="Provider Protocol Type")
     
     class Config:
         from_attributes = True
 
 
-# 解决循环引用
+class ModelProviderExport(BaseModel):
+    """Model Provider Export Model (Uses Provider Name instead of ID)"""
+    provider_name: str
+    target_model_name: str
+    provider_rules: Optional[dict[str, Any]] = None
+    priority: int = 0
+    weight: int = 1
+    is_active: bool = True
+
+
+class ModelExport(ModelMappingCreate):
+    """Model Export Model"""
+    providers: list[ModelProviderExport] = []
+
+
+# Resolve circular reference
 ModelMappingResponse.model_rebuild()

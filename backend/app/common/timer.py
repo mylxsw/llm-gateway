@@ -1,7 +1,7 @@
 """
-计时器模块
+Timer Module
 
-提供请求耗时统计功能，支持首字节延迟和总耗时的精确测量。
+Provides request latency statistics, supporting precise measurement of time to first byte and total time.
 """
 
 import time
@@ -10,37 +10,37 @@ from typing import Optional
 
 class Timer:
     """
-    高精度计时器
+    High-precision Timer
     
-    用于测量请求处理过程中的各项耗时指标：
-    - 首字节延迟（TTFB）
-    - 总耗时
+    Used to measure various latency metrics during request processing:
+    - Time to First Byte (TTFB)
+    - Total Time
     
-    使用 time.perf_counter() 确保高精度计时。
+    Uses time.perf_counter() to ensure high precision.
     
     Example:
         timer = Timer()
         timer.start()
-        # ... 发送请求 ...
-        timer.mark_first_byte()  # 收到第一个字节
-        # ... 接收完整响应 ...
+        # ... Send request ...
+        timer.mark_first_byte()  # Received first byte
+        # ... Receive full response ...
         timer.stop()
         print(f"TTFB: {timer.first_byte_delay_ms}ms")
         print(f"Total: {timer.total_time_ms}ms")
     """
     
     def __init__(self):
-        """初始化计时器"""
+        """Initialize Timer"""
         self._start_time: Optional[float] = None
         self._first_byte_time: Optional[float] = None
         self._end_time: Optional[float] = None
     
     def start(self) -> "Timer":
         """
-        开始计时
+        Start timing
         
         Returns:
-            Timer: 返回自身，支持链式调用
+            Timer: Returns self for chaining
         """
         self._start_time = time.perf_counter()
         self._first_byte_time = None
@@ -49,13 +49,13 @@ class Timer:
     
     def mark_first_byte(self) -> "Timer":
         """
-        标记首字节时间
+        Mark first byte time
         
-        在收到响应的第一个字节时调用，用于计算 TTFB。
-        如果已经标记过，则忽略后续调用。
+        Called when the first byte of the response is received, used to calculate TTFB.
+        Subsequent calls are ignored if already marked.
         
         Returns:
-            Timer: 返回自身，支持链式调用
+            Timer: Returns self for chaining
         """
         if self._first_byte_time is None:
             self._first_byte_time = time.perf_counter()
@@ -63,13 +63,13 @@ class Timer:
     
     def stop(self) -> "Timer":
         """
-        停止计时
+        Stop timing
         
         Returns:
-            Timer: 返回自身，支持链式调用
+            Timer: Returns self for chaining
         """
         self._end_time = time.perf_counter()
-        # 如果没有标记首字节时间，使用结束时间
+        # If first byte time not marked, use end time
         if self._first_byte_time is None:
             self._first_byte_time = self._end_time
         return self
@@ -77,10 +77,10 @@ class Timer:
     @property
     def first_byte_delay_ms(self) -> Optional[int]:
         """
-        获取首字节延迟（毫秒）
+        Get Time to First Byte (ms)
         
         Returns:
-            Optional[int]: 首字节延迟，如果计时未完成则返回 None
+            Optional[int]: TTFB, or None if timing not completed
         """
         if self._start_time is None or self._first_byte_time is None:
             return None
@@ -89,10 +89,10 @@ class Timer:
     @property
     def total_time_ms(self) -> Optional[int]:
         """
-        获取总耗时（毫秒）
+        Get Total Time (ms)
         
         Returns:
-            Optional[int]: 总耗时，如果计时未完成则返回 None
+            Optional[int]: Total time, or None if timing not completed
         """
         if self._start_time is None or self._end_time is None:
             return None
@@ -100,10 +100,10 @@ class Timer:
     
     def reset(self) -> "Timer":
         """
-        重置计时器
+        Reset Timer
         
         Returns:
-            Timer: 返回自身，支持链式调用
+            Timer: Returns self for chaining
         """
         self._start_time = None
         self._first_byte_time = None

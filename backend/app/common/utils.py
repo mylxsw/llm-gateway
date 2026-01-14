@@ -1,7 +1,7 @@
 """
-工具函数模块
+Utility Functions Module
 
-提供通用的工具函数，如 API Key 生成、Trace ID 生成等。
+Provides common utility functions, such as API Key generation, Trace ID generation, etc.
 """
 
 import json
@@ -17,16 +17,16 @@ def generate_api_key(
     length: Optional[int] = None
 ) -> str:
     """
-    生成随机 API Key
+    Generate Random API Key
     
-    使用 secrets 模块生成密码学安全的随机 token。
+    Uses secrets module to generate a cryptographically secure random token.
     
     Args:
-        prefix: Key 前缀，默认使用配置中的 API_KEY_PREFIX
-        length: Key 长度（不含前缀），默认使用配置中的 API_KEY_LENGTH
+        prefix: Key prefix, defaults to API_KEY_PREFIX in configuration
+        length: Key length (excluding prefix), defaults to API_KEY_LENGTH in configuration
     
     Returns:
-        str: 生成的 API Key，格式如 "lgw-xxxxxxxxxxxx"
+        str: Generated API Key, e.g., "lgw-xxxxxxxxxxxx"
     
     Example:
         >>> generate_api_key()
@@ -36,8 +36,8 @@ def generate_api_key(
     prefix = prefix or settings.API_KEY_PREFIX
     length = length or settings.API_KEY_LENGTH
     
-    # 使用 secrets.token_hex 生成安全的随机字符串
-    # token_hex 返回 hex 字符串，长度是字节数的两倍
+    # Use secrets.token_hex to generate secure random string
+    # token_hex returns hex string, length is double the bytes
     random_part = secrets.token_hex(length // 2)
     
     return f"{prefix}{random_part}"
@@ -45,12 +45,12 @@ def generate_api_key(
 
 def generate_trace_id() -> str:
     """
-    生成请求追踪 ID
+    Generate Request Trace ID
     
-    使用 UUID4 生成唯一的追踪标识符，用于关联同一请求的日志。
+    Uses UUID4 to generate a unique trace identifier for correlating logs of the same request.
     
     Returns:
-        str: UUID 格式的追踪 ID
+        str: UUID format trace ID
     
     Example:
         >>> generate_trace_id()
@@ -61,32 +61,32 @@ def generate_trace_id() -> str:
 
 def extract_model_from_body(body: dict) -> Optional[str]:
     """
-    从请求体中提取模型名称
+    Extract model name from request body
     
-    支持 OpenAI 和 Anthropic 格式的请求体。
+    Supports OpenAI and Anthropic format request bodies.
     
     Args:
-        body: 请求体字典
+        body: Request body dictionary
     
     Returns:
-        Optional[str]: 模型名称，如果不存在则返回 None
+        Optional[str]: Model name, or None if not present
     """
     return body.get("model")
 
 
 def replace_model_in_body(body: dict, target_model: str) -> dict:
     """
-    替换请求体中的模型名称
+    Replace model name in request body
     
-    仅修改 model 字段，其他字段保持不变。
-    返回新字典，不修改原始数据。
+    Only modifies the model field, other fields remain unchanged.
+    Returns a new dictionary, does not modify original data.
     
     Args:
-        body: 原始请求体
-        target_model: 目标模型名
+        body: Original request body
+        target_model: Target model name
     
     Returns:
-        dict: 替换后的请求体（新字典）
+        dict: Replaced request body (new dictionary)
     """
     new_body = body.copy()
     new_body["model"] = target_model
@@ -95,17 +95,17 @@ def replace_model_in_body(body: dict, target_model: str) -> dict:
 
 def mask_string(s: str, visible_start: int = 4, visible_end: int = 2) -> str:
     """
-    对字符串进行掩码处理
+    Mask string
     
-    保留开头和结尾的部分字符，中间用星号替换。
+    Keeps a few characters at start and end, replaces middle with asterisks.
     
     Args:
-        s: 原始字符串
-        visible_start: 开头保留的字符数
-        visible_end: 结尾保留的字符数
+        s: Original string
+        visible_start: Number of characters to keep at start
+        visible_end: Number of characters to keep at end
     
     Returns:
-        str: 掩码后的字符串
+        str: Masked string
     
     Example:
         >>> mask_string("abcdefghijklmnop")
@@ -118,10 +118,10 @@ def mask_string(s: str, visible_start: int = 4, visible_end: int = 2) -> str:
 
 def try_parse_json_object(text: str) -> Any:
     """
-    尝试把字符串解析为 JSON 对象/数组
+    Try parsing string as JSON object/array
 
-    仅当字符串形态看起来像 JSON object/array（以 { 或 [ 开头）时才尝试解析，
-    解析失败则返回原始字符串。
+    Only attempts parsing if the string looks like a JSON object/array (starts with { or [),
+    otherwise returns the original string if parsing fails.
     """
     stripped = text.strip()
     if not stripped:

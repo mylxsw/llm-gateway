@@ -1,7 +1,7 @@
 """
-规则模型定义模块
+Rule Model Definition Module
 
-定义规则引擎使用的数据结构。
+Defines data structures used by the rule engine.
 """
 
 from dataclasses import dataclass, field
@@ -11,14 +11,14 @@ from typing import Any, Optional
 @dataclass
 class Rule:
     """
-    规则定义
+    Rule Definition
     
-    单条规则，包含匹配字段、操作符和期望值。
+    A single rule, containing the matching field, operator, and expected value.
     
     Attributes:
-        field: 匹配字段路径（如 "model", "headers.x-priority", "body.temperature"）
-        operator: 操作符（如 "eq", "gt", "contains"）
-        value: 期望值
+        field: Matching field path (e.g., "model", "headers.x-priority", "body.temperature")
+        operator: Operator (e.g., "eq", "gt", "contains")
+        value: Expected value
     """
     
     field: str
@@ -27,7 +27,7 @@ class Rule:
     
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Rule":
-        """从字典创建规则"""
+        """Create rule from dictionary"""
         return cls(
             field=data.get("field", ""),
             operator=data.get("operator", "eq"),
@@ -38,25 +38,25 @@ class Rule:
 @dataclass
 class RuleSet:
     """
-    规则集
+    Rule Set
     
-    包含多条规则和逻辑运算符（AND/OR）。
+    Contains multiple rules and logic operator (AND/OR).
     
     Attributes:
-        rules: 规则列表
-        logic: 逻辑运算符，"AND" 或 "OR"，默认 "AND"
+        rules: List of rules
+        logic: Logic operator, "AND" or "OR", defaults to "AND"
     """
     
     rules: list[Rule] = field(default_factory=list)
-    logic: str = "AND"  # "AND" 或 "OR"
+    logic: str = "AND"  # "AND" or "OR"
     
     @classmethod
     def from_dict(cls, data: Optional[dict[str, Any]]) -> Optional["RuleSet"]:
         """
-        从字典创建规则集
+        Create rule set from dictionary
         
         Args:
-            data: 规则集字典，格式如：
+            data: Rule set dictionary, formatted as:
                 {
                     "rules": [
                         {"field": "model", "operator": "eq", "value": "gpt-4"}
@@ -65,7 +65,7 @@ class RuleSet:
                 }
         
         Returns:
-            Optional[RuleSet]: 规则集，如果 data 为空则返回 None
+            Optional[RuleSet]: Rule set, or None if data is empty
         """
         if not data:
             return None
@@ -77,26 +77,26 @@ class RuleSet:
         return cls(rules=rules, logic=logic)
     
     def is_empty(self) -> bool:
-        """检查规则集是否为空"""
+        """Check if rule set is empty"""
         return len(self.rules) == 0
 
 
 @dataclass
 class CandidateProvider:
     """
-    候选供应商
+    Candidate Provider
     
-    规则引擎匹配后输出的候选供应商信息。
+    Candidate provider information output after rule engine matching.
     
     Attributes:
-        provider_id: 供应商 ID
-        provider_name: 供应商名称
-        base_url: 供应商基础 URL
-        protocol: 供应商协议（openai/anthropic）
-        api_key: 供应商 API Key
-        target_model: 目标模型名（该供应商对应的实际模型）
-        priority: 优先级（数值越小优先级越高）
-        weight: 权重（用于加权选择）
+        provider_id: Provider ID
+        provider_name: Provider Name
+        base_url: Provider Base URL
+        protocol: Provider Protocol (openai/anthropic)
+        api_key: Provider API Key
+        target_model: Target Model Name (Actual model corresponding to this provider)
+        priority: Priority (Lower value means higher priority)
+        weight: Weight (Used for weighted selection)
     """
     
     provider_id: int
@@ -105,5 +105,6 @@ class CandidateProvider:
     protocol: str
     api_key: Optional[str]
     target_model: str
+    extra_headers: Optional[dict[str, str]] = None
     priority: int = 0
     weight: int = 1

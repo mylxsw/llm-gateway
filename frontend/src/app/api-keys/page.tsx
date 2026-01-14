@@ -1,6 +1,6 @@
 /**
- * API Key 管理页面
- * 提供 API Key 的列表展示和 CRUD 操作
+ * API Key Management Page
+ * Provides API Key list display and CRUD operations
  */
 
 'use client';
@@ -20,23 +20,23 @@ import {
 import { ApiKey, ApiKeyCreate, ApiKeyUpdate } from '@/types';
 
 /**
- * API Key 管理页面组件
+ * API Key Management Page Component
  */
 export default function ApiKeysPage() {
-  // 分页状态
+  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // 表单对话框状态
+  // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null);
   const [createdKey, setCreatedKey] = useState<ApiKey | null>(null);
 
-  // 删除确认对话框状态
+  // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingKey, setDeletingKey] = useState<ApiKey | null>(null);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useApiKeys({
     page,
     page_size: pageSize,
@@ -47,31 +47,31 @@ export default function ApiKeysPage() {
   const updateMutation = useUpdateApiKey();
   const deleteMutation = useDeleteApiKey();
 
-  // 打开新建表单
+  // Open create form
   const handleCreate = () => {
     setEditingKey(null);
     setCreatedKey(null);
     setFormOpen(true);
   };
 
-  // 打开编辑表单
+  // Open edit form
   const handleEdit = (apiKey: ApiKey) => {
     setEditingKey(apiKey);
     setCreatedKey(null);
     setFormOpen(true);
   };
 
-  // 打开删除确认
+  // Open delete confirmation
   const handleDelete = (apiKey: ApiKey) => {
     setDeletingKey(apiKey);
     setDeleteDialogOpen(true);
   };
 
-  // 提交表单
+  // Submit form
   const handleSubmit = async (formData: ApiKeyCreate | ApiKeyUpdate) => {
     try {
       if (editingKey) {
-        // 更新
+        // Update
         await updateMutation.mutateAsync({
           id: editingKey.id,
           data: formData as ApiKeyUpdate,
@@ -79,16 +79,16 @@ export default function ApiKeysPage() {
         setFormOpen(false);
         setEditingKey(null);
       } else {
-        // 创建 - 显示新建的 key
+        // Create - Show created key
         const newKey = await createMutation.mutateAsync(formData as ApiKeyCreate);
         setCreatedKey(newKey);
       }
     } catch (error) {
-      console.error('保存失败:', error);
+      console.error('Save failed:', error);
     }
   };
 
-  // 关闭表单
+  // Close form
   const handleCloseForm = (open: boolean) => {
     if (!open) {
       setFormOpen(false);
@@ -97,7 +97,7 @@ export default function ApiKeysPage() {
     }
   };
 
-  // 确认删除
+  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!deletingKey) return;
     try {
@@ -105,45 +105,45 @@ export default function ApiKeysPage() {
       setDeleteDialogOpen(false);
       setDeletingKey(null);
     } catch (error) {
-      console.error('删除失败:', error);
+      console.error('Delete failed:', error);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
+      {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">API Key 管理</h1>
+          <h1 className="text-2xl font-bold">API Key Management</h1>
           <p className="mt-1 text-muted-foreground">
-            管理用于访问代理接口的 API Key
+            Manage API Keys used for accessing proxy interfaces
           </p>
         </div>
         <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          新建 API Key
+          <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
+          New API Key
         </Button>
       </div>
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>API Key 列表</CardTitle>
+          <CardTitle>API Key List</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载 API Key 列表失败"
+              message="Failed to load API Key list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="暂无 API Key"
-              actionText="新建 API Key"
+              message="No API Keys found"
+              actionText="New API Key"
               onAction={handleCreate}
             />
           )}
@@ -167,7 +167,7 @@ export default function ApiKeysPage() {
         </CardContent>
       </Card>
 
-      {/* 新建/编辑表单 */}
+      {/* Create/Edit Form */}
       <ApiKeyForm
         open={formOpen}
         onOpenChange={handleCloseForm}
@@ -177,13 +177,13 @@ export default function ApiKeysPage() {
         createdKey={createdKey}
       />
 
-      {/* 删除确认对话框 */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="删除 API Key"
-        description={`确定要删除 API Key「${deletingKey?.key_name}」吗？删除后使用该 Key 的客户端将无法访问。`}
-        confirmText="删除"
+        title="Delete API Key"
+        description={`Are you sure you want to delete API Key "${deletingKey?.key_name}"? Clients using this key will no longer be able to access the service.`}
+        confirmText="Delete"
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

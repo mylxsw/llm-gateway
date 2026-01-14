@@ -1,6 +1,6 @@
 /**
- * Label 组件
- * 表单标签组件
+ * Label Component
+ * Form label component
  */
 
 'use client';

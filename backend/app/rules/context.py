@@ -1,7 +1,7 @@
 """
-规则上下文模块
+Rule Context Module
 
-定义规则引擎执行时所需的上下文数据结构。
+Defines the context data structure required for rule engine execution.
 """
 
 from dataclasses import dataclass, field
@@ -11,48 +11,48 @@ from typing import Any, Optional
 @dataclass
 class TokenUsage:
     """
-    Token 使用量数据类
+    Token Usage Data Class
     
-    记录请求的 Token 消耗情况。
+    Records Token consumption for the request.
     """
     
-    # 输入 Token 数
+    # Input Token Count
     input_tokens: int = 0
-    # 输出 Token 数（通常在规则评估时尚未产生）
+    # Output Token Count (Usually not yet produced during rule evaluation)
     output_tokens: int = 0
     
     @property
     def total_tokens(self) -> int:
-        """获取总 Token 数"""
+        """Get total Token count"""
         return self.input_tokens + self.output_tokens
 
 
 @dataclass
 class RuleContext:
     """
-    规则引擎上下文
+    Rule Engine Context
     
-    包含规则评估所需的所有输入数据：
-    - current_model: 当前请求的模型名
-    - headers: 请求头（结构化对象）
-    - request_body: 请求体（结构化对象）
-    - token_usage: Token 消耗统计
+    Contains all input data required for rule evaluation:
+    - current_model: Current requested model name
+    - headers: Request headers (structured object)
+    - request_body: Request body (structured object)
+    - token_usage: Token consumption statistics
     """
     
-    # 当前请求的模型名（requested_model）
+    # Current requested model name (requested_model)
     current_model: str
-    # 请求头
+    # Request headers
     headers: dict[str, str] = field(default_factory=dict)
-    # 请求体
+    # Request body
     request_body: dict[str, Any] = field(default_factory=dict)
-    # Token 使用量
+    # Token usage
     token_usage: TokenUsage = field(default_factory=TokenUsage)
     
     def get_value(self, field_path: str) -> Optional[Any]:
         """
-        根据字段路径获取值
+        Get value by field path
         
-        支持以下路径格式：
+        Supports the following path formats:
         - "model" -> current_model
         - "headers.x-priority" -> headers["x-priority"]
         - "body.temperature" -> request_body["temperature"]
@@ -60,10 +60,10 @@ class RuleContext:
         - "token_usage.input_tokens" -> token_usage.input_tokens
         
         Args:
-            field_path: 字段路径
+            field_path: Field path
         
         Returns:
-            Optional[Any]: 字段值，不存在则返回 None
+            Optional[Any]: Field value, or None if not found
         """
         if not field_path:
             return None
@@ -71,7 +71,7 @@ class RuleContext:
         parts = field_path.split(".")
         root = parts[0].lower()
         
-        # 处理根字段
+        # Handle root fields
         if root == "model":
             return self.current_model
         elif root == "headers":
@@ -85,16 +85,16 @@ class RuleContext:
     
     def _get_nested_value(self, obj: Any, path: list[str]) -> Optional[Any]:
         """
-        获取嵌套对象的值
+        Get value from nested object
         
-        支持字典键和数组索引访问。
+        Supports dictionary key and array index access.
         
         Args:
-            obj: 当前对象
-            path: 剩余路径部分
+            obj: Current object
+            path: Remaining path parts
         
         Returns:
-            Optional[Any]: 值或 None
+            Optional[Any]: Value or None
         """
         if not path:
             return obj
@@ -102,7 +102,7 @@ class RuleContext:
         current = path[0]
         remaining = path[1:]
         
-        # 处理数组索引，如 "messages[0]"
+        # Handle array index, e.g., "messages[0]"
         if "[" in current and current.endswith("]"):
             key = current[:current.index("[")]
             index_str = current[current.index("[") + 1:-1]
@@ -117,14 +117,14 @@ class RuleContext:
                 pass
             return None
         
-        # 处理普通键
+        # Handle normal key
         if isinstance(obj, dict) and current in obj:
             return self._get_nested_value(obj[current], remaining)
         
         return None
     
     def _get_token_usage_value(self, path: list[str]) -> Optional[Any]:
-        """获取 token_usage 的字段值"""
+        """Get value from token_usage"""
         if not path:
             return self.token_usage
         

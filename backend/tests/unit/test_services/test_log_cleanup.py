@@ -1,5 +1,5 @@
 """
-测试日志清理功能
+Test Log Cleanup Functionality
 """
 
 import pytest
@@ -12,14 +12,14 @@ from app.services.log_service import LogService
 
 @pytest.mark.asyncio
 async def test_delete_older_than_days(db_session):
-    """测试删除指定天数之前的日志"""
+    """Test deleting logs older than specified days"""
     repo = SQLAlchemyLogRepository(db_session)
 
-    # 创建测试数据：3 条旧日志（10 天前）和 2 条新日志（3 天前）
+    # Create test data: 3 old logs (10 days ago) and 2 new logs (3 days ago)
     old_time = datetime.now(timezone.utc) - timedelta(days=10)
     recent_time = datetime.now(timezone.utc) - timedelta(days=3)
 
-    # 创建旧日志
+    # Create old logs
     for i in range(3):
         await repo.create(
             RequestLogCreate(
@@ -42,7 +42,7 @@ async def test_delete_older_than_days(db_session):
             )
         )
 
-    # 创建新日志
+    # Create new logs
     for i in range(2):
         await repo.create(
             RequestLogCreate(
@@ -65,19 +65,19 @@ async def test_delete_older_than_days(db_session):
             )
         )
 
-    # 删除 7 天之前的日志
-    deleted_count = await repo.delete_older_than_days(7)
+    # Delete logs older than 7 days
+    deleted_count = await repo.cleanup_old_logs(7)
 
-    # 验证删除了 3 条旧日志
+    # Verify 3 old logs deleted
     assert deleted_count == 3
 
 
 @pytest.mark.asyncio
 async def test_delete_older_than_days_no_matching_logs(db_session):
-    """测试当没有符合条件的日志时"""
+    """Test when no matching logs found"""
     repo = SQLAlchemyLogRepository(db_session)
 
-    # 创建一条最近的日志
+    # Create a recent log
     recent_time = datetime.now(timezone.utc) - timedelta(days=2)
     await repo.create(
         RequestLogCreate(
@@ -100,20 +100,20 @@ async def test_delete_older_than_days_no_matching_logs(db_session):
         )
     )
 
-    # 删除 7 天之前的日志（应该没有符合条件的）
-    deleted_count = await repo.delete_older_than_days(7)
+    # Delete logs older than 7 days (should be none)
+    deleted_count = await repo.cleanup_old_logs(7)
 
-    # 验证没有删除任何日志
+    # Verify no logs deleted
     assert deleted_count == 0
 
 
 @pytest.mark.asyncio
 async def test_cleanup_old_logs_service(db_session):
-    """测试服务层的日志清理方法"""
+    """Test log cleanup in service layer"""
     repo = SQLAlchemyLogRepository(db_session)
     service = LogService(repo)
 
-    # 创建旧日志
+    # Create old log
     old_time = datetime.now(timezone.utc) - timedelta(days=10)
     await repo.create(
         RequestLogCreate(
@@ -136,7 +136,7 @@ async def test_cleanup_old_logs_service(db_session):
         )
     )
 
-    # 创建新日志
+    # Create new log
     recent_time = datetime.now(timezone.utc) - timedelta(days=3)
     await repo.create(
         RequestLogCreate(
@@ -159,8 +159,8 @@ async def test_cleanup_old_logs_service(db_session):
         )
     )
 
-    # 清理 7 天之前的日志
+    # Cleanup logs older than 7 days
     deleted_count = await service.cleanup_old_logs(7)
 
-    # 验证只删除了旧日志
+    # Verify only old log deleted
     assert deleted_count == 1

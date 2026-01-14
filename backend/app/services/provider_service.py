@@ -1,7 +1,7 @@
 """
-供应商管理服务模块
+Provider Management Service Module
 
-提供供应商的业务逻辑处理。
+Provides business logic processing for Providers.
 """
 
 from typing import Optional
@@ -14,34 +14,34 @@ from app.repositories.provider_repo import ProviderRepository
 
 class ProviderService:
     """
-    供应商管理服务
+    Provider Management Service
     
-    处理供应商相关的业务逻辑，包括 CRUD 操作和业务规则验证。
+    Handles business logic related to providers, including CRUD operations and business rule validation.
     """
     
     def __init__(self, repo: ProviderRepository):
         """
-        初始化服务
+        Initialize Service
         
         Args:
-            repo: 供应商 Repository
+            repo: Provider Repository
         """
         self.repo = repo
     
     async def create(self, data: ProviderCreate) -> ProviderResponse:
         """
-        创建供应商
+        Create Provider
         
         Args:
-            data: 创建数据
+            data: Creation data
         
         Returns:
-            ProviderResponse: 创建后的供应商（API Key 脱敏）
+            ProviderResponse: Created provider (API Key sanitized)
         
         Raises:
-            ConflictError: 名称已存在
+            ConflictError: Name already exists
         """
-        # 检查名称是否已存在
+        # Check if name already exists
         existing = await self.repo.get_by_name(data.name)
         if existing:
             raise ConflictError(
@@ -54,16 +54,16 @@ class ProviderService:
     
     async def get_by_id(self, id: int) -> ProviderResponse:
         """
-        根据 ID 获取供应商
+        Get Provider by ID
         
         Args:
-            id: 供应商 ID
+            id: Provider ID
         
         Returns:
-            ProviderResponse: 供应商信息（API Key 脱敏）
+            ProviderResponse: Provider info (API Key sanitized)
         
         Raises:
-            NotFoundError: 供应商不存在
+            NotFoundError: Provider not found
         """
         provider = await self.repo.get_by_id(id)
         if not provider:
@@ -80,35 +80,35 @@ class ProviderService:
         page_size: int = 20,
     ) -> tuple[list[ProviderResponse], int]:
         """
-        获取供应商列表
+        Get Provider List
         
         Args:
-            is_active: 过滤激活状态
-            page: 页码
-            page_size: 每页数量
+            is_active: Filter by active status
+            page: Page number
+            page_size: Items per page
         
         Returns:
-            tuple[list[ProviderResponse], int]: (供应商列表, 总数)
+            tuple[list[ProviderResponse], int]: (Provider list, Total count)
         """
         providers, total = await self.repo.get_all(is_active, page, page_size)
         return [self._to_response(p) for p in providers], total
     
     async def update(self, id: int, data: ProviderUpdate) -> ProviderResponse:
         """
-        更新供应商
+        Update Provider
         
         Args:
-            id: 供应商 ID
-            data: 更新数据
+            id: Provider ID
+            data: Update data
         
         Returns:
-            ProviderResponse: 更新后的供应商
+            ProviderResponse: Updated provider
         
         Raises:
-            NotFoundError: 供应商不存在
-            ConflictError: 名称已被其他供应商使用
+            NotFoundError: Provider not found
+            ConflictError: Name already used by another provider
         """
-        # 检查供应商是否存在
+        # Check if provider exists
         existing = await self.repo.get_by_id(id)
         if not existing:
             raise NotFoundError(
@@ -116,7 +116,7 @@ class ProviderService:
                 code="provider_not_found",
             )
         
-        # 如果更新名称，检查是否与其他供应商冲突
+        # If updating name, check for conflict with other providers
         if data.name and data.name != existing.name:
             name_conflict = await self.repo.get_by_name(data.name)
             if name_conflict:
@@ -130,16 +130,16 @@ class ProviderService:
     
     async def delete(self, id: int) -> None:
         """
-        删除供应商
+        Delete Provider
         
         Args:
-            id: 供应商 ID
+            id: Provider ID
         
         Raises:
-            NotFoundError: 供应商不存在
-            ConflictError: 供应商被模型映射引用
+            NotFoundError: Provider not found
+            ConflictError: Provider referenced by model mappings
         """
-        # 检查供应商是否存在
+        # Check if provider exists
         existing = await self.repo.get_by_id(id)
         if not existing:
             raise NotFoundError(
@@ -147,7 +147,7 @@ class ProviderService:
                 code="provider_not_found",
             )
         
-        # 检查是否被引用
+        # Check if referenced
         if await self.repo.has_model_mappings(id):
             raise ConflictError(
                 message="Provider is referenced by model mappings",
@@ -155,16 +155,66 @@ class ProviderService:
             )
         
         await self.repo.delete(id)
+
+    async def export_data(self) -> list[ProviderCreate]:
+        """
+        Export all providers
+        
+        Returns:
+            list[ProviderCreate]: List of providers with full details
+        """
+        # Get all providers without pagination (using a large limit)
+        providers, _ = await self.repo.get_all(page=1, page_size=10000)
+        
+        export_list = []
+        for p in providers:
+            export_list.append(
+                ProviderCreate(
+                    name=p.name,
+                    base_url=p.base_url,
+                    protocol=p.protocol,
+                    api_type=p.api_type,
+                    extra_headers=p.extra_headers,
+                    api_key=p.api_key,
+                    is_active=p.is_active
+                )
+            )
+        return export_list
+
+    async def import_data(self, data: list[ProviderCreate]) -> dict[str, int]:
+        """
+        Import providers
+        
+        Args:
+            data: List of providers to import
+            
+        Returns:
+            dict: Import summary (success, skipped)
+        """
+        success = 0
+        skipped = 0
+        
+        for item in data:
+            # Check if name already exists
+            existing = await self.repo.get_by_name(item.name)
+            if existing:
+                skipped += 1
+                continue
+            
+            await self.repo.create(item)
+            success += 1
+            
+        return {"success": success, "skipped": skipped}
     
     def _to_response(self, provider: Provider) -> ProviderResponse:
         """
-        将 Provider 转换为响应模型（API Key 脱敏）
+        Convert Provider to response model (API Key sanitized)
         
         Args:
-            provider: 供应商模型
+            provider: Provider model
         
         Returns:
-            ProviderResponse: 响应模型
+            ProviderResponse: Response model
         """
         return ProviderResponse(
             id=provider.id,

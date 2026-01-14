@@ -1,6 +1,6 @@
 /**
- * 侧边栏导航组件
- * 提供全局导航菜单
+ * Sidebar Navigation Component
+ * Provides global navigation menu
  */
 
 'use client';
@@ -18,50 +18,50 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** 导航菜单项定义 */
+/** Navigation Items Definition */
 const navItems = [
   {
-    title: '首页',
+    title: 'Home',
     href: '/',
     icon: Home,
   },
   {
-    title: '供应商管理',
+    title: 'Providers',
     href: '/providers',
     icon: Server,
   },
   {
-    title: '模型管理',
+    title: 'Models',
     href: '/models',
     icon: Layers,
   },
   {
-    title: 'API Key 管理',
+    title: 'API Keys',
     href: '/api-keys',
     icon: Key,
   },
   {
-    title: '请求日志',
+    title: 'Request Logs',
     href: '/logs',
     icon: FileText,
   },
 ];
 
 /**
- * 侧边栏导航组件
+ * Sidebar Navigation Component
  */
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="flex w-64 flex-col border-r bg-white">
-      {/* Logo 和标题 */}
-      <div className="flex h-16 items-center border-b px-6">
-        <Settings className="h-6 w-6 text-primary" />
+    <div className="flex w-64 flex-col border-r border-border bg-card text-card-foreground">
+      {/* Logo and Title */}
+      <div className="flex h-16 items-center border-b border-border px-6">
+        <Settings className="h-6 w-6 text-primary" suppressHydrationWarning />
         <span className="ml-3 text-lg font-semibold">LLM Gateway</span>
       </div>
 
-      {/* 导航菜单 */}
+      {/* Navigation Menu */}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href ||
@@ -76,18 +76,18 @@ export function Sidebar() {
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-5 w-5" suppressHydrationWarning />
               {item.title}
             </Link>
           );
         })}
       </nav>
 
-      {/* 底部信息 */}
-      <div className="border-t px-6 py-4">
+      {/* Footer Info */}
+      <div className="border-t border-border px-6 py-4">
         <p className="text-xs text-muted-foreground">
           LLM Gateway v1.0.0
         </p>

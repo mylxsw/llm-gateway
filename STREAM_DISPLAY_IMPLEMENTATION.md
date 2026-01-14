@@ -40,13 +40,13 @@ Added stream mode indicator to the log list display and reorganized columns for 
   - ID column (hidden as requested)
   
 - **Merged columns:**
-  - "请求模型" + "目标模型" → "模型映射" (with arrow icon between them)
-  - "状态码" + "重试" → "状态/重试" (separated by slash)
-  - "首字节延迟" + "总耗时" → "延迟/总时" (stacked vertically)
-  - "输入 Token" + "输出 Token" → "输入/输出 Token" (separated by slash)
+  - "Requested Model" + "Target Model" → "Model Mapping" (with arrow icon between them)
+  - "Status" + "Retry" → "Status/Retry" (separated by slash)
+  - "First Byte Latency" + "Total Time" → "Latency/Total" (stacked vertically)
+  - "Input Token" + "Output Token" → "Input/Output Token" (separated by slash)
   
 - **New column:**
-  - "Token消耗/Stream" - Shows total token consumption and stream indicator
+  - "Token Usage/Stream" - Shows total token consumption and stream indicator
     - Total tokens displayed first (input + output)
     - Followed by a slash
     - Wave icon (Waves from lucide-react) in blue for stream requests
@@ -80,10 +80,10 @@ The `is_stream` column will be automatically created when running `init_db()` on
 
 The new log list layout:
 ```
-请求时间 | 模型映射 | 供应商 | 状态/重试 | 延迟/总时 | 输入/输出Token | Token消耗/Stream | 操作
---------|---------|--------|----------|-----------|---------------|----------------|------
-2024... | gpt-4 → | OpenAI | 200 / 0  | 100ms    | 500 / 1000    | 1500 / 🌊      | 👁️
-        | gpt-4   |        |          | 1.5s     |               |                |
+Time | Model Mapping | Provider | Status/Retry | Latency/Total | In/Out Token | Usage/Stream | Action
+-----|---------------|----------|--------------|---------------|--------------|--------------|-------
+2024 | gpt-4 →       | OpenAI   | 200 / 0      | 100ms         | 500 / 1000   | 1500 / 🌊    | 👁️
+     | gpt-4         |          |              | 1.5s          |              |              |
 ```
 
 ## Testing

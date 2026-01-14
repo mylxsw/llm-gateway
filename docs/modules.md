@@ -1,16 +1,16 @@
-# LLM Gateway 模块拆分设计
+# LLM Gateway Module Decomposition Design
 
-## 模块概览
+## Module Overview
 
-项目拆分为以下独立可开发的模块，每个模块可由不同开发者并行开发。
+The project is split into the following independent modules, each of which can be developed in parallel by different developers.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              模块依赖关系图                                   │
+│                              Module Dependency Graph                          │
 └─────────────────────────────────────────────────────────────────────────────┘
 
                     ┌───────────────────┐
-                    │   M1: 基础设施    │
+                    │   M1: Infrastructure│
                     │  (DB/Config/Common)│
                     └─────────┬─────────┘
                               │
@@ -18,15 +18,17 @@
           │                   │                   │
           ▼                   ▼                   ▼
 ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│ M2: 数据访问层   │  │ M3: 规则引擎    │  │ M4: 上游适配器  │
-│  (Repository)   │  │ (Rule Engine)   │  │ (Providers)     │
+│ M2: Data Access  │  │ M3: Rule Engine │  │ M4: Upstream    │
+│  Layer          │  │ (Rule Engine)   │  │ Adapters        │
+│  (Repository)   │  │                 │  │ (Providers)     │
 └────────┬────────┘  └────────┬────────┘  └────────┬────────┘
          │                    │                    │
          └────────────────────┼────────────────────┘
                               │
                               ▼
                     ┌─────────────────────┐
-                    │   M5: 业务服务层     │
+                    │   M5: Business      │
+                    │    Service Layer    │
                     │    (Services)       │
                     └─────────┬───────────┘
                               │
@@ -34,63 +36,64 @@
               │                               │
               ▼                               ▼
     ┌─────────────────┐             ┌─────────────────┐
-    │ M6: 代理 API    │             │ M7: 管理 API    │
+    │ M6: Proxy API   │             │ M7: Admin API   │
     │ (Proxy Routes)  │             │ (Admin Routes)  │
     └─────────────────┘             └─────────────────┘
 
                               │
                               ▼
     ┌─────────────────────────────────────────────────────┐
-    │                  M8: 前端管理面板                     │
+    │                  M8: Frontend Admin Dashboard         │
     │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│
-    │  │供应商管理│ │ 模型管理 │ │API Key管理│ │ 日志查询 ││
+    │  │ Provider │ │  Model   │ │ API Key  │ │ Log      ││
+    │  │ Mgmt     │ │  Mgmt    │ │ Mgmt     │ │ Query    ││
     │  └──────────┘ └──────────┘ └──────────┘ └──────────┘│
     └─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## M1: 基础设施模块
+## M1: Infrastructure Module
 
-### 模块职责
-- 数据库连接与会话管理
-- 配置管理（环境变量、多数据库切换）
-- 公共工具函数（脱敏、Token计数、计时器、错误处理等）
+### Module Responsibilities
+- Database connection and session management
+- Configuration management (Environment variables, multi-database switching)
+- Common utility functions (Sanitization, Token counting, Timer, Error handling, etc.)
 
-### 文件结构
+### File Structure
 ```
 backend/app/
-├── config.py                 # 配置管理
+├── config.py                 # Configuration management
 ├── db/
 │   ├── __init__.py
-│   ├── session.py            # 数据库会话管理
-│   └── models.py             # ORM 模型定义
+│   ├── session.py            # Database session management
+│   └── models.py             # ORM Model definitions
 └── common/
     ├── __init__.py
-    ├── http_client.py        # HTTP 客户端封装
-    ├── token_counter.py      # Token 计数器
-    ├── sanitizer.py          # 数据脱敏
-    ├── errors.py             # 错误定义
-    ├── timer.py              # 计时器
-    └── utils.py              # 工具函数
+    ├── http_client.py        # HTTP Client wrapper
+    ├── token_counter.py      # Token Counter
+    ├── sanitizer.py          # Data Sanitizer
+    ├── errors.py             # Error Definitions
+    ├── timer.py              # Timer
+    └── utils.py              # Utility functions
 ```
 
-### 接口定义
+### Interface Definition
 
 #### config.py
 ```python
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    # 数据库配置
+    # Database Config
     DATABASE_TYPE: str = "sqlite"  # sqlite | postgresql
     DATABASE_URL: str = "sqlite:///./llm_gateway.db"
     
-    # 应用配置
+    # App Config
     APP_NAME: str = "LLM Gateway"
     DEBUG: bool = False
     
-    # 重试配置
+    # Retry Config
     RETRY_MAX_ATTEMPTS: int = 3
     RETRY_DELAY_MS: int = 1000
 
@@ -101,12 +104,12 @@ class Settings(BaseSettings):
 #### common/sanitizer.py
 ```python
 def sanitize_authorization(value: str) -> str:
-    """脱敏 authorization 字段"""
+    """Sanitize authorization field"""
     # Bearer sk-xxx...xxx -> Bearer sk-***...***
     pass
 
 def sanitize_headers(headers: dict) -> dict:
-    """脱敏请求头"""
+    """Sanitize request headers"""
     pass
 ```
 
@@ -121,7 +124,7 @@ class TokenCounter(ABC):
 
 class OpenAITokenCounter(TokenCounter):
     def count_tokens(self, text: str, model: str) -> int:
-        # 使用 tiktoken 计算
+        # Use tiktoken for calculation
         pass
 
 class AnthropicTokenCounter(TokenCounter):
@@ -129,28 +132,28 @@ class AnthropicTokenCounter(TokenCounter):
         pass
 ```
 
-### 测试要点
-- [ ] 配置加载正确性（环境变量优先级）
-- [ ] 数据库连接（SQLite/PostgreSQL 切换）
-- [ ] 脱敏函数（authorization 字段打码）
-- [ ] Token 计数准确性
+### Test Points
+- [ ] Configuration loading correctness (Environment variable priority)
+- [ ] Database connection (SQLite/PostgreSQL switching)
+- [ ] Sanitization functions (authorization field masking)
+- [ ] Token counting accuracy
 
-### 预估工时
-**2-3 天**
+### Estimated Effort
+**2-3 Days**
 
 ---
 
-## M2: 数据访问层模块
+## M2: Data Access Layer Module
 
-### 模块职责
-- 定义 Repository 抽象接口
-- 实现 SQLAlchemy 具体实现
-- 支持 SQLite 和 PostgreSQL
+### Module Responsibilities
+- Define Repository abstract interfaces
+- Implement SQLAlchemy concrete implementation
+- Support SQLite and PostgreSQL
 
-### 文件结构
+### File Structure
 ```
 backend/app/
-├── domain/                        # 领域模型/DTO
+├── domain/                        # Domain Models/DTO
 │   ├── __init__.py
 │   ├── provider.py
 │   ├── model.py
@@ -158,12 +161,12 @@ backend/app/
 │   └── log.py
 └── repositories/
     ├── __init__.py
-    ├── base.py                    # 基础 Repository 接口
-    ├── provider_repo.py           # 供应商 Repository 接口
-    ├── model_repo.py              # 模型 Repository 接口
-    ├── api_key_repo.py            # API Key Repository 接口
-    ├── log_repo.py                # 日志 Repository 接口
-    └── sqlalchemy/                # SQLAlchemy 实现
+    ├── base.py                    # Base Repository Interface
+    ├── provider_repo.py           # Provider Repository Interface
+    ├── model_repo.py              # Model Repository Interface
+    ├── api_key_repo.py            # API Key Repository Interface
+    ├── log_repo.py                # Log Repository Interface
+    └── sqlalchemy/                # SQLAlchemy Implementation
         ├── __init__.py
         ├── provider_repo.py
         ├── model_repo.py
@@ -171,7 +174,7 @@ backend/app/
         └── log_repo.py
 ```
 
-### 接口定义
+### Interface Definition
 
 #### repositories/provider_repo.py
 ```python
@@ -261,36 +264,36 @@ class LogRepository(ABC):
         pass
 ```
 
-### 测试要点
-- [ ] CRUD 操作正确性
-- [ ] 分页查询
-- [ ] 多条件过滤
-- [ ] 外键约束
-- [ ] SQLite 与 PostgreSQL 兼容性
+### Test Points
+- [ ] CRUD operations correctness
+- [ ] Pagination query
+- [ ] Multi-condition filtering
+- [ ] Foreign key constraints
+- [ ] SQLite and PostgreSQL compatibility
 
-### 预估工时
-**3-4 天**
+### Estimated Effort
+**3-4 Days**
 
 ---
 
-## M3: 规则引擎模块
+## M3: Rule Engine Module
 
-### 模块职责
-- 定义规则上下文结构
-- 实现规则评估逻辑
-- 输出候选供应商及其目标模型
+### Module Responsibilities
+- Define rule context structure
+- Implement rule evaluation logic
+- Output candidate providers and their target models
 
-### 文件结构
+### File Structure
 ```
 backend/app/rules/
 ├── __init__.py
-├── engine.py              # 规则引擎核心
-├── context.py             # 规则上下文
-├── evaluator.py           # 规则评估器
-└── models.py              # 规则模型定义
+├── engine.py              # Rule Engine Core
+├── context.py             # Rule Context
+├── evaluator.py           # Rule Evaluator
+└── models.py              # Rule Model Definition
 ```
 
-### 接口定义
+### Interface Definition
 
 #### rules/context.py
 ```python
@@ -299,11 +302,11 @@ from typing import Dict, Any
 
 @dataclass
 class RuleContext:
-    """规则引擎上下文"""
+    """Rule Engine Context"""
     current_model: str              # requested_model
-    headers: Dict[str, str]         # 请求头
-    request_body: Dict[str, Any]    # 请求体
-    token_usage: TokenUsage         # Token 消耗
+    headers: Dict[str, str]         # Request headers
+    request_body: Dict[str, Any]    # Request body
+    token_usage: TokenUsage         # Token consumption
 
 @dataclass
 class TokenUsage:
@@ -318,19 +321,19 @@ from typing import List, Optional, Any
 
 @dataclass
 class Rule:
-    """规则定义"""
-    field: str              # 匹配字段 (model, headers.x-custom, body.temperature)
-    operator: str           # 操作符 (eq, ne, gt, lt, gte, lte, contains, regex)
-    value: Any              # 匹配值
+    """Rule Definition"""
+    field: str              # Matching field (model, headers.x-custom, body.temperature)
+    operator: str           # Operator (eq, ne, gt, lt, gte, lte, contains, regex)
+    value: Any              # Matching value
     
 @dataclass
 class RuleSet:
-    """规则集（AND 逻辑）"""
+    """Rule Set (AND Logic)"""
     rules: List[Rule]
     
 @dataclass
 class CandidateProvider:
-    """候选供应商"""
+    """Candidate Provider"""
     provider_id: int
     provider_name: str
     target_model: str
@@ -345,7 +348,7 @@ from app.rules.context import RuleContext
 from app.rules.models import CandidateProvider
 
 class RuleEngine:
-    """规则引擎"""
+    """Rule Engine"""
     
     async def evaluate(
         self,
@@ -354,17 +357,17 @@ class RuleEngine:
         provider_mappings: List[ModelMappingProvider]
     ) -> List[CandidateProvider]:
         """
-        评估所有规则，返回候选供应商列表
+        Evaluate all rules, return list of candidate providers
         
-        流程:
-        1. 检查模型级规则 (model_mapping.matching_rules)
-        2. 对每个供应商检查供应商级规则 (provider_mapping.provider_rules)
-        3. 返回所有通过的供应商及其 target_model
+        Process:
+        1. Check model-level rules (model_mapping.matching_rules)
+        2. Check provider-level rules for each provider (provider_mapping.provider_rules)
+        3. Return all passed providers and their target_model
         """
         pass
 ```
 
-### 规则格式示例
+### Rule Format Example
 ```json
 {
   "rules": [
@@ -375,35 +378,35 @@ class RuleEngine:
 }
 ```
 
-### 测试要点
-- [ ] 各类操作符 (eq, ne, gt, lt, contains, regex)
-- [ ] 嵌套字段访问 (headers.x-custom, body.messages[0].role)
-- [ ] 多规则 AND/OR 组合
-- [ ] 空规则处理（默认通过）
-- [ ] 无匹配供应商处理
+### Test Points
+- [ ] Various operators (eq, ne, gt, lt, contains, regex)
+- [ ] Nested field access (headers.x-custom, body.messages[0].role)
+- [ ] Multi-rule AND/OR combinations
+- [ ] Empty rule handling (Default pass)
+- [ ] No matching provider handling
 
-### 预估工时
-**2-3 天**
+### Estimated Effort
+**2-3 Days**
 
 ---
 
-## M4: 上游供应商适配器模块
+## M4: Upstream Provider Adapter Module
 
-### 模块职责
-- 封装上游 API 调用
-- 支持 OpenAI 和 Anthropic 协议
-- 处理流式响应
+### Module Responsibilities
+- Encapsulate upstream API calls
+- Support OpenAI and Anthropic protocols
+- Handle streaming responses
 
-### 文件结构
+### File Structure
 ```
 backend/app/providers/
 ├── __init__.py
-├── base.py                # 基础适配器接口
-├── openai_client.py       # OpenAI 客户端
-└── anthropic_client.py    # Anthropic 客户端
+├── base.py                # Base Adapter Interface
+├── openai_client.py       # OpenAI Client
+└── anthropic_client.py    # Anthropic Client
 ```
 
-### 接口定义
+### Interface Definition
 
 #### providers/base.py
 ```python
@@ -420,7 +423,7 @@ class ProviderResponse:
     total_time_ms: int
 
 class ProviderClient(ABC):
-    """上游供应商客户端基类"""
+    """Base class for upstream provider client"""
     
     @abstractmethod
     async def forward(
@@ -433,7 +436,7 @@ class ProviderClient(ABC):
         body: dict,
         target_model: str
     ) -> ProviderResponse:
-        """转发请求到上游供应商"""
+        """Forward request to upstream provider"""
         pass
     
     @abstractmethod
@@ -447,61 +450,61 @@ class ProviderClient(ABC):
         body: dict,
         target_model: str
     ) -> AsyncGenerator[bytes, None]:
-        """转发流式请求"""
+        """Forward streaming request"""
         pass
 ```
 
 #### providers/openai_client.py
 ```python
 class OpenAIClient(ProviderClient):
-    """OpenAI 协议客户端"""
+    """OpenAI Protocol Client"""
     
     async def forward(self, ...) -> ProviderResponse:
-        # 1. 复制 body，替换 model 字段
-        # 2. 转发到 base_url + path
-        # 3. 记录延迟指标
+        # 1. Copy body, replace model field
+        # 2. Forward to base_url + path
+        # 3. Record latency metrics
         pass
 ```
 
-### 测试要点
-- [ ] 请求转发正确性
-- [ ] 只修改 model 字段验证
-- [ ] 流式响应处理
-- [ ] 错误响应处理
-- [ ] 超时处理
+### Test Points
+- [ ] Request forwarding correctness
+- [ ] Only modify model field verification
+- [ ] Streaming response handling
+- [ ] Error response handling
+- [ ] Timeout handling
 
-### 预估工时
-**2-3 天**
+### Estimated Effort
+**2-3 Days**
 
 ---
 
-## M5: 业务服务层模块
+## M5: Business Service Layer Module
 
-### 模块职责
-- 代理核心逻辑编排
-- 重试与故障切换
-- 轮询策略实现
-- 日志记录服务
+### Module Responsibilities
+- Proxy core logic orchestration
+- Retry and failover
+- Round Robin strategy implementation
+- Log recording service
 
-### 文件结构
+### File Structure
 ```
 backend/app/services/
 ├── __init__.py
-├── proxy_service.py       # 代理核心服务
-├── provider_service.py    # 供应商管理服务
-├── model_service.py       # 模型管理服务
-├── api_key_service.py     # API Key 服务
-├── log_service.py         # 日志服务
-├── retry_handler.py       # 重试处理器
-└── strategy.py            # 策略服务(轮询)
+├── proxy_service.py       # Proxy Core Service
+├── provider_service.py    # Provider Management Service
+├── model_service.py       # Model Management Service
+├── api_key_service.py     # API Key Service
+├── log_service.py         # Log Service
+├── retry_handler.py       # Retry Handler
+└── strategy.py            # Strategy Service (Round Robin)
 ```
 
-### 接口定义
+### Interface Definition
 
 #### services/proxy_service.py
 ```python
 class ProxyService:
-    """代理核心服务"""
+    """Proxy Core Service"""
     
     def __init__(
         self,
@@ -526,18 +529,18 @@ class ProxyService:
         body: dict
     ) -> ProxyResponse:
         """
-        处理代理请求
+        Process proxy request
         
-        流程:
-        1. 提取 requested_model
-        2. 计算输入 Token
-        3. 构建规则上下文
-        4. 规则引擎匹配 -> 候选供应商列表
-        5. 轮询策略选择供应商
-        6. 转发请求 (含重试/切换逻辑)
-        7. 计算输出 Token
-        8. 记录日志
-        9. 返回响应
+        Process:
+        1. Extract requested_model
+        2. Calculate Input Token
+        3. Build Rule Context
+        4. Rule Engine Match -> Candidate Provider List
+        5. Round Robin Strategy selects Provider
+        6. Forward Request (with Retry/Failover logic)
+        7. Calculate Output Token
+        8. Log Request
+        9. Return Response
         """
         pass
 ```
@@ -545,7 +548,7 @@ class ProxyService:
 #### services/retry_handler.py
 ```python
 class RetryHandler:
-    """重试与故障切换处理器"""
+    """Retry and Failover Handler"""
     
     async def execute_with_retry(
         self,
@@ -554,15 +557,15 @@ class RetryHandler:
         **kwargs
     ) -> tuple[ProviderResponse, int, CandidateProvider]:
         """
-        带重试的请求执行
+        Execute request with retry
         
-        逻辑:
-        - status >= 500: 同供应商重试 3 次，间隔 1s
-        - status < 500: 直接切换下一供应商
-        - 全部失败: 返回最后一次错误
+        Logic:
+        - status >= 500: Retry on same provider 3 times, 1s interval
+        - status < 500: Switch directly to next provider
+        - All failed: Return last error
         
         Returns:
-            (响应, 重试次数, 最终使用的供应商)
+            (Response, Retry Count, Final Provider Used)
         """
         pass
 ```
@@ -572,7 +575,7 @@ class RetryHandler:
 from abc import ABC, abstractmethod
 
 class SelectionStrategy(ABC):
-    """供应商选择策略"""
+    """Provider Selection Strategy"""
     
     @abstractmethod
     async def select(
@@ -583,44 +586,44 @@ class SelectionStrategy(ABC):
         pass
 
 class RoundRobinStrategy(SelectionStrategy):
-    """轮询策略"""
+    """Round Robin Strategy"""
     
     async def select(self, candidates, requested_model) -> CandidateProvider:
-        # 使用原子计数器实现并发安全的轮询
+        # Use atomic counter to implement concurrency-safe round robin
         pass
 ```
 
-### 测试要点
-- [ ] 完整代理流程
-- [ ] 重试逻辑 (>=500 同供应商重试 3 次)
-- [ ] 切换逻辑 (<500 直接切换)
-- [ ] 轮询策略正确性与并发安全
-- [ ] 日志记录完整性
+### Test Points
+- [ ] Complete proxy flow
+- [ ] Retry logic (>=500 Retry on same provider 3 times)
+- [ ] Switch logic (<500 Switch directly)
+- [ ] Round Robin strategy correctness and concurrency safety
+- [ ] Log recording completeness
 
-### 预估工时
-**4-5 天**
+### Estimated Effort
+**4-5 Days**
 
 ---
 
-## M6: 代理 API 模块
+## M6: Proxy API Module
 
-### 模块职责
-- OpenAI 兼容接口
-- Anthropic 兼容接口
-- API Key 鉴权
+### Module Responsibilities
+- OpenAI Compatible Interface
+- Anthropic Compatible Interface
+- API Key Authentication
 
-### 文件结构
+### File Structure
 ```
 backend/app/api/
 ├── __init__.py
-├── deps.py                # 依赖注入
+├── deps.py                # Dependency Injection
 └── proxy/
     ├── __init__.py
-    ├── openai.py          # OpenAI 兼容接口
-    └── anthropic.py       # Anthropic 兼容接口
+    ├── openai.py          # OpenAI Compatible Interface
+    └── anthropic.py       # Anthropic Compatible Interface
 ```
 
-### 接口定义
+### Interface Definition
 
 #### api/proxy/openai.py
 ```python
@@ -635,17 +638,17 @@ async def chat_completions(
     authorization: str = Header(...),
     proxy_service: ProxyService = Depends(get_proxy_service)
 ):
-    """OpenAI Chat Completions 代理接口"""
+    """OpenAI Chat Completions Proxy Interface"""
     pass
 
 @router.post("/v1/completions")
 async def completions(request: Request, ...):
-    """OpenAI Completions 代理接口"""
+    """OpenAI Completions Proxy Interface"""
     pass
 
 @router.post("/v1/embeddings")
 async def embeddings(request: Request, ...):
-    """OpenAI Embeddings 代理接口"""
+    """OpenAI Embeddings Proxy Interface"""
     pass
 ```
 
@@ -655,137 +658,137 @@ router = APIRouter()
 
 @router.post("/v1/messages")
 async def messages(request: Request, ...):
-    """Anthropic Messages 代理接口"""
+    """Anthropic Messages Proxy Interface"""
     pass
 ```
 
-### 测试要点
-- [ ] API Key 鉴权
-- [ ] 请求解析
-- [ ] 响应格式正确性
-- [ ] 流式响应
-- [ ] 错误处理
+### Test Points
+- [ ] API Key Authentication
+- [ ] Request Parsing
+- [ ] Response Format Correctness
+- [ ] Streaming Response
+- [ ] Error Handling
 
-### 预估工时
-**2-3 天**
+### Estimated Effort
+**2-3 Days**
 
 ---
 
-## M7: 管理 API 模块
+## M7: Admin API Module
 
-### 模块职责
-- 供应商 CRUD API
-- 模型映射 CRUD API
+### Module Responsibilities
+- Provider CRUD API
+- Model Mapping CRUD API
 - API Key CRUD API
-- 日志查询 API
+- Log Query API
 
-### 文件结构
+### File Structure
 ```
 backend/app/api/admin/
 ├── __init__.py
-├── providers.py           # 供应商管理
-├── models.py              # 模型管理
-├── api_keys.py            # API Key 管理
-└── logs.py                # 日志查询
+├── providers.py           # Provider Management
+├── models.py              # Model Management
+├── api_keys.py            # API Key Management
+└── logs.py                # Log Query
 ```
 
-### API 详情见下方 API 文档
+### API Details see API Documentation below
 
-### 测试要点
-- [ ] CRUD 操作
-- [ ] 参数校验
-- [ ] 分页与过滤
-- [ ] 错误处理
+### Test Points
+- [ ] CRUD Operations
+- [ ] Parameter Validation
+- [ ] Pagination and Filtering
+- [ ] Error Handling
 
-### 预估工时
-**2-3 天**
+### Estimated Effort
+**2-3 Days**
 
 ---
 
-## M8: 前端管理面板模块
+## M8: Frontend Admin Dashboard Module
 
-### 子模块拆分
+### Sub-module Breakdown
 
-#### M8.1: 基础框架与通用组件
-- 项目初始化 (Next.js + TypeScript)
-- UI 组件库集成 (shadcn/ui)
-- 通用组件开发
-- API 客户端封装
+#### M8.1: Basic Framework and Common Components
+- Project Initialization (Next.js + TypeScript)
+- UI Component Library Integration (shadcn/ui)
+- Common Component Development
+- API Client Wrapper
 
-**预估工时: 2-3 天**
+**Estimated Effort: 2-3 Days**
 
-#### M8.2: 供应商管理页面
-- 供应商列表
-- 新增/编辑表单
-- 删除确认
+#### M8.2: Provider Management Page
+- Provider List
+- Add/Edit Form
+- Delete Confirmation
 
-**预估工时: 1-2 天**
+**Estimated Effort: 1-2 Days**
 
-#### M8.3: 模型管理页面
-- 模型映射列表
-- 模型-供应商映射配置
-- 规则编辑器
+#### M8.3: Model Management Page
+- Model Mapping List
+- Model-Provider Mapping Configuration
+- Rule Editor
 
-**预估工时: 3-4 天**
+**Estimated Effort: 3-4 Days**
 
-#### M8.4: API Key 管理页面
-- API Key 列表
-- 新增（key_value 后端生成）
-- 状态管理
+#### M8.4: API Key Management Page
+- API Key List
+- Add (key_value generated by backend)
+- State Management
 
-**预估工时: 1-2 天**
+**Estimated Effort: 1-2 Days**
 
-#### M8.5: 日志查询页面
-- 日志列表（分页、排序）
-- 多条件筛选器
-- 日志详情页
+#### M8.5: Log Query Page
+- Log List (Pagination, Sorting)
+- Multi-condition Filter
+- Log Detail Page
 
-**预估工时: 2-3 天**
+**Estimated Effort: 2-3 Days**
 
 ---
 
-## 开发顺序建议
+## Development Sequence Suggestion
 
 ```
-Phase 1 (并行):
-├── M1: 基础设施 (开发者 A)
-├── M3: 规则引擎 (开发者 B)
-└── M8.1: 前端基础框架 (开发者 C)
+Phase 1 (Parallel):
+├── M1: Infrastructure (Developer A)
+├── M3: Rule Engine (Developer B)
+└── M8.1: Frontend Basic Framework (Developer C)
 
-Phase 2 (并行, 依赖 M1):
-├── M2: 数据访问层 (开发者 A)
-├── M4: 上游适配器 (开发者 B)
-└── M8.2: 供应商管理页面 (开发者 C)
+Phase 2 (Parallel, Depends on M1):
+├── M2: Data Access Layer (Developer A)
+├── M4: Upstream Adapter (Developer B)
+└── M8.2: Provider Management Page (Developer C)
 
-Phase 3 (并行, 依赖 M2, M3, M4):
-├── M5: 业务服务层 (开发者 A)
-├── M7: 管理 API (开发者 B)
-└── M8.3: 模型管理页面 (开发者 C)
+Phase 3 (Parallel, Depends on M2, M3, M4):
+├── M5: Business Service Layer (Developer A)
+├── M7: Admin API (Developer B)
+└── M8.3: Model Management Page (Developer C)
 
-Phase 4 (并行, 依赖 M5):
-├── M6: 代理 API (开发者 A)
-├── M8.4: API Key 管理页面 (开发者 B)
-└── M8.5: 日志查询页面 (开发者 C)
+Phase 4 (Parallel, Depends on M5):
+├── M6: Proxy API (Developer A)
+├── M8.4: API Key Management Page (Developer B)
+└── M8.5: Log Query Page (Developer C)
 
 Phase 5:
-└── 集成测试与修复
+└── Integration Test and Fixes
 ```
 
 ---
 
-## 总预估工时
+## Total Estimated Effort
 
-| 模块 | 预估工时 |
-|------|----------|
-| M1: 基础设施 | 2-3 天 |
-| M2: 数据访问层 | 3-4 天 |
-| M3: 规则引擎 | 2-3 天 |
-| M4: 上游适配器 | 2-3 天 |
-| M5: 业务服务层 | 4-5 天 |
-| M6: 代理 API | 2-3 天 |
-| M7: 管理 API | 2-3 天 |
-| M8: 前端管理面板 | 9-14 天 |
-| 集成测试与修复 | 3-5 天 |
-| **总计** | **29-43 天** (单人) |
+| Module | Estimated Effort |
+|--------|------------------|
+| M1: Infrastructure | 2-3 Days |
+| M2: Data Access Layer | 3-4 Days |
+| M3: Rule Engine | 2-3 Days |
+| M4: Upstream Adapter | 2-3 Days |
+| M5: Business Service Layer | 4-5 Days |
+| M6: Proxy API | 2-3 Days |
+| M7: Admin API | 2-3 Days |
+| M8: Frontend Admin Dashboard | 9-14 Days |
+| Integration Test and Fixes | 3-5 Days |
+| **Total** | **29-43 Days** (Single person) |
 
-**并行开发 (3人)**: 约 **12-18 天**
+**Parallel Development (3 people)**: Approx **12-18 Days**

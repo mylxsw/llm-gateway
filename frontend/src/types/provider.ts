@@ -1,45 +1,48 @@
 /**
- * 供应商相关类型定义
- * 对应后端 service_providers 表
+ * Provider Related Type Definitions
+ * Corresponds to backend service_providers table
  */
 
-/** 协议类型 */
+/** Protocol Type */
 export type ProtocolType = 'openai' | 'anthropic';
 
-/** 供应商实体 */
+/** Provider Entity */
 export interface Provider {
   id: number;
   name: string;
   base_url: string;
   protocol: ProtocolType;
   api_type: string;
-  api_key?: string;          // 脱敏显示
+  api_key?: string;          // Sanitized display
+  extra_headers?: Record<string, string>;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-/** 创建供应商请求 */
+/** Create Provider Request */
 export interface ProviderCreate {
   name: string;
   base_url: string;
   protocol: ProtocolType;
   api_type: string;
   api_key?: string;
+  extra_headers?: Record<string, string>;
   is_active?: boolean;
 }
 
-/** 更新供应商请求 */
+/** Update Provider Request */
 export interface ProviderUpdate {
   name?: string;
   base_url?: string;
   protocol?: ProtocolType;
   api_type?: string;
   api_key?: string;
+  extra_headers?: Record<string, string>;
   is_active?: boolean;
 }
 
-/** 供应商列表查询参数 */
+/** Provider List Query Params */
 export interface ProviderListParams {
   is_active?: boolean;
   page?: number;

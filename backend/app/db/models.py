@@ -1,12 +1,12 @@
 """
-SQLAlchemy ORM 模型定义
+SQLAlchemy ORM Model Definitions
 
-定义系统的所有数据库表结构，包括：
-- service_providers: 服务商表
-- model_mappings: 模型映射表
-- model_mapping_providers: 模型-供应商映射表
-- api_keys: API Key 表
-- request_logs: 请求日志表
+Defines all database table structures for the system, including:
+- service_providers: Service Providers Table
+- model_mappings: Model Mappings Table
+- model_mapping_providers: Model-Provider Mappings Table
+- api_keys: API Keys Table
+- request_logs: Request Logs Table
 """
 
 from datetime import datetime
@@ -27,42 +27,44 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    """SQLAlchemy ORM 基类"""
+    """SQLAlchemy ORM Base Class"""
     pass
 
 
 class ServiceProvider(Base):
     """
-    服务商表
+    Service Providers Table
     
-    存储上游 LLM 供应商的配置信息，包括接口地址、协议类型等。
+    Stores configuration for upstream LLM providers, including base URL, protocol type, etc.
     """
     __tablename__ = "service_providers"
     
-    # 主键 ID
+    # Primary Key ID
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # 供应商名称，唯一
+    # Provider Name, unique
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    # 接口基础地址，如 https://api.openai.com
+    # Base URL, e.g., https://api.openai.com
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    # 协议类型：openai 或 anthropic
+    # Protocol type: openai or anthropic
     protocol: Mapped[str] = mapped_column(String(50), nullable=False)
-    # API 类型：chat / completion / embedding
+    # API Type: chat / completion / embedding
     api_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    # 供应商的 API Key（加密存储建议）
+    # Provider API Key (Encrypted storage recommended)
     api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # 是否激活
+    # Extra Headers (JSON format)
+    extra_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 创建时间
+    # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    # 更新时间
+    # Update Time
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
     
-    # 关联关系：供应商下的模型映射
+    # Relationship: Model mappings under this provider
     model_mappings: Mapped[list["ModelMappingProvider"]] = relationship(
         "ModelMappingProvider", back_populates="provider"
     )
@@ -70,35 +72,35 @@ class ServiceProvider(Base):
 
 class ModelMapping(Base):
     """
-    模型映射表
+    Model Mappings Table
     
-    以 requested_model（客户端请求的模型名）为主键，
-    定义模型的选择策略和匹配规则。
+    Keyed by requested_model (client requested model name),
+    defines model selection strategy and matching rules.
     """
     __tablename__ = "model_mappings"
     
-    # 请求模型名作为主键
+    # Requested model name as Primary Key
     requested_model: Mapped[str] = mapped_column(
         String(100), primary_key=True, nullable=False
     )
-    # 选择策略，当前仅支持 round_robin（轮询）
+    # Selection strategy, currently only supports round_robin
     strategy: Mapped[str] = mapped_column(String(50), default="round_robin")
-    # 模型级匹配规则（JSON 格式）
+    # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
-    # 模型能力描述（JSON 格式）
+    # Model capabilities description (JSON format)
     capabilities: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
-    # 是否激活
+    # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 创建时间
+    # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    # 更新时间
+    # Update Time
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
     
-    # 关联关系：模型下的供应商映射
+    # Relationship: Provider mappings under this model
     providers: Mapped[list["ModelMappingProvider"]] = relationship(
         "ModelMappingProvider", back_populates="model_mapping"
     )
@@ -106,52 +108,52 @@ class ModelMapping(Base):
 
 class ModelMappingProvider(Base):
     """
-    模型-供应商映射表
+    Model-Provider Mappings Table
     
-    定义同一个 requested_model 在不同供应商下的目标模型名。
-    这是系统的核心表，支持同一请求模型映射到不同供应商的不同实际模型。
+    Defines the target model name for the same requested_model under different providers.
+    This is the core table supporting mapping of the same requested model to different actual models across providers.
     """
     __tablename__ = "model_mapping_providers"
     
-    # 主键 ID
+    # Primary Key ID
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # 请求模型名（外键）
+    # Requested Model Name (Foreign Key)
     requested_model: Mapped[str] = mapped_column(
         String(100), 
         ForeignKey("model_mappings.requested_model", ondelete="CASCADE"),
         nullable=False
     )
-    # 供应商 ID（外键）
+    # Provider ID (Foreign Key)
     provider_id: Mapped[int] = mapped_column(
         Integer, 
         ForeignKey("service_providers.id", ondelete="CASCADE"),
         nullable=False
     )
-    # 该供应商对应的目标模型名（实际转发时使用的模型名）
+    # Target model name for this provider (actual model used for forwarding)
     target_model_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    # 供应商级匹配规则（JSON 格式）
+    # Provider-level matching rules (JSON format)
     provider_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
-    # 优先级（数值越小优先级越高）
+    # Priority (Lower value means higher priority)
     priority: Mapped[int] = mapped_column(Integer, default=0)
-    # 权重（用于加权轮询，当前未使用）
+    # Weight (Used for weighted round-robin, currently unused)
     weight: Mapped[int] = mapped_column(Integer, default=1)
-    # 是否激活
+    # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 创建时间
+    # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    # 更新时间
+    # Update Time
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
     
-    # 唯一约束：同一模型下同一供应商只能有一条映射
+    # Unique Constraint: Only one mapping per provider for the same model
     __table_args__ = (
         UniqueConstraint("requested_model", "provider_id", name="uq_model_provider"),
     )
     
-    # 关联关系
+    # Relationships
     provider: Mapped["ServiceProvider"] = relationship(
         "ServiceProvider", back_populates="model_mappings"
     )
@@ -162,87 +164,87 @@ class ModelMappingProvider(Base):
 
 class ApiKey(Base):
     """
-    API Key 表
+    API Keys Table
     
-    用于客户端鉴权的 API Key 实体。
+    API Key entity used for client authentication.
     """
     __tablename__ = "api_keys"
     
-    # 主键 ID
+    # Primary Key ID
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # Key 名称，唯一，用于标识用途
+    # Key Name, unique, identifies usage
     key_name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    # Key 值（随机生成的 token），唯一
+    # Key Value (randomly generated token), unique
     key_value: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    # 是否激活
+    # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # 创建时间
+    # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )
-    # 最后使用时间
+    # Last Used Time
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
-    # 关联关系：该 Key 的请求日志
+    # Relationship: Request logs for this Key
     logs: Mapped[list["RequestLog"]] = relationship("RequestLog", back_populates="api_key")
 
 
 class RequestLog(Base):
     """
-    请求日志表
+    Request Logs Table
     
-    记录所有代理请求的详细信息，包括时间、模型、供应商、Token 使用等。
+    Records detailed information for all proxy requests, including time, model, provider, token usage, etc.
     """
     __tablename__ = "request_logs"
     
-    # 主键 ID
+    # Primary Key ID
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # 请求时间
+    # Request Time
     request_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    # API Key ID（外键）
+    # API Key ID (Foreign Key)
     api_key_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("api_keys.id"), nullable=True
     )
-    # API Key 名称（冗余字段，便于查询）
+    # API Key Name (Redundant field for easy querying)
     api_key_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 请求模型名
+    # Requested Model Name
     requested_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 目标模型名（实际转发的模型）
+    # Target Model Name (Actually forwarded model)
     target_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 供应商 ID
+    # Provider ID
     provider_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("service_providers.id"), nullable=True
     )
-    # 供应商名称（冗余字段）
+    # Provider Name (Redundant field)
     provider_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 重试次数
+    # Retry Count
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
-    # 匹配到的供应商数量
+    # Matched Provider Count
     matched_provider_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 首字节延迟（毫秒）
+    # Time to First Byte (ms)
     first_byte_delay_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 总耗时（毫秒）
+    # Total Time (ms)
     total_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 输入 Token 数
+    # Input Token Count
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 输出 Token 数
+    # Output Token Count
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 请求头（JSON 格式，已脱敏）
+    # Request Headers (JSON format, sanitized)
     request_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
-    # 请求体（JSON 格式）
+    # Request Body (JSON format)
     request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
-    # 响应状态码
+    # Response Status Code
     response_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # 响应体
+    # Response Body
     response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # 错误信息
+    # Error Info
     error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # 追踪 ID
+    # Trace ID
     trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 是否为流式请求
+    # Is Stream Request
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
-    # 索引定义，优化查询性能
+    # Indices for optimizing queries
     __table_args__ = (
         Index("idx_request_logs_time", "request_time"),
         Index("idx_request_logs_api_key", "api_key_id"),
@@ -251,5 +253,5 @@ class RequestLog(Base):
         Index("idx_request_logs_status", "response_status"),
     )
     
-    # 关联关系
+    # Relationships
     api_key: Mapped[Optional["ApiKey"]] = relationship("ApiKey", back_populates="logs")

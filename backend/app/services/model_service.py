@@ -1,7 +1,7 @@
 """
-模型管理服务模块
+Model Management Service Module
 
-提供模型映射和模型-供应商映射的业务逻辑处理。
+Provides business logic processing for Model Mappings and Model-Provider Mappings.
 """
 
 from typing import Optional
@@ -23,9 +23,9 @@ from app.repositories.provider_repo import ProviderRepository
 
 class ModelService:
     """
-    模型管理服务
+    Model Management Service
     
-    处理模型映射和模型-供应商映射相关的业务逻辑。
+    Handles business logic related to Model Mappings and Model-Provider Mappings.
     """
     
     def __init__(
@@ -34,31 +34,31 @@ class ModelService:
         provider_repo: ProviderRepository,
     ):
         """
-        初始化服务
+        Initialize Service
         
         Args:
-            model_repo: 模型 Repository
-            provider_repo: 供应商 Repository
+            model_repo: Model Repository
+            provider_repo: Provider Repository
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
     
-    # ============ 模型映射操作 ============
+    # ============ Model Mapping Operations ============
     
     async def create_mapping(self, data: ModelMappingCreate) -> ModelMappingResponse:
         """
-        创建模型映射
+        Create Model Mapping
         
         Args:
-            data: 创建数据
+            data: Creation data
         
         Returns:
-            ModelMappingResponse: 创建后的模型映射
+            ModelMappingResponse: Created model mapping
         
         Raises:
-            ConflictError: 模型已存在
+            ConflictError: Model already exists
         """
-        # 检查模型是否已存在
+        # Check if model already exists
         existing = await self.model_repo.get_mapping(data.requested_model)
         if existing:
             raise ConflictError(
@@ -71,16 +71,16 @@ class ModelService:
     
     async def get_mapping(self, requested_model: str) -> ModelMappingResponse:
         """
-        获取模型映射详情（含供应商配置）
+        Get Model Mapping details (including provider configuration)
         
         Args:
-            requested_model: 请求模型名
+            requested_model: Requested model name
         
         Returns:
-            ModelMappingResponse: 模型映射详情
+            ModelMappingResponse: Model mapping details
         
         Raises:
-            NotFoundError: 模型不存在
+            NotFoundError: Model not found
         """
         mapping = await self.model_repo.get_mapping(requested_model)
         if not mapping:
@@ -98,15 +98,15 @@ class ModelService:
         page_size: int = 20,
     ) -> tuple[list[ModelMappingResponse], int]:
         """
-        获取模型映射列表
+        Get Model Mapping List
         
         Args:
-            is_active: 过滤激活状态
-            page: 页码
-            page_size: 每页数量
+            is_active: Filter by active status
+            page: Page number
+            page_size: Items per page
         
         Returns:
-            tuple[list[ModelMappingResponse], int]: (模型映射列表, 总数)
+            tuple[list[ModelMappingResponse], int]: (Model mapping list, Total count)
         """
         mappings, total = await self.model_repo.get_all_mappings(
             is_active, page, page_size
@@ -122,17 +122,17 @@ class ModelService:
         self, requested_model: str, data: ModelMappingUpdate
     ) -> ModelMappingResponse:
         """
-        更新模型映射
+        Update Model Mapping
         
         Args:
-            requested_model: 请求模型名
-            data: 更新数据
+            requested_model: Requested model name
+            data: Update data
         
         Returns:
-            ModelMappingResponse: 更新后的模型映射
+            ModelMappingResponse: Updated model mapping
         
         Raises:
-            NotFoundError: 模型不存在
+            NotFoundError: Model not found
         """
         existing = await self.model_repo.get_mapping(requested_model)
         if not existing:
@@ -146,13 +146,13 @@ class ModelService:
     
     async def delete_mapping(self, requested_model: str) -> None:
         """
-        删除模型映射
+        Delete Model Mapping
         
         Args:
-            requested_model: 请求模型名
+            requested_model: Requested model name
         
         Raises:
-            NotFoundError: 模型不存在
+            NotFoundError: Model not found
         """
         existing = await self.model_repo.get_mapping(requested_model)
         if not existing:
@@ -163,25 +163,25 @@ class ModelService:
         
         await self.model_repo.delete_mapping(requested_model)
     
-    # ============ 模型-供应商映射操作 ============
+    # ============ Model-Provider Mapping Operations ============
     
     async def create_provider_mapping(
         self, data: ModelMappingProviderCreate
     ) -> ModelMappingProviderResponse:
         """
-        创建模型-供应商映射
+        Create Model-Provider Mapping
         
         Args:
-            data: 创建数据
+            data: Creation data
         
         Returns:
-            ModelMappingProviderResponse: 创建后的映射
+            ModelMappingProviderResponse: Created mapping
         
         Raises:
-            NotFoundError: 模型或供应商不存在
-            ConflictError: 映射已存在
+            NotFoundError: Model or provider not found
+            ConflictError: Mapping already exists
         """
-        # 检查模型是否存在
+        # Check if model exists
         model = await self.model_repo.get_mapping(data.requested_model)
         if not model:
             raise NotFoundError(
@@ -189,7 +189,7 @@ class ModelService:
                 code="model_not_found",
             )
         
-        # 检查供应商是否存在
+        # Check if provider exists
         provider = await self.provider_repo.get_by_id(data.provider_id)
         if not provider:
             raise NotFoundError(
@@ -197,8 +197,8 @@ class ModelService:
                 code="provider_not_found",
             )
         
-        # 检查映射是否已存在
-        existing = await self.model_repo.get_provider_mappings(
+        # Check if mapping already exists
+        existing = await self.model_repo.get_all_provider_mappings(
             requested_model=data.requested_model,
             provider_id=data.provider_id,
         )
@@ -208,7 +208,7 @@ class ModelService:
                 code="duplicate_mapping",
             )
         
-        return await self.model_repo.create_provider_mapping(data)
+        return await self.model_repo.add_provider_mapping(data)
     
     async def get_provider_mappings(
         self,
@@ -217,35 +217,37 @@ class ModelService:
         is_active: Optional[bool] = None,
     ) -> list[ModelMappingProviderResponse]:
         """
-        获取模型-供应商映射列表
+        Get Model-Provider Mapping List
         
         Args:
-            requested_model: 按模型过滤
-            provider_id: 按供应商过滤
-            is_active: 过滤激活状态
+            requested_model: Filter by model
+            provider_id: Filter by provider
+            is_active: Filter by active status
         
         Returns:
-            list[ModelMappingProviderResponse]: 映射列表
+            list[ModelMappingProviderResponse]: Mapping list
         """
-        return await self.model_repo.get_provider_mappings(
-            requested_model, provider_id, is_active
+        return await self.model_repo.get_all_provider_mappings(
+            requested_model=requested_model,
+            provider_id=provider_id,
+            is_active=is_active,
         )
     
     async def update_provider_mapping(
         self, id: int, data: ModelMappingProviderUpdate
     ) -> ModelMappingProviderResponse:
         """
-        更新模型-供应商映射
+        Update Model-Provider Mapping
         
         Args:
-            id: 映射 ID
-            data: 更新数据
+            id: Mapping ID
+            data: Update data
         
         Returns:
-            ModelMappingProviderResponse: 更新后的映射
+            ModelMappingProviderResponse: Updated mapping
         
         Raises:
-            NotFoundError: 映射不存在
+            NotFoundError: Mapping not found
         """
         existing = await self.model_repo.get_provider_mapping(id)
         if not existing:
@@ -259,13 +261,13 @@ class ModelService:
     
     async def delete_provider_mapping(self, id: int) -> None:
         """
-        删除模型-供应商映射
+        Delete Model-Provider Mapping
         
         Args:
-            id: 映射 ID
+            id: Mapping ID
         
         Raises:
-            NotFoundError: 映射不存在
+            NotFoundError: Mapping not found
         """
         existing = await self.model_repo.get_provider_mapping(id)
         if not existing:
@@ -275,19 +277,117 @@ class ModelService:
             )
         
         await self.model_repo.delete_provider_mapping(id)
+
+    async def export_data(self) -> list["ModelExport"]:
+        """
+        Export all models with their provider mappings
+        
+        Returns:
+            list[ModelExport]: List of models
+        """
+        from app.domain.model import ModelExport, ModelProviderExport
+
+        # Get all model mappings
+        mappings, _ = await self.model_repo.get_all_mappings(page=1, page_size=10000)
+        
+        export_list = []
+        for m in mappings:
+            # Get provider mappings for this model
+            provider_mappings = await self.model_repo.get_provider_mappings(
+                requested_model=m.requested_model
+            )
+            
+            providers_export = []
+            for pm in provider_mappings:
+                providers_export.append(
+                    ModelProviderExport(
+                        provider_name=pm.provider_name,
+                        target_model_name=pm.target_model_name,
+                        provider_rules=pm.provider_rules,
+                        priority=pm.priority,
+                        weight=pm.weight,
+                        is_active=pm.is_active
+                    )
+                )
+            
+            export_list.append(
+                ModelExport(
+                    requested_model=m.requested_model,
+                    strategy=m.strategy,
+                    matching_rules=m.matching_rules,
+                    capabilities=m.capabilities,
+                    is_active=m.is_active,
+                    providers=providers_export
+                )
+            )
+            
+        return export_list
+
+    async def import_data(self, data: list["ModelExport"]) -> dict:
+        """
+        Import models
+        
+        Args:
+            data: List of models to import
+            
+        Returns:
+            dict: Import summary
+        """
+        success = 0
+        skipped = 0
+        errors = []
+        
+        for item in data:
+            # Check if model already exists
+            existing = await self.model_repo.get_mapping(item.requested_model)
+            if existing:
+                skipped += 1
+                continue
+            
+            # Create model mapping
+            try:
+                await self.model_repo.create_mapping(item)
+                
+                # Create provider mappings
+                for p_item in item.providers:
+                    provider = await self.provider_repo.get_by_name(p_item.provider_name)
+                    if not provider:
+                        errors.append(
+                            f"Model '{item.requested_model}': Provider '{p_item.provider_name}' not found. Mapping skipped."
+                        )
+                        continue
+                    
+                    from app.domain.model import ModelMappingProviderCreate
+                    await self.model_repo.create_provider_mapping(
+                        ModelMappingProviderCreate(
+                            requested_model=item.requested_model,
+                            provider_id=provider.id,
+                            target_model_name=p_item.target_model_name,
+                            provider_rules=p_item.provider_rules,
+                            priority=p_item.priority,
+                            weight=p_item.weight,
+                            is_active=p_item.is_active
+                        )
+                    )
+                
+                success += 1
+            except Exception as e:
+                errors.append(f"Model '{item.requested_model}': {str(e)}")
+        
+        return {"success": success, "skipped": skipped, "errors": errors}
     
     async def _to_mapping_response(
         self, mapping: ModelMapping, include_providers: bool = False
     ) -> ModelMappingResponse:
         """
-        将 ModelMapping 转换为响应模型
+        Convert ModelMapping to Response Model
         
         Args:
-            mapping: 模型映射
-            include_providers: 是否包含供应商列表
+            mapping: Model mapping
+            include_providers: Whether to include provider list
         
         Returns:
-            ModelMappingResponse: 响应模型
+            ModelMappingResponse: Response model
         """
         provider_count = await self.model_repo.get_provider_count(
             mapping.requested_model

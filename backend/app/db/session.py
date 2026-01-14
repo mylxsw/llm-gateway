@@ -1,7 +1,7 @@
 """
-数据库会话管理模块
+Database Session Management Module
 
-提供异步数据库会话管理，支持 SQLite 和 PostgreSQL。
+Provides asynchronous database session management, supporting SQLite and PostgreSQL.
 """
 
 from typing import AsyncGenerator
@@ -14,25 +14,25 @@ from sqlalchemy.ext.asyncio import (
 
 from app.config import get_settings
 
-# 获取配置
+# Get configuration
 settings = get_settings()
 
-# 创建异步数据库引擎
-# echo=True 在 DEBUG 模式下打印 SQL 语句
+# Create asynchronous database engine
+# echo=True prints SQL statements in DEBUG mode
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    # SQLite 特定配置
+    # SQLite specific configuration
     connect_args={"check_same_thread": False} 
     if settings.DATABASE_TYPE == "sqlite" 
     else {},
 )
 
-# 创建异步会话工厂
+# Create asynchronous session factory
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    expire_on_commit=False,  # 提交后不自动过期对象，避免额外查询
+    expire_on_commit=False,  # Do not expire objects after commit, avoids extra queries
     autocommit=False,
     autoflush=False,
 )
@@ -40,13 +40,13 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    获取数据库会话（依赖注入用）
+    Get database session (for dependency injection)
     
-    使用 async with 确保会话正确关闭。
-    在 FastAPI 中作为 Depends 使用。
+    Uses async with to ensure session is closed correctly.
+    Used as Depends in FastAPI.
     
     Yields:
-        AsyncSession: 异步数据库会话
+        AsyncSession: Async database session
     
     Example:
         @router.get("/items")
@@ -62,12 +62,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     """
-    初始化数据库
+    Initialize Database
     
-    创建所有定义的表结构。在应用启动时调用。
+    Creates all defined table structures. Called on application startup.
     
     Note:
-        生产环境建议使用 Alembic 进行数据库迁移管理。
+        In production, using Alembic for database migration is recommended.
     """
     from app.db.models import Base
     

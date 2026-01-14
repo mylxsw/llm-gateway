@@ -1,6 +1,6 @@
 /**
- * Switch 开关组件
- * 基于 Radix UI Switch 实现
+ * Switch Component
+ * Implemented based on Radix UI Switch
  */
 
 'use client';

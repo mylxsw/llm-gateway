@@ -1,11 +1,12 @@
 /**
- * 日志筛选组件
- * 提供多条件日志查询筛选器
+ * Log Filter Component
+ * Provides multi-condition filtering for log queries
  */
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,248 +17,359 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-import { LogQueryParams, Provider } from '@/types';
+import { ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
+import { LogQueryParams } from '@/types';
 
 interface LogFiltersProps {
-  /** 当前筛选参数 */
+  /** Current filter values */
   filters: LogQueryParams;
-  /** 筛选参数变更回调 */
-  onFiltersChange: (filters: LogQueryParams) => void;
-  /** 供应商列表（用于下拉选择） */
-  providers: Provider[];
-  /** 搜索按钮点击回调 */
-  onSearch: () => void;
-  /** 重置按钮点击回调 */
-  onReset: () => void;
+  /** Filter change callback */
+  onFilterChange: (filters: Partial<LogQueryParams>) => void;
+  /** Providers list (for dropdown) */
+  providers: Array<{ id: number; name: string }>;
 }
 
+const FILTER_KEYS: Array<keyof LogQueryParams> = [
+  'start_time',
+  'end_time',
+  'requested_model',
+  'target_model',
+  'provider_id',
+  'has_error',
+  'status_min',
+  'status_max',
+  'api_key_name',
+  'retry_count_min',
+  'retry_count_max',
+  'input_tokens_min',
+  'input_tokens_max',
+  'total_time_min',
+  'total_time_max',
+];
+
 /**
- * 日志筛选组件
+ * Log Filter Component
  */
 export function LogFilters({
   filters,
-  onFiltersChange,
+  onFilterChange,
   providers,
-  onSearch,
-  onReset,
 }: LogFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // 更新单个筛选字段
-  const updateFilter = <K extends keyof LogQueryParams>(
-    key: K,
-    value: LogQueryParams[K]
-  ) => {
-    onFiltersChange({ ...filters, [key]: value });
+  const defaultValues = useMemo<Partial<LogQueryParams>>(
+    () => ({
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+      requested_model: filters.requested_model,
+      target_model: filters.target_model,
+      provider_id: filters.provider_id,
+      has_error: filters.has_error,
+      status_min: filters.status_min,
+      status_max: filters.status_max,
+      api_key_name: filters.api_key_name,
+      retry_count_min: filters.retry_count_min,
+      retry_count_max: filters.retry_count_max,
+      input_tokens_min: filters.input_tokens_min,
+      input_tokens_max: filters.input_tokens_max,
+      total_time_min: filters.total_time_min,
+      total_time_max: filters.total_time_max,
+    }),
+    [
+      filters.api_key_name,
+      filters.end_time,
+      filters.has_error,
+      filters.input_tokens_max,
+      filters.input_tokens_min,
+      filters.provider_id,
+      filters.requested_model,
+      filters.retry_count_max,
+      filters.retry_count_min,
+      filters.start_time,
+      filters.status_max,
+      filters.status_min,
+      filters.target_model,
+      filters.total_time_max,
+      filters.total_time_min,
+    ]
+  );
+
+  const { register, handleSubmit, reset, setValue, watch } = useForm<
+    Partial<LogQueryParams>
+  >({
+    defaultValues,
+  });
+
+  useEffect(() => {
+    reset(defaultValues);
+  }, [defaultValues, reset]);
+
+  const onReset = () => {
+    const cleared: Partial<LogQueryParams> = {
+      page: 1,
+      page_size: filters.page_size ?? 20,
+    };
+    for (const key of FILTER_KEYS) cleared[key] = undefined;
+    reset(cleared);
+    onFilterChange(cleared);
   };
 
+  const onSubmit = (data: Partial<LogQueryParams>) => {
+    const normalized: Partial<LogQueryParams> = {
+      page: 1,
+      page_size: filters.page_size ?? 20,
+    };
+
+    for (const key of FILTER_KEYS) {
+      const value = data[key];
+      if (value === '') {
+        normalized[key] = undefined;
+        continue;
+      }
+      if (typeof value === 'number' && Number.isNaN(value)) {
+        normalized[key] = undefined;
+        continue;
+      }
+      (normalized as Record<keyof LogQueryParams, unknown>)[key] = value;
+    }
+
+    onFilterChange(normalized);
+  };
+
+  const providerValue =
+    watch('provider_id') === undefined ? 'all' : String(watch('provider_id'));
+
+  const errorValue =
+    watch('has_error') === undefined
+      ? 'all'
+      : watch('has_error')
+        ? 'true'
+        : 'false';
+
   return (
-    <div className="space-y-4 rounded-lg border bg-card p-4">
-      {/* 第一行：时间范围 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="space-y-2">
-          <Label>开始时间</Label>
-          <Input
-            type="datetime-local"
-            value={filters.start_time || ''}
-            onChange={(e) => updateFilter('start_time', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>结束时间</Label>
-          <Input
-            type="datetime-local"
-            value={filters.end_time || ''}
-            onChange={(e) => updateFilter('end_time', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>请求模型</Label>
-          <Input
-            placeholder="模糊匹配"
-            value={filters.requested_model || ''}
-            onChange={(e) => updateFilter('requested_model', e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>目标模型</Label>
-          <Input
-            placeholder="模糊匹配"
-            value={filters.target_model || ''}
-            onChange={(e) => updateFilter('target_model', e.target.value)}
-          />
-        </div>
-      </div>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="mb-6 rounded-lg border bg-card p-4 shadow-sm"
+    >
+      <div className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-2">
+            <Label>Start Time</Label>
+            <Input type="datetime-local" {...register('start_time')} />
+          </div>
 
-      {/* 第二行：供应商和状态 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <div className="space-y-2">
-          <Label>供应商</Label>
-          <Select
-            value={filters.provider_id ? String(filters.provider_id) : 'all'}
-            onValueChange={(value) =>
-              updateFilter('provider_id', value === 'all' ? undefined : Number(value))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="全部" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              {providers.map((p) => (
-                <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>是否有错误</Label>
-          <Select
-            value={filters.has_error === undefined ? 'all' : String(filters.has_error)}
-            onValueChange={(value) =>
-              updateFilter('has_error', value === 'all' ? undefined : value === 'true')
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="全部" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部</SelectItem>
-              <SelectItem value="true">有错误</SelectItem>
-              <SelectItem value="false">无错误</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-end gap-2">
-          <Button onClick={onSearch} className="flex-1">
-            <Search className="mr-2 h-4 w-4" />
-            搜索
-          </Button>
-          <Button variant="outline" onClick={onReset}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            重置
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="shrink-0"
-          >
-            {showAdvanced ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      </div>
+          <div className="space-y-2">
+            <Label>End Time</Label>
+            <Input type="datetime-local" {...register('end_time')} />
+          </div>
 
-      {/* 高级筛选 */}
-      {showAdvanced && (
-        <div className="space-y-4 border-t pt-4">
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>状态码范围</Label>
-              <div className="flex gap-2">
+          <div className="space-y-2">
+            <Label>Requested Model</Label>
+            <Input
+              placeholder="Fuzzy match"
+              {...register('requested_model')}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Target Model</Label>
+            <Input
+              placeholder="Fuzzy match"
+              {...register('target_model')}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Provider</Label>
+            <Select
+              value={providerValue}
+              onValueChange={(value) =>
+                setValue(
+                  'provider_id',
+                  value === 'all' ? undefined : Number(value),
+                  { shouldDirty: true }
+                )
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Has Error</Label>
+            <Select
+              value={errorValue}
+              onValueChange={(value) =>
+                setValue(
+                  'has_error',
+                  value === 'all' ? undefined : value === 'true',
+                  { shouldDirty: true }
+                )
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="true">Has Error</SelectItem>
+                <SelectItem value="false">No Error</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onReset}>
+              <X className="mr-2 h-4 w-4" suppressHydrationWarning />
+              Reset
+            </Button>
+            <Button type="submit">
+              <Filter className="mr-2 h-4 w-4" suppressHydrationWarning />
+              Filter
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0"
+              aria-label="Toggle advanced filters"
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              {showAdvanced ? (
+                <ChevronUp className="h-4 w-4" suppressHydrationWarning />
+              ) : (
+                <ChevronDown className="h-4 w-4" suppressHydrationWarning />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {showAdvanced && (
+          <div className="space-y-4 border-t pt-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label>Status Code Range</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    className="min-w-0 flex-1"
+                    {...register('status_min', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    className="min-w-0 flex-1"
+                    {...register('status_max', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Retry Count Range</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Min"
+                    className="min-w-0 flex-1"
+                    {...register('retry_count_min', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Max"
+                    className="min-w-0 flex-1"
+                    {...register('retry_count_max', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>API Key Name</Label>
                 <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.status_min || ''}
-                  onChange={(e) =>
-                    updateFilter('status_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.status_max || ''}
-                  onChange={(e) =>
-                    updateFilter('status_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
+                  placeholder="Fuzzy match"
+                  {...register('api_key_name')}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>重试次数</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  min={0}
-                  value={filters.retry_count_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('retry_count_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  min={0}
-                  value={filters.retry_count_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('retry_count_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
+
+              <div className="space-y-2">
+                <Label>Input Tokens Range</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    className="min-w-0 flex-1"
+                    {...register('input_tokens_min', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    className="min-w-0 flex-1"
+                    {...register('input_tokens_max', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>API Key 名称</Label>
-              <Input
-                placeholder="模糊匹配"
-                value={filters.api_key_name || ''}
-                onChange={(e) => updateFilter('api_key_name', e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>输入 Token 区间</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.input_tokens_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('input_tokens_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.input_tokens_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('input_tokens_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label>Total Duration Range (ms)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    className="min-w-0 flex-1"
+                    {...register('total_time_min', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    className="min-w-0 flex-1"
+                    {...register('total_time_max', {
+                      setValueAs: (v) =>
+                        v === '' ? undefined : Number(v),
+                    })}
+                  />
+                </div>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div className="space-y-2">
-              <Label>总耗时区间 (ms)</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="最小"
-                  value={filters.total_time_min ?? ''}
-                  onChange={(e) =>
-                    updateFilter('total_time_min', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-                <Input
-                  type="number"
-                  placeholder="最大"
-                  value={filters.total_time_max ?? ''}
-                  onChange={(e) =>
-                    updateFilter('total_time_max', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </form>
   );
 }

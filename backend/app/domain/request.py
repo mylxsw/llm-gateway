@@ -1,7 +1,7 @@
 """
-请求/响应领域模型
+Request/Response Domain Model
 
-定义代理请求和响应相关的数据结构。
+Defines data structures related to proxy requests and responses.
 """
 
 from dataclasses import dataclass, field
@@ -12,103 +12,103 @@ from typing import Any, Optional
 @dataclass
 class ProxyRequest:
     """
-    代理请求数据类
+    Proxy Request Data Class
     
-    封装客户端发来的请求信息。
+    Encapsulates request information sent by the client.
     """
     
-    # 请求路径（如 /v1/chat/completions）
+    # Request Path (e.g., /v1/chat/completions)
     path: str
-    # HTTP 方法
+    # HTTP Method
     method: str
-    # 请求头
+    # Request Headers
     headers: dict[str, str]
-    # 请求体
+    # Request Body
     body: dict[str, Any]
-    # 协议类型（openai / anthropic）
+    # Protocol Type (openai / anthropic)
     protocol: str
     # API Key ID
     api_key_id: int
-    # API Key 名称
+    # API Key Name
     api_key_name: str
-    # 追踪 ID
+    # Trace ID
     trace_id: str
-    # 请求时间
+    # Request Time
     request_time: datetime = field(default_factory=datetime.utcnow)
     
     @property
     def requested_model(self) -> Optional[str]:
-        """获取请求的模型名"""
+        """Get requested model name"""
         return self.body.get("model")
     
     @property
     def is_stream(self) -> bool:
-        """是否是流式请求"""
+        """Is stream request"""
         return self.body.get("stream", False)
 
 
 @dataclass
 class ProxyResponse:
     """
-    代理响应数据类
+    Proxy Response Data Class
     
-    封装转发后的响应信息。
+    Encapsulates forwarded response information.
     """
     
-    # HTTP 状态码
+    # HTTP Status Code
     status_code: int
-    # 响应头
+    # Response Headers
     headers: dict[str, str]
-    # 响应体（非流式）
+    # Response Body (Non-stream)
     body: Any
-    # 目标模型名
+    # Target Model Name
     target_model: str
-    # 供应商 ID
+    # Provider ID
     provider_id: int
-    # 供应商名称
+    # Provider Name
     provider_name: str
-    # 重试次数
+    # Retry Count
     retry_count: int = 0
-    # 首字节延迟（毫秒）
+    # First Byte Delay (ms)
     first_byte_delay_ms: Optional[int] = None
-    # 总耗时（毫秒）
+    # Total Time (ms)
     total_time_ms: Optional[int] = None
-    # 输入 Token 数
+    # Input Token Count
     input_tokens: Optional[int] = None
-    # 输出 Token 数
+    # Output Token Count
     output_tokens: Optional[int] = None
-    # 错误信息
+    # Error Info
     error_info: Optional[str] = None
-    # 是否成功
+    # Success Status
     success: bool = True
     
     @property
     def is_error(self) -> bool:
-        """是否是错误响应"""
+        """Is error response"""
         return not self.success or self.status_code >= 400
 
 
 @dataclass
 class CandidateProvider:
     """
-    候选供应商数据类
+    Candidate Provider Data Class
     
-    规则引擎匹配后输出的候选供应商信息。
+    Candidate provider information output after rule engine matching.
     """
     
-    # 供应商 ID
+    # Provider ID
     provider_id: int
-    # 供应商名称
+    # Provider Name
     provider_name: str
-    # 供应商基础 URL
+    # Provider Base URL
     base_url: str
-    # 供应商协议
+    # Provider Protocol
     protocol: str
-    # 供应商 API Key
+    # Provider API Key
     api_key: Optional[str]
-    # 目标模型名（该供应商对应的实际模型）
+    # Target Model Name (Actual model corresponding to this provider)
     target_model: str
-    # 优先级
+    # Priority
     priority: int = 0
-    # 权重
+    # Weight
     weight: int = 1

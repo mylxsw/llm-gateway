@@ -1,6 +1,6 @@
 /**
- * API Key 表单组件
- * 用于创建和编辑 API Key
+ * API Key Form Component
+ * Used for creating and editing API Keys
  */
 
 'use client';
@@ -24,28 +24,28 @@ import { ApiKey, ApiKeyCreate, ApiKeyUpdate } from '@/types';
 import { isValidKeyName, copyToClipboard } from '@/lib/utils';
 
 interface ApiKeyFormProps {
-  /** 是否显示对话框 */
+  /** Whether dialog is open */
   open: boolean;
-  /** 关闭对话框回调 */
+  /** Dialog close callback */
   onOpenChange: (open: boolean) => void;
-  /** 编辑模式下的 API Key 数据 */
+  /** API Key data for edit mode */
   apiKey?: ApiKey | null;
-  /** 提交回调 */
+  /** Submit callback */
   onSubmit: (data: ApiKeyCreate | ApiKeyUpdate) => void;
-  /** 是否加载中 */
+  /** Loading state */
   loading?: boolean;
-  /** 新创建的 API Key（用于显示完整 key_value） */
+  /** Newly created API Key (for displaying full key value) */
   createdKey?: ApiKey | null;
 }
 
-/** 表单字段定义 */
+/** Form Field Definition */
 interface FormData {
   key_name: string;
   is_active: boolean;
 }
 
 /**
- * API Key 表单组件
+ * API Key Form Component
  */
 export function ApiKeyForm({
   open,
@@ -55,11 +55,11 @@ export function ApiKeyForm({
   loading = false,
   createdKey,
 }: ApiKeyFormProps) {
-  // 判断是否为编辑模式
+  // Check if edit mode
   const isEdit = !!apiKey;
   const [copied, setCopied] = useState(false);
   
-  // 表单控制
+  // Form control
   const {
     register,
     handleSubmit,
@@ -76,7 +76,7 @@ export function ApiKeyForm({
 
   const isActive = watch('is_active');
 
-  // 编辑模式下，填充表单数据
+  // Fill form data in edit mode
   useEffect(() => {
     if (apiKey) {
       reset({
@@ -92,7 +92,7 @@ export function ApiKeyForm({
     setCopied(false);
   }, [apiKey, reset, open]);
 
-  // 提交表单
+  // Submit form
   const onFormSubmit = (data: FormData) => {
     if (isEdit) {
       onSubmit({
@@ -106,7 +106,7 @@ export function ApiKeyForm({
     }
   };
 
-  // 复制 API Key
+  // Copy API Key
   const handleCopy = async () => {
     if (createdKey?.key_value) {
       const success = await copyToClipboard(createdKey.key_value);
@@ -117,28 +117,28 @@ export function ApiKeyForm({
     }
   };
 
-  // 如果是显示新创建的 Key
+  // Display newly created Key
   if (createdKey) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>API Key 创建成功</DialogTitle>
+            <DialogTitle>API Key Created Successfully</DialogTitle>
             <DialogDescription>
-              请立即复制保存以下 API Key，关闭后将无法再次查看完整内容
+              Please copy and save the following API Key immediately. You will not be able to see the full key again after closing.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
-              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              <AlertCircle className="h-5 w-5 text-yellow-500" suppressHydrationWarning />
               <span className="text-sm text-muted-foreground">
-                这是唯一一次显示完整 Key 的机会
+                This is the only time the full Key will be displayed
               </span>
             </div>
             
             <div className="space-y-2">
-              <Label>API Key 名称</Label>
+              <Label>API Key Name</Label>
               <Input value={createdKey.key_name} disabled />
             </div>
             
@@ -156,9 +156,9 @@ export function ApiKeyForm({
                   onClick={handleCopy}
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-500" />
+                    <Check className="h-4 w-4 text-green-500" suppressHydrationWarning />
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Copy className="h-4 w-4" suppressHydrationWarning />
                   )}
                 </Button>
               </div>
@@ -167,7 +167,7 @@ export function ApiKeyForm({
 
           <DialogFooter>
             <Button onClick={() => onOpenChange(false)}>
-              我已复制保存
+              I have copied and saved it
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -179,21 +179,21 @@ export function ApiKeyForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑 API Key' : '新建 API Key'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit API Key' : 'New API Key'}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-          {/* 名称 */}
+          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="key_name">
-              名称 <span className="text-destructive">*</span>
+              Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="key_name"
-              placeholder="请输入 API Key 名称，如：生产环境"
+              placeholder="Enter API Key name, e.g.: Production"
               {...register('key_name', {
-                required: '名称不能为空',
-                validate: (v) => isValidKeyName(v) || '名称格式不正确',
+                required: 'Name is required',
+                validate: (v) => isValidKeyName(v) || 'Invalid name format',
               })}
             />
             {errors.key_name && (
@@ -201,10 +201,10 @@ export function ApiKeyForm({
             )}
           </div>
 
-          {/* 状态 */}
+          {/* Status */}
           {isEdit && (
             <div className="flex items-center justify-between">
-              <Label htmlFor="is_active">启用状态</Label>
+              <Label htmlFor="is_active">Enabled Status</Label>
               <Switch
                 id="is_active"
                 checked={isActive}
@@ -215,7 +215,7 @@ export function ApiKeyForm({
 
           {!isEdit && (
             <p className="text-sm text-muted-foreground">
-              API Key 将由系统自动生成，创建后请立即保存
+              API Key will be automatically generated by the system, please save it immediately after creation
             </p>
           )}
 
@@ -226,10 +226,10 @@ export function ApiKeyForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              取消
+              Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? '保存中...' : isEdit ? '保存' : '创建'}
+              {loading ? 'Saving...' : isEdit ? 'Save' : 'Create'}
             </Button>
           </DialogFooter>
         </form>

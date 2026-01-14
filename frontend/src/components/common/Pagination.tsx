@@ -1,6 +1,6 @@
 /**
- * 分页组件
- * 用于列表页面的分页导航
+ * Pagination Component
+ * Used for pagination navigation in list pages.
  */
 
 'use client';
@@ -10,23 +10,23 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface PaginationProps {
-  /** 当前页码（从1开始） */
+  /** Current page number (starts from 1) */
   page: number;
-  /** 每页数量 */
+  /** Items per page */
   pageSize: number;
-  /** 总记录数 */
+  /** Total records */
   total: number;
-  /** 页码改变回调 */
+  /** Page change callback */
   onPageChange: (page: number) => void;
-  /** 每页数量改变回调 */
+  /** Page size change callback */
   onPageSizeChange?: (pageSize: number) => void;
-  /** 可选的每页数量选项 */
+  /** Optional page size options */
   pageSizeOptions?: number[];
 }
 
 /**
- * 分页组件
- * 显示分页导航和页面信息
+ * Pagination Component
+ * Displays pagination navigation and page info
  */
 export function Pagination({
   page,
@@ -36,29 +36,29 @@ export function Pagination({
   onPageSizeChange,
   pageSizeOptions = [10, 20, 50, 100],
 }: PaginationProps) {
-  // 计算总页数
+  // Calculate total pages
   const totalPages = Math.ceil(total / pageSize);
   
-  // 是否可以前进/后退
+  // Can go previous/next
   const canPreviousPage = page > 1;
   const canNextPage = page < totalPages;
   
-  // 计算当前显示范围
+  // Calculate current display range
   const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
 
   return (
     <div className="flex items-center justify-between px-2 py-4">
-      {/* 左侧：显示信息 */}
+      {/* Left: Display Info */}
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <span>
-          共 {total} 条，显示 {startItem}-{endItem}
+          Total {total} items, showing {startItem}-{endItem}
         </span>
         
-        {/* 每页数量选择 */}
+        {/* Page Size Selection */}
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
-            <span>每页</span>
+            <span>Per page</span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -70,38 +70,38 @@ export function Pagination({
                 </option>
               ))}
             </select>
-            <span>条</span>
+            <span>items</span>
           </div>
         )}
       </div>
 
-      {/* 右侧：分页按钮 */}
+      {/* Right: Pagination Buttons */}
       <div className="flex items-center gap-1">
-        {/* 第一页 */}
+        {/* First Page */}
         <Button
           variant="outline"
           size="icon"
           onClick={() => onPageChange(1)}
           disabled={!canPreviousPage}
-          title="第一页"
+          title="First Page"
         >
-          <ChevronsLeft className="h-4 w-4" />
+          <ChevronsLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
-        {/* 上一页 */}
+        {/* Previous Page */}
         <Button
           variant="outline"
           size="icon"
           onClick={() => onPageChange(page - 1)}
           disabled={!canPreviousPage}
-          title="上一页"
+          title="Previous Page"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
-        {/* 页码显示 */}
+        {/* Page Number Display */}
         <span className="flex items-center gap-1 px-2 text-sm">
-          <span>第</span>
+          <span>Page</span>
           <input
             type="number"
             min={1}
@@ -115,29 +115,29 @@ export function Pagination({
             }}
             className="h-8 w-12 rounded border border-input bg-background px-2 text-center text-sm"
           />
-          <span>/ {totalPages || 1} 页</span>
+          <span>/ {totalPages || 1}</span>
         </span>
         
-        {/* 下一页 */}
+        {/* Next Page */}
         <Button
           variant="outline"
           size="icon"
           onClick={() => onPageChange(page + 1)}
           disabled={!canNextPage}
-          title="下一页"
+          title="Next Page"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
-        {/* 最后一页 */}
+        {/* Last Page */}
         <Button
           variant="outline"
           size="icon"
           onClick={() => onPageChange(totalPages)}
           disabled={!canNextPage}
-          title="最后一页"
+          title="Last Page"
         >
-          <ChevronsRight className="h-4 w-4" />
+          <ChevronsRight className="h-4 w-4" suppressHydrationWarning />
         </Button>
       </div>
     </div>

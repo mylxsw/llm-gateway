@@ -1,13 +1,13 @@
 /**
- * 模型详情页面
- * 展示模型映射详情和供应商配置
+ * Model Detail Page
+ * Displays model mapping details and provider configurations
  */
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import React, { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,54 +46,51 @@ function protocolLabel(protocol: ProtocolType) {
   }
 }
 
-/**
- * 模型详情页面组件
- */
 export default function ModelDetailPage() {
-  const params = useParams();
-  const requestedModel = decodeURIComponent(params.model as string);
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <ModelDetailContent />
+    </Suspense>
+  );
+}
 
-  // 表单对话框状态
+function ModelDetailContent() {
+  const searchParams = useSearchParams();
+  const requestedModelParam = searchParams.get('model');
+  const requestedModel = requestedModelParam ? decodeURIComponent(requestedModelParam) : '';
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingMapping, setEditingMapping] = useState<ModelMappingProvider | null>(null);
 
-  // 删除确认对话框状态
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingMapping, setDeletingMapping] = useState<ModelMappingProvider | null>(null);
 
-  // 数据查询
   const { data: model, isLoading, isError, refetch } = useModel(requestedModel);
-  // 获取所有供应商，不过滤激活状态，以便配置
   const { data: providersData } = useProviders();
   const providersById = useMemo(() => {
     const entries = providersData?.items?.map((p) => [p.id, p] as const) ?? [];
     return new Map(entries);
   }, [providersData?.items]);
 
-  // Mutations
   const createMutation = useCreateModelProvider();
   const updateMutation = useUpdateModelProvider();
   const deleteMutation = useDeleteModelProvider();
 
-  // 打开新建表单
   const handleAddProvider = () => {
     setEditingMapping(null);
     setFormOpen(true);
   };
 
-  // 打开编辑表单
   const handleEditMapping = (mapping: ModelMappingProvider) => {
     setEditingMapping(mapping);
     setFormOpen(true);
   };
 
-  // 打开删除确认
   const handleDeleteMapping = (mapping: ModelMappingProvider) => {
     setDeletingMapping(mapping);
     setDeleteDialogOpen(true);
   };
 
-  // 提交表单
   const handleSubmit = async (
     formData: ModelMappingProviderCreate | ModelMappingProviderUpdate
   ) => {
@@ -110,12 +107,11 @@ export default function ModelDetailPage() {
       setEditingMapping(null);
       refetch();
     } catch (error) {
-      console.error('保存失败:', error);
-      alert('保存失败，请检查输入或重试');
+      console.error('Save failed:', error);
+      alert('Save failed, please check input or retry');
     }
   };
 
-  // 确认删除
   const handleConfirmDelete = async () => {
     if (!deletingMapping) return;
     try {
@@ -124,18 +120,27 @@ export default function ModelDetailPage() {
       setDeletingMapping(null);
       refetch();
     } catch (error) {
-      console.error('删除失败:', error);
+      console.error('Delete failed:', error);
     }
   };
 
-  if (isLoading) {
-    return <LoadingSpinner />;
+  if (!requestedModel) {
+    return (
+      <ErrorState
+        message="Missing model parameter"
+        onRetry={() => {
+          window.location.href = '/models';
+        }}
+      />
+    );
   }
+
+  if (isLoading) return <LoadingSpinner />;
 
   if (isError || !model) {
     return (
       <ErrorState
-        message="加载模型详情失败"
+        message="Failed to load model details"
         onRetry={() => refetch()}
       />
     );
@@ -145,51 +150,48 @@ export default function ModelDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* 返回按钮和标题 */}
       <div className="flex items-center gap-4">
         <Link href="/models">
           <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" suppressHydrationWarning />
           </Button>
         </Link>
         <div>
           <h1 className="text-2xl font-bold font-mono">{model.requested_model}</h1>
-          <p className="mt-1 text-muted-foreground">模型映射详情</p>
+          <p className="mt-1 text-muted-foreground">Model Mapping Details</p>
         </div>
       </div>
 
-      {/* 基本信息 */}
       <Card>
         <CardHeader>
-          <CardTitle>基本信息</CardTitle>
+          <CardTitle>Basic Information</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">请求模型名</p>
+              <p className="text-sm text-muted-foreground">Requested Model Name</p>
               <code className="text-sm">{model.requested_model}</code>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">选择策略</p>
+              <p className="text-sm text-muted-foreground">Strategy</p>
               <Badge variant="outline">{model.strategy}</Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">状态</p>
+              <p className="text-sm text-muted-foreground">Status</p>
               <Badge className={status.className}>{status.text}</Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">更新时间</p>
+              <p className="text-sm text-muted-foreground">Updated At</p>
               <p className="text-sm">{formatDateTime(model.updated_at)}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* 匹配规则 */}
       {model.matching_rules && (
         <Card>
           <CardHeader>
-            <CardTitle>匹配规则</CardTitle>
+            <CardTitle>Matching Rules</CardTitle>
           </CardHeader>
           <CardContent>
             <JsonViewer data={model.matching_rules} />
@@ -197,11 +199,10 @@ export default function ModelDetailPage() {
         </Card>
       )}
 
-      {/* 功能描述 */}
       {model.capabilities && (
         <Card>
           <CardHeader>
-            <CardTitle>功能描述</CardTitle>
+            <CardTitle>Capabilities</CardTitle>
           </CardHeader>
           <CardContent>
             <JsonViewer data={model.capabilities} />
@@ -209,13 +210,12 @@ export default function ModelDetailPage() {
         </Card>
       )}
 
-      {/* 供应商配置 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>供应商配置</CardTitle>
+          <CardTitle>Provider Configuration</CardTitle>
           <Button onClick={handleAddProvider} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            添加供应商
+            <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
+            Add Provider
           </Button>
         </CardHeader>
         <CardContent>
@@ -223,13 +223,13 @@ export default function ModelDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>供应商</TableHead>
-                  <TableHead>目标模型</TableHead>
-                  <TableHead>优先级</TableHead>
-                  <TableHead>权重</TableHead>
-                  <TableHead>规则</TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Target Model</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Weight</TableHead>
+                  <TableHead>Rules</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -262,7 +262,7 @@ export default function ModelDetailPage() {
                       <TableCell>
                         {mapping.provider_rules ? (
                           <Badge variant="outline" className="text-blue-600">
-                            已配置
+                            Configured
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -279,17 +279,20 @@ export default function ModelDetailPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditMapping(mapping)}
-                            title="编辑"
+                            title="Edit"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" suppressHydrationWarning />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteMapping(mapping)}
-                            title="删除"
+                            title="Delete"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2
+                              className="h-4 w-4 text-destructive"
+                              suppressHydrationWarning
+                            />
                           </Button>
                         </div>
                       </TableCell>
@@ -300,13 +303,12 @@ export default function ModelDetailPage() {
             </Table>
           ) : (
             <p className="py-8 text-center text-muted-foreground">
-              暂未配置供应商，点击上方按钮添加
+              No providers configured, click button above to add
             </p>
           )}
         </CardContent>
       </Card>
 
-      {/* 供应商配置表单 */}
       <ModelProviderForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -317,13 +319,12 @@ export default function ModelDetailPage() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* 删除确认对话框 */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="删除供应商配置"
-        description={`确定要删除供应商「${deletingMapping?.provider_name}」的配置吗？`}
-        confirmText="删除"
+        title="Delete Provider Configuration"
+        description={`Are you sure you want to delete configuration for provider "${deletingMapping?.provider_name}"?`}
+        confirmText="Delete"
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

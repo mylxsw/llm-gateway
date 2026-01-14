@@ -1,6 +1,6 @@
 /**
- * 供应商列表组件
- * 展示供应商数据表格，包含操作按钮
+ * Provider List Component
+ * Displays provider data table with action buttons
  */
 
 'use client';
@@ -21,16 +21,16 @@ import { Provider } from '@/types';
 import { formatDateTime, truncate, getActiveStatus } from '@/lib/utils';
 
 interface ProviderListProps {
-  /** 供应商列表数据 */
+  /** Provider list data */
   providers: Provider[];
-  /** 编辑回调 */
+  /** Edit callback */
   onEdit: (provider: Provider) => void;
-  /** 删除回调 */
+  /** Delete callback */
   onDelete: (provider: Provider) => void;
 }
 
 /**
- * 供应商列表组件
+ * Provider List Component
  */
 export function ProviderList({
   providers,
@@ -42,13 +42,13 @@ export function ProviderList({
       <TableHeader>
         <TableRow>
           <TableHead className="w-[60px]">ID</TableHead>
-          <TableHead>名称</TableHead>
-          <TableHead>接口地址</TableHead>
-          <TableHead>协议</TableHead>
-          <TableHead>API 类型</TableHead>
-          <TableHead>状态</TableHead>
-          <TableHead>更新时间</TableHead>
-          <TableHead className="text-right">操作</TableHead>
+          <TableHead>Name</TableHead>
+          <TableHead>Base URL</TableHead>
+          <TableHead>Protocol</TableHead>
+          <TableHead>API Type</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Updated At</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -81,17 +81,17 @@ export function ProviderList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(provider)}
-                    title="编辑"
+                    title="Edit"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(provider)}
-                    title="删除"
+                    title="Delete"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
                 </div>
               </TableCell>

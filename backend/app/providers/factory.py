@@ -1,7 +1,7 @@
 """
-供应商客户端工厂模块
+Provider Client Factory Module
 
-根据协议类型创建对应的供应商客户端。
+Creates corresponding provider clients based on protocol type.
 """
 
 from app.providers.base import ProviderClient
@@ -9,24 +9,24 @@ from app.providers.openai_client import OpenAIClient
 from app.providers.anthropic_client import AnthropicClient
 
 
-# 客户端缓存
+# Client cache
 _clients: dict[str, ProviderClient] = {}
 
 
 def get_provider_client(protocol: str) -> ProviderClient:
     """
-    获取指定协议的供应商客户端
+    Get provider client for the specified protocol
     
-    使用缓存避免重复创建客户端实例。
+    Uses caching to avoid repeated client instantiation.
     
     Args:
-        protocol: 协议类型，"openai" 或 "anthropic"
+        protocol: Protocol type, "openai" or "anthropic"
     
     Returns:
-        ProviderClient: 对应的客户端实例
+        ProviderClient: Corresponding client instance
     
     Raises:
-        ValueError: 不支持的协议类型
+        ValueError: Unsupported protocol type
     """
     protocol = protocol.lower()
     

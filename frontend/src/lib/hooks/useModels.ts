@@ -1,6 +1,6 @@
 /**
- * 模型映射相关 React Query Hooks
- * 提供数据获取、缓存和状态管理
+ * Model Mapping Related React Query Hooks
+ * Provides data fetching, caching and state management
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,7 +26,7 @@ import {
   ModelProviderListParams,
 } from '@/types';
 
-/** 查询键常量 */
+/** Query Keys */
 const QUERY_KEYS = {
   models: ['models'] as const,
   modelList: (params?: ModelListParams) => [...QUERY_KEYS.models, 'list', params] as const,
@@ -36,10 +36,10 @@ const QUERY_KEYS = {
     [...QUERY_KEYS.modelProviders, 'list', params] as const,
 };
 
-// ============ 模型映射 Hooks ============
+// ============ Model Mapping Hooks ============
 
 /**
- * 获取模型映射列表 Hook
+ * Get Model Mapping List Hook
  */
 export function useModels(params?: ModelListParams) {
   return useQuery({
@@ -49,18 +49,18 @@ export function useModels(params?: ModelListParams) {
 }
 
 /**
- * 获取单个模型映射详情 Hook（含供应商配置）
+ * Get Single Model Mapping Detail Hook (Includes Provider Config)
  */
 export function useModel(requestedModel: string) {
   return useQuery({
     queryKey: QUERY_KEYS.modelDetail(requestedModel),
     queryFn: () => getModel(requestedModel),
-    enabled: !!requestedModel, // 仅当 requestedModel 有效时执行
+    enabled: !!requestedModel, // Only query when requestedModel is valid
   });
 }
 
 /**
- * 创建模型映射 Mutation Hook
+ * Create Model Mapping Mutation Hook
  */
 export function useCreateModel() {
   const queryClient = useQueryClient();
@@ -74,7 +74,7 @@ export function useCreateModel() {
 }
 
 /**
- * 更新模型映射 Mutation Hook
+ * Update Model Mapping Mutation Hook
  */
 export function useUpdateModel() {
   const queryClient = useQueryClient();
@@ -97,7 +97,7 @@ export function useUpdateModel() {
 }
 
 /**
- * 删除模型映射 Mutation Hook
+ * Delete Model Mapping Mutation Hook
  */
 export function useDeleteModel() {
   const queryClient = useQueryClient();
@@ -110,10 +110,10 @@ export function useDeleteModel() {
   });
 }
 
-// ============ 模型-供应商映射 Hooks ============
+// ============ Model-Provider Mapping Hooks ============
 
 /**
- * 获取模型-供应商映射列表 Hook
+ * Get Model-Provider Mapping List Hook
  */
 export function useModelProviders(params?: ModelProviderListParams) {
   return useQuery({
@@ -123,7 +123,7 @@ export function useModelProviders(params?: ModelProviderListParams) {
 }
 
 /**
- * 创建模型-供应商映射 Mutation Hook
+ * Create Model-Provider Mapping Mutation Hook
  */
 export function useCreateModelProvider() {
   const queryClient = useQueryClient();
@@ -133,7 +133,7 @@ export function useCreateModelProvider() {
     onSuccess: (_: ModelMappingProvider, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelProviders });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
-      // 刷新对应模型的详情
+      // Refresh model detail
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.modelDetail(variables.requested_model),
       });
@@ -142,7 +142,7 @@ export function useCreateModelProvider() {
 }
 
 /**
- * 更新模型-供应商映射 Mutation Hook
+ * Update Model-Provider Mapping Mutation Hook
  */
 export function useUpdateModelProvider() {
   const queryClient = useQueryClient();
@@ -163,7 +163,7 @@ export function useUpdateModelProvider() {
 }
 
 /**
- * 删除模型-供应商映射 Mutation Hook
+ * Delete Model-Provider Mapping Mutation Hook
  */
 export function useDeleteModelProvider() {
   const queryClient = useQueryClient();

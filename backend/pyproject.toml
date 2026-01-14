@@ -15,6 +15,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "alembic>=1.13.0",
     "httpx>=0.26.0",
+    "litellm>=1.55.0",
     "tiktoken>=0.5.2",
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.6",

@@ -1,6 +1,6 @@
 /**
- * API Key 相关 React Query Hooks
- * 提供数据获取、缓存和状态管理
+ * API Key Related React Query Hooks
+ * Provides data fetching, caching and state management
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,7 +18,7 @@ import {
   ApiKeyListParams,
 } from '@/types';
 
-/** 查询键常量 */
+/** Query Keys */
 const QUERY_KEYS = {
   all: ['api-keys'] as const,
   list: (params?: ApiKeyListParams) => [...QUERY_KEYS.all, 'list', params] as const,
@@ -26,7 +26,7 @@ const QUERY_KEYS = {
 };
 
 /**
- * 获取 API Key 列表 Hook
+ * Get API Key List Hook
  */
 export function useApiKeys(params?: ApiKeyListParams) {
   return useQuery({
@@ -36,7 +36,7 @@ export function useApiKeys(params?: ApiKeyListParams) {
 }
 
 /**
- * 获取单个 API Key 详情 Hook
+ * Get Single API Key Detail Hook
  */
 export function useApiKey(id: number) {
   return useQuery({
@@ -47,8 +47,8 @@ export function useApiKey(id: number) {
 }
 
 /**
- * 创建 API Key Mutation Hook
- * 注意：创建成功后会返回完整的 key_value（仅此一次）
+ * Create API Key Mutation Hook
+ * Note: Returns full key_value on success (only once)
  */
 export function useCreateApiKey() {
   const queryClient = useQueryClient();
@@ -62,7 +62,7 @@ export function useCreateApiKey() {
 }
 
 /**
- * 更新 API Key Mutation Hook
+ * Update API Key Mutation Hook
  */
 export function useUpdateApiKey() {
   const queryClient = useQueryClient();
@@ -78,7 +78,7 @@ export function useUpdateApiKey() {
 }
 
 /**
- * 删除 API Key Mutation Hook
+ * Delete API Key Mutation Hook
  */
 export function useDeleteApiKey() {
   const queryClient = useQueryClient();

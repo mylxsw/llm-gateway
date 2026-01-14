@@ -1,5 +1,5 @@
 """
-脱敏模块单元测试
+Sanitizer Module Unit Tests
 """
 
 import pytest
@@ -11,37 +11,37 @@ from app.common.sanitizer import (
 
 
 class TestSanitizeAuthorization:
-    """authorization 脱敏测试"""
+    """Authorization Sanitize Test"""
     
     def test_bearer_token(self):
-        """测试 Bearer token 脱敏"""
+        """Test Bearer token sanitization"""
         result = sanitize_authorization("Bearer sk-1234567890abcdef")
         assert result.startswith("Bearer sk-1")
         assert "***" in result
         assert result.endswith("ef")
     
     def test_plain_token(self):
-        """测试普通 token 脱敏"""
+        """Test plain token sanitization"""
         result = sanitize_authorization("lgw-abcdefghijklmnop")
         assert result.startswith("lgw-")
         assert "***" in result
     
     def test_short_token(self):
-        """测试短 token 脱敏"""
+        """Test short token sanitization"""
         result = sanitize_authorization("short")
         assert result == "***"
     
     def test_empty_value(self):
-        """测试空值"""
+        """Test empty value"""
         assert sanitize_authorization("") == ""
         assert sanitize_authorization(None) is None
 
 
 class TestSanitizeHeaders:
-    """请求头脱敏测试"""
+    """Header Sanitize Test"""
     
     def test_sanitize_authorization_header(self):
-        """测试 authorization 头脱敏"""
+        """Test authorization header sanitization"""
         headers = {
             "authorization": "Bearer sk-1234567890abcdef",
             "content-type": "application/json",
@@ -52,7 +52,7 @@ class TestSanitizeHeaders:
         assert result["content-type"] == "application/json"
     
     def test_sanitize_x_api_key_header(self):
-        """测试 x-api-key 头脱敏"""
+        """Test x-api-key header sanitization"""
         headers = {
             "x-api-key": "sk-1234567890abcdef",
             "user-agent": "test",
@@ -63,7 +63,7 @@ class TestSanitizeHeaders:
         assert result["user-agent"] == "test"
     
     def test_not_modify_original(self):
-        """测试不修改原始数据"""
+        """Test original data is not modified"""
         headers = {
             "authorization": "Bearer sk-1234567890abcdef",
         }
@@ -75,16 +75,16 @@ class TestSanitizeHeaders:
         assert result is not headers
     
     def test_empty_headers(self):
-        """测试空请求头"""
+        """Test empty headers"""
         assert sanitize_headers({}) == {}
         assert sanitize_headers(None) == {}
 
 
 class TestSanitizeApiKeyDisplay:
-    """API Key 显示脱敏测试"""
+    """API Key Display Sanitize Test"""
     
     def test_sanitize_api_key(self):
-        """测试 API Key 脱敏"""
+        """Test API Key sanitization"""
         result = sanitize_api_key_display("lgw-abcdefghijklmnopqrstuvwxyz")
         assert result.startswith("lgw-")
         assert "***" in result

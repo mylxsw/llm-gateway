@@ -1,6 +1,6 @@
 /**
- * API Key 列表组件
- * 展示 API Key 数据表格
+ * API Key List Component
+ * Displays API Key data table
  */
 
 'use client';
@@ -21,27 +21,27 @@ import { ApiKey } from '@/types';
 import { formatDateTime, getActiveStatus, copyToClipboard } from '@/lib/utils';
 
 interface ApiKeyListProps {
-  /** API Key 列表数据 */
+  /** API Key list data */
   apiKeys: ApiKey[];
-  /** 编辑回调 */
+  /** Edit callback */
   onEdit: (apiKey: ApiKey) => void;
-  /** 删除回调 */
+  /** Delete callback */
   onDelete: (apiKey: ApiKey) => void;
 }
 
 /**
- * API Key 列表组件
+ * API Key List Component
  */
 export function ApiKeyList({
   apiKeys,
   onEdit,
   onDelete,
 }: ApiKeyListProps) {
-  // 存储复制状态和显示状态
+  // Store copy state and visibility state
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [visibleId, setVisibleId] = useState<number | null>(null);
 
-  // 复制 API Key
+  // Copy API Key
   const handleCopy = async (apiKey: ApiKey) => {
     const success = await copyToClipboard(apiKey.key_value);
     if (success) {
@@ -50,7 +50,7 @@ export function ApiKeyList({
     }
   };
 
-  // 切换显示/隐藏
+  // Toggle visibility
   const toggleVisible = (id: number) => {
     setVisibleId(visibleId === id ? null : id);
   };
@@ -60,12 +60,12 @@ export function ApiKeyList({
       <TableHeader>
         <TableRow>
           <TableHead className="w-[60px]">ID</TableHead>
-          <TableHead>名称</TableHead>
+          <TableHead>Name</TableHead>
           <TableHead>API Key</TableHead>
-          <TableHead>状态</TableHead>
-          <TableHead>创建时间</TableHead>
-          <TableHead>最后使用</TableHead>
-          <TableHead className="text-right">操作</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Created At</TableHead>
+          <TableHead>Last Used</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -90,12 +90,12 @@ export function ApiKeyList({
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => toggleVisible(apiKey.id)}
-                    title={isVisible ? '隐藏' : '显示'}
+                    title={isVisible ? 'Hide' : 'Show'}
                   >
                     {isVisible ? (
-                      <EyeOff className="h-3.5 w-3.5" />
+                      <EyeOff className="h-3.5 w-3.5" suppressHydrationWarning />
                     ) : (
-                      <Eye className="h-3.5 w-3.5" />
+                      <Eye className="h-3.5 w-3.5" suppressHydrationWarning />
                     )}
                   </Button>
                   <Button
@@ -103,12 +103,12 @@ export function ApiKeyList({
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => handleCopy(apiKey)}
-                    title="复制"
+                    title="Copy"
                   >
                     {isCopied ? (
-                      <Check className="h-3.5 w-3.5 text-green-500" />
+                      <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
                     ) : (
-                      <Copy className="h-3.5 w-3.5" />
+                      <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
                     )}
                   </Button>
                 </div>
@@ -128,17 +128,17 @@ export function ApiKeyList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(apiKey)}
-                    title="编辑"
+                    title="Edit"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(apiKey)}
-                    title="删除"
+                    title="Delete"
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
                 </div>
               </TableCell>

@@ -90,6 +90,30 @@ For a deep dive, check the [Architecture Documentation](docs/architecture.md).
     ```
     The Dashboard will be available at `http://localhost:3000`.
 
+## 🐳 Docker
+
+Build a single image containing both backend and frontend:
+
+```bash
+docker build -t llm-gateway .
+docker run --rm -p 8000:8000 -v $(pwd)/data:/data llm-gateway
+```
+
+- Dashboard: `http://localhost:8000`
+- API: `http://localhost:8000/v1/...` and `http://localhost:8000/api/admin/...`
+- Persist SQLite DB by mounting `/data` (or set `DATABASE_URL` to an external DB).
+
+### Docker Compose (one-click)
+
+```bash
+cp .env.example .env
+./start.sh
+```
+
+- Stop: `./stop.sh` (or `./start.sh down`)
+- Default DB: PostgreSQL (service `postgres`)
+- SQLite: set `DATABASE_TYPE/DATABASE_URL` in `.env` (see `.env.example`)
+
 ## ⚙️ Configuration
 
 Configuration is managed via environment variables or a `.env` file in the `backend/` directory.

@@ -1,7 +1,7 @@
 """
-策略服务模块
+Strategy Service Module
 
-提供供应商选择策略的实现。
+Provides implementation for provider selection strategies.
 """
 
 from abc import ABC, abstractmethod
@@ -13,9 +13,9 @@ from app.rules.models import CandidateProvider
 
 class SelectionStrategy(ABC):
     """
-    供应商选择策略抽象基类
+    Provider Selection Strategy Abstract Base Class
     
-    定义从候选供应商列表中选择供应商的接口。
+    Defines the interface for selecting a provider from a list of candidates.
     """
     
     @abstractmethod
@@ -25,14 +25,14 @@ class SelectionStrategy(ABC):
         requested_model: str,
     ) -> Optional[CandidateProvider]:
         """
-        从候选列表中选择一个供应商
+        Select a provider from the candidate list
         
         Args:
-            candidates: 候选供应商列表
-            requested_model: 请求的模型名（用于状态隔离）
+            candidates: List of candidate providers
+            requested_model: Requested model name (for state isolation)
         
         Returns:
-            Optional[CandidateProvider]: 选中的供应商，无可用供应商时返回 None
+            Optional[CandidateProvider]: Selected provider, or None if no provider available
         """
         pass
     
@@ -44,37 +44,37 @@ class SelectionStrategy(ABC):
         current: CandidateProvider,
     ) -> Optional[CandidateProvider]:
         """
-        获取下一个供应商（用于故障切换）
+        Get next provider (used for failover)
         
         Args:
-            candidates: 候选供应商列表
-            requested_model: 请求的模型名
-            current: 当前供应商
+            candidates: List of candidate providers
+            requested_model: Requested model name
+            current: Current provider
         
         Returns:
-            Optional[CandidateProvider]: 下一个供应商，无可用供应商时返回 None
+            Optional[CandidateProvider]: Next provider, or None if no provider available
         """
         pass
 
 
 class RoundRobinStrategy(SelectionStrategy):
     """
-    轮询（轮转）策略
+    Round Robin Strategy
     
-    在候选供应商之间进行轮询选择，确保请求均匀分布。
-    使用原子计数器实现并发安全。
+    Selects providers in a round-robin fashion to ensure even distribution of requests.
+    Uses atomic counters for concurrency safety.
     """
     
     def __init__(self):
-        """初始化策略"""
-        # 每个模型维护独立的计数器
+        """Initialize Strategy"""
+        # Maintain independent counters for each model
         self._counters: dict[str, int] = {}
-        # 用于保护计数器的锁
+        # Lock to protect counters
         self._lock: Optional[asyncio.Lock] = None
 
     @property
     def lock(self) -> asyncio.Lock:
-        """获取锁（懒加载）"""
+        """Get lock (lazy loading)"""
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
@@ -85,24 +85,24 @@ class RoundRobinStrategy(SelectionStrategy):
         requested_model: str,
     ) -> Optional[CandidateProvider]:
         """
-        轮询选择供应商
+        Round-robin provider selection
         
         Args:
-            candidates: 候选供应商列表（已按优先级排序）
-            requested_model: 请求的模型名
+            candidates: List of candidate providers (sorted by priority)
+            requested_model: Requested model name
         
         Returns:
-            Optional[CandidateProvider]: 选中的供应商
+            Optional[CandidateProvider]: Selected provider
         """
         if not candidates:
             return None
         
         async with self.lock:
-            # 获取当前计数
+            # Get current count
             counter = self._counters.get(requested_model, 0)
-            # 选择供应商
+            # Select provider
             index = counter % len(candidates)
-            # 更新计数
+            # Update count
             self._counters[requested_model] = counter + 1
         
         return candidates[index]
@@ -114,20 +114,20 @@ class RoundRobinStrategy(SelectionStrategy):
         current: CandidateProvider,
     ) -> Optional[CandidateProvider]:
         """
-        获取下一个供应商（故障切换时使用）
+        Get next provider (used for failover)
         
         Args:
-            candidates: 候选供应商列表
-            requested_model: 请求的模型名
-            current: 当前供应商
+            candidates: List of candidate providers
+            requested_model: Requested model name
+            current: Current provider
         
         Returns:
-            Optional[CandidateProvider]: 下一个供应商
+            Optional[CandidateProvider]: Next provider
         """
         if not candidates or len(candidates) <= 1:
             return None
         
-        # 找到当前供应商的索引
+        # Find index of current provider
         current_index = -1
         for i, c in enumerate(candidates):
             if c.provider_id == current.provider_id:
@@ -137,7 +137,7 @@ class RoundRobinStrategy(SelectionStrategy):
         if current_index == -1:
             return None
         
-        # 返回下一个供应商
+        # Return next provider
         next_index = (current_index + 1) % len(candidates)
         if next_index == current_index:
             return None
@@ -146,10 +146,10 @@ class RoundRobinStrategy(SelectionStrategy):
     
     def reset(self, requested_model: Optional[str] = None) -> None:
         """
-        重置计数器（用于测试）
+        Reset counters (for testing)
         
         Args:
-            requested_model: 指定模型名，为 None 时重置所有
+            requested_model: Specific model name, resets all if None
         """
         if requested_model:
             self._counters.pop(requested_model, None)

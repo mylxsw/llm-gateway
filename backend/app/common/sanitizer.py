@@ -1,8 +1,8 @@
 """
-数据脱敏模块
+Data Sanitization Module
 
-对敏感信息（如 authorization 头）进行脱敏处理，
-确保日志记录不包含明文敏感数据。
+Sanitizes sensitive information (such as authorization headers)
+to ensure logs do not contain plain text sensitive data.
 """
 
 import re
@@ -11,15 +11,15 @@ from typing import Any
 
 def sanitize_authorization(value: str) -> str:
     """
-    脱敏 authorization 字段值
+    Sanitize authorization field value
     
-    将 API Key 等敏感信息进行掩码处理，保留前缀和部分字符用于识别。
+    Masks API Keys and other sensitive information, keeping a prefix and some characters for identification.
     
     Args:
-        value: 原始 authorization 值，如 "Bearer sk-xxxxxxxxxxxx"
+        value: Original authorization value, e.g., "Bearer sk-xxxxxxxxxxxx"
     
     Returns:
-        str: 脱敏后的值，如 "Bearer sk-***...***"
+        str: Sanitized value, e.g., "Bearer sk-***...***"
     
     Examples:
         >>> sanitize_authorization("Bearer sk-1234567890abcdef")
@@ -30,35 +30,35 @@ def sanitize_authorization(value: str) -> str:
     if not value:
         return value
     
-    # 处理 Bearer 前缀
+    # Handle Bearer prefix
     prefix = ""
     token = value
     if value.lower().startswith("bearer "):
         prefix = "Bearer "
         token = value[7:]
     
-    # 如果 token 太短，直接返回掩码
+    # If token is too short, mask directly
     if len(token) <= 8:
         return f"{prefix}***"
     
-    # 保留前4个字符和后2个字符，中间用掩码替换
+    # Keep first 4 and last 2 characters, mask middle
     return f"{prefix}{token[:4]}***...***{token[-2:]}"
 
 
 def sanitize_headers(headers: dict[str, Any]) -> dict[str, Any]:
     """
-    脱敏请求头
+    Sanitize request headers
     
-    对请求头中的敏感字段进行脱敏处理，目前处理以下字段：
+    Sanitizes sensitive fields in request headers. Currently handles:
     - authorization
     - x-api-key
     - api-key
     
     Args:
-        headers: 原始请求头字典
+        headers: Original headers dictionary
     
     Returns:
-        dict: 脱敏后的请求头字典（新字典，不修改原始数据）
+        dict: Sanitized headers dictionary (new dictionary, original data not modified)
     
     Examples:
         >>> headers = {"authorization": "Bearer sk-xxx", "content-type": "application/json"}
@@ -68,10 +68,10 @@ def sanitize_headers(headers: dict[str, Any]) -> dict[str, Any]:
     if not headers:
         return {}
     
-    # 需要脱敏的字段名（小写）
+    # Fields to sanitize (lowercase)
     sensitive_fields = {"authorization", "x-api-key", "api-key"}
     
-    # 创建新字典，避免修改原始数据
+    # Create new dictionary to avoid modifying original data
     sanitized = {}
     for key, value in headers.items():
         if key.lower() in sensitive_fields and isinstance(value, str):
@@ -84,15 +84,15 @@ def sanitize_headers(headers: dict[str, Any]) -> dict[str, Any]:
 
 def sanitize_api_key_display(key_value: str) -> str:
     """
-    脱敏 API Key 显示
+    Sanitize API Key Display
     
-    用于列表展示时的 API Key 脱敏。
+    Used for masking API Key in list views.
     
     Args:
-        key_value: 完整的 API Key 值
+        key_value: Full API Key value
     
     Returns:
-        str: 脱敏后的显示值
+        str: Sanitized display value
     
     Examples:
         >>> sanitize_api_key_display("lgw-abcdefghijklmnopqrstuvwxyz")

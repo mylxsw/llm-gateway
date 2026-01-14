@@ -14,6 +14,12 @@ alembic>=1.13.0    # 数据库迁移
 # HTTP 客户端
 httpx>=0.26.0
 
+# 静态资源
+aiofiles>=23.2.1
+
+# 协议转换（OpenAI <-> Anthropic）
+litellm>=1.55.0
+
 # Token 计数
 tiktoken>=0.5.2
 

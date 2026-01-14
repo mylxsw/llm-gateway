@@ -1,7 +1,7 @@
 """
-HTTP 客户端封装模块
+HTTP Client Wrapper Module
 
-提供统一的异步 HTTP 客户端，用于与上游供应商通信。
+Provides a unified asynchronous HTTP client for communicating with upstream providers.
 """
 
 from typing import Any, AsyncGenerator, Optional
@@ -13,10 +13,10 @@ from app.config import get_settings
 
 class HttpClient:
     """
-    异步 HTTP 客户端封装
+    Asynchronous HTTP Client Wrapper
     
-    封装 httpx.AsyncClient，提供统一的请求方法和超时配置。
-    支持普通请求和流式请求。
+    Wraps httpx.AsyncClient, providing unified request methods and timeout configuration.
+    Supports normal requests and streaming requests.
     """
     
     def __init__(
@@ -26,12 +26,12 @@ class HttpClient:
         headers: Optional[dict[str, str]] = None,
     ):
         """
-        初始化 HTTP 客户端
+        Initialize HTTP Client
         
         Args:
-            base_url: 基础 URL
-            timeout: 请求超时时间（秒），默认使用配置
-            headers: 默认请求头
+            base_url: Base URL
+            timeout: Request timeout (seconds), defaults to configuration
+            headers: Default request headers
         """
         settings = get_settings()
         self.base_url = base_url
@@ -41,10 +41,10 @@ class HttpClient:
     
     async def _get_client(self) -> httpx.AsyncClient:
         """
-        获取或创建 HTTP 客户端实例
+        Get or create HTTP client instance
         
         Returns:
-            httpx.AsyncClient: HTTP 客户端实例
+            httpx.AsyncClient: HTTP client instance
         """
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -55,7 +55,7 @@ class HttpClient:
         return self._client
     
     async def close(self) -> None:
-        """关闭 HTTP 客户端"""
+        """Close HTTP Client"""
         if self._client is not None:
             await self._client.aclose()
             self._client = None
@@ -69,17 +69,17 @@ class HttpClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """
-        发送 HTTP 请求
+        Send HTTP Request
         
         Args:
-            method: HTTP 方法（GET, POST 等）
-            url: 请求 URL（相对于 base_url）
-            headers: 请求头
-            json: JSON 请求体
-            **kwargs: 其他 httpx 参数
+            method: HTTP method (GET, POST, etc.)
+            url: Request URL (relative to base_url)
+            headers: Request headers
+            json: JSON request body
+            **kwargs: Other httpx parameters
         
         Returns:
-            httpx.Response: HTTP 响应
+            httpx.Response: HTTP response
         """
         client = await self._get_client()
         return await client.request(
@@ -98,16 +98,16 @@ class HttpClient:
         **kwargs: Any,
     ) -> httpx.Response:
         """
-        发送 POST 请求
+        Send POST Request
         
         Args:
-            url: 请求 URL
-            headers: 请求头
-            json: JSON 请求体
-            **kwargs: 其他参数
+            url: Request URL
+            headers: Request headers
+            json: JSON request body
+            **kwargs: Other parameters
         
         Returns:
-            httpx.Response: HTTP 响应
+            httpx.Response: HTTP response
         """
         return await self.request("POST", url, headers=headers, json=json, **kwargs)
     
@@ -120,17 +120,17 @@ class HttpClient:
         **kwargs: Any,
     ) -> AsyncGenerator[bytes, None]:
         """
-        发送流式请求
+        Send Streaming Request
         
         Args:
-            method: HTTP 方法
-            url: 请求 URL
-            headers: 请求头
-            json: JSON 请求体
-            **kwargs: 其他参数
+            method: HTTP method
+            url: Request URL
+            headers: Request headers
+            json: JSON request body
+            **kwargs: Other parameters
         
         Yields:
-            bytes: 响应数据块
+            bytes: Response data chunk
         """
         client = await self._get_client()
         async with client.stream(
@@ -150,15 +150,15 @@ async def create_client(
     timeout: Optional[int] = None,
 ) -> HttpClient:
     """
-    创建配置好的 HTTP 客户端
+    Create configured HTTP client
     
     Args:
-        base_url: 基础 URL
-        api_key: API Key（用于 Authorization 头）
-        timeout: 超时时间
+        base_url: Base URL
+        api_key: API Key (used for Authorization header)
+        timeout: Timeout duration
     
     Returns:
-        HttpClient: 配置好的客户端实例
+        HttpClient: Configured client instance
     """
     headers = {}
     if api_key:

@@ -1,11 +1,10 @@
-"""
-代理核心服务模块
+"""Proxy Core Service Module
 
-实现请求代理的核心业务逻辑。
-"""
+Implements core business logic for request proxying."""
 
 import json
 import asyncio
+import logging
 import time
 from datetime import datetime
 from typing import Any, Optional, AsyncGenerator
@@ -15,6 +14,12 @@ import anyio
 from app.common.errors import NotFoundError, ServiceError
 from app.common.sanitizer import sanitize_headers
 from app.common.stream_usage import StreamUsageAccumulator
+from app.common.protocol_conversion import (
+    convert_request_for_supplier,
+    convert_response_for_user,
+    convert_stream_for_user,
+    normalize_protocol,
+)
 from app.common.token_counter import get_token_counter
 from app.common.utils import generate_trace_id
 from app.domain.log import RequestLogCreate
@@ -28,21 +33,23 @@ from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
 from app.services.retry_handler import RetryHandler
 from app.services.strategy import RoundRobinStrategy, SelectionStrategy
 
+logger = logging.getLogger(__name__)
+
 
 class ProxyService:
     """
-    代理核心服务
+    Proxy Core Service
     
-    处理代理请求的完整流程：
-    1. 解析请求，提取 requested_model
-    2. 计算输入 Token
-    3. 规则引擎匹配，获取候选供应商
-    4. 轮询策略选择供应商
-    5. 替换 model 字段，转发请求
-    6. 处理重试和故障切换
-    7. 计算输出 Token
-    8. 记录日志
-    9. 返回响应
+    Handles the complete flow of proxy requests:
+    1. Parse request, extract requested_model
+    2. Calculate input Token
+    3. Rule engine match, get candidate providers
+    4. Round-robin strategy selects provider
+    5. Replace model field, forward request
+    6. Handle retry and failover
+    7. Calculate output Token
+    8. Record log
+    9. Return response
     """
     
     def __init__(
@@ -53,13 +60,13 @@ class ProxyService:
         strategy: Optional[SelectionStrategy] = None,
     ):
         """
-        初始化服务
+        Initialize Service
         
         Args:
-            model_repo: 模型 Repository
-            provider_repo: 供应商 Repository
-            log_repo: 日志 Repository
-            strategy: 供应商选择策略 (可选，默认使用 RoundRobinStrategy)
+            model_repo: Model Repository
+            provider_repo: Provider Repository
+            log_repo: Log Repository
+            strategy: Provider Selection Strategy (Optional, defaults to RoundRobinStrategy)
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
@@ -76,7 +83,7 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ModelMapping, list[CandidateProvider], int, str]:
         """
-        解析模型与供应商候选列表
+        Resolve model and provider candidate list
 
         Returns:
             tuple: (model_mapping, candidates, input_tokens, protocol)
@@ -114,22 +121,12 @@ class ProxyService:
                 providers[pid] = provider
 
         eligible_provider_mappings = [
-            pm
-            for pm in provider_mappings
-            if (p := providers.get(pm.provider_id)) and p.protocol == request_protocol
+            pm for pm in provider_mappings if providers.get(pm.provider_id) is not None
         ]
-        eligible_providers = {
-            pid: p for pid, p in providers.items() if p.protocol == request_protocol
-        }
+        eligible_providers = {pid: p for pid, p in providers.items()}
 
         if not eligible_provider_mappings:
-            raise ServiceError(
-                message=(
-                    f"No providers configured for model '{requested_model}' "
-                    f"with protocol '{request_protocol}'"
-                ),
-                code="no_available_provider",
-            )
+            raise ServiceError(message="No available providers", code="no_available_provider")
 
         token_counter = get_token_counter(request_protocol)
         messages = body.get("messages", [])
@@ -168,27 +165,27 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
-        处理代理请求
+        Process Proxy Request
         
         Args:
             api_key_id: API Key ID
-            api_key_name: API Key 名称
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
+            api_key_name: API Key Name
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
         
         Returns:
-            tuple[ProviderResponse, dict]: (供应商响应, 日志信息)
+            tuple[ProviderResponse, dict]: (Provider response, Log info)
         
         Raises:
-            NotFoundError: 模型未配置
-            ServiceError: 无可用供应商
+            NotFoundError: Model not configured
+            ServiceError: No available provider
         """
         trace_id = generate_trace_id()
         request_time = datetime.utcnow()
         
-        # 1. 提取 requested_model
+        # 1. Extract requested_model
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(
@@ -196,7 +193,7 @@ class ProxyService:
                 code="missing_model",
             )
         
-        # 2. 获取模型映射
+        # 2. Get model mapping
         model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
@@ -204,7 +201,7 @@ class ProxyService:
             body=body,
         )
 
-        # DEBUG: Print matched providers
+        # DEBUG: Log matched providers
         candidates_info = [
             {
                 "id": c.provider_id,
@@ -214,42 +211,94 @@ class ProxyService:
             }
             for c in candidates
         ]
-        print(f"[DEBUG] Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
+        logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
         
-        # 8. 执行请求（带重试）
+        # 8. Execute request (with retry)
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
-            client = get_provider_client(candidate.protocol)
-            return await client.forward(
-                base_url=candidate.base_url,
-                api_key=candidate.api_key,
-                path=path,
-                method=method,
-                headers=headers,
-                body=body,
-                target_model=candidate.target_model,
-            )
-        
+            try:
+                client = get_provider_client(candidate.protocol)
+                supplier_path, supplier_body = convert_request_for_supplier(
+                    request_protocol=request_protocol,
+                    supplier_protocol=candidate.protocol,
+                    path=path,
+                    body=body,
+                    target_model=candidate.target_model,
+                )
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                return await client.forward(
+                    base_url=candidate.base_url,
+                    api_key=candidate.api_key,
+                    path=supplier_path,
+                    method=method,
+                    headers=headers,
+                    body=supplier_body,
+                    target_model=candidate.target_model,
+                    response_mode="raw" if same_protocol else "parsed",
+                    extra_headers=candidate.extra_headers,
+                )
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(
+                    "Error during request forwarding: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    candidate.provider_id,
+                    candidate.provider_name,
+                    request_protocol,
+                    candidate.protocol,
+                    error_msg,
+                )
+                return ProviderResponse(status_code=400, error=error_msg)
+
         result = await self.retry_handler.execute_with_retry(
             candidates=candidates,
             requested_model=requested_model,
             forward_fn=forward_fn,
         )
+
+        if result.response.body is not None and result.final_provider is not None:
+            try:
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(result.final_provider.protocol)
+                if not same_protocol:
+                    result.response.body = convert_response_for_user(
+                        request_protocol=request_protocol,
+                        supplier_protocol=result.final_provider.protocol,
+                        body=result.response.body,
+                        target_model=result.final_provider.target_model,
+                    )
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(
+                    "Error during response conversion: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    result.final_provider.provider_id,
+                    result.final_provider.provider_name,
+                    request_protocol,
+                    result.final_provider.protocol,
+                    error_msg,
+                )
+                result.response = ProviderResponse(
+                    status_code=502,
+                    headers=result.response.headers,
+                    error=error_msg,
+                    first_byte_delay_ms=result.response.first_byte_delay_ms,
+                    total_time_ms=result.response.total_time_ms,
+                )
         
-        # 9. 计算输出 Token
+        # 9. Calculate Output Token
         output_tokens = 0
         if result.success and result.response.body:
             try:
-                # OpenAI 格式
+                # OpenAI format
                 if isinstance(result.response.body, dict):
                     usage = result.response.body.get("usage", {})
                     output_tokens = usage.get("completion_tokens", 0)
                     if not output_tokens:
-                        # Anthropic 格式
+                        # Anthropic format
                         output_tokens = usage.get("output_tokens", 0)
             except Exception:
                 pass
         
-        # 10. 记录日志
+        # 10. Record log
         log_data = RequestLogCreate(
             request_time=request_time,
             api_key_id=api_key_id,
@@ -271,7 +320,11 @@ class ProxyService:
             response_body=(
                 json.dumps(result.response.body, ensure_ascii=False)
                 if isinstance(result.response.body, (dict, list))
-                else result.response.body
+                else (
+                    result.response.body.decode("utf-8", errors="ignore")
+                    if isinstance(result.response.body, (bytes, bytearray))
+                    else result.response.body
+                )
             )
             if result.response.body is not None
             else None,
@@ -280,12 +333,12 @@ class ProxyService:
             is_stream=False,
         )
         
-        # DEBUG: Print log as JSON
+        # DEBUG: Log request details
         try:
-            print(f"[DEBUG] Request Log: {log_data.model_dump_json()}")
+            logger.debug(f"Request Log: {log_data.model_dump_json()}")
         except AttributeError:
             # Fallback for Pydantic v1
-            print(f"[DEBUG] Request Log: {log_data.json()}")
+            logger.debug(f"Request Log: {log_data.json()}")
 
         await self.log_repo.create(log_data)
         
@@ -307,24 +360,24 @@ class ProxyService:
         body: dict[str, Any],
     ) -> tuple[ProviderResponse, AsyncGenerator[bytes, None], dict[str, Any]]:
         """
-        处理流式代理请求
+        Process Streaming Proxy Request
         
         Args:
             api_key_id: API Key ID
-            api_key_name: API Key 名称
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
+            api_key_name: API Key Name
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
         
         Returns:
-            tuple: (初始响应, 流生成器, 日志信息)
+            tuple: (Initial response, Stream generator, Log info)
         """
         trace_id = generate_trace_id()
         request_time = datetime.utcnow()
         start_monotonic = time.monotonic()
         
-        # 1-7. 同样的模型解析和规则匹配逻辑
+        # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(message="Model is required", code="missing_model")
@@ -336,7 +389,7 @@ class ProxyService:
             body=body,
         )
 
-        # DEBUG: Print matched providers
+        # DEBUG: Log matched providers
         candidates_info = [
             {
                 "id": c.provider_id,
@@ -346,26 +399,117 @@ class ProxyService:
             }
             for c in candidates
         ]
-        print(f"[DEBUG] Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
+        logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
             
-        # 8. 执行流式请求
+        # 8. Execute streaming request
         def forward_stream_fn(candidate: CandidateProvider):
-            client = get_provider_client(candidate.protocol)
-            return client.forward_stream(
+            async def error_gen(msg: str):
+                yield b"", ProviderResponse(status_code=400, error=msg)
+
+            try:
+                client = get_provider_client(candidate.protocol)
+                supplier_path, supplier_body = convert_request_for_supplier(
+                    request_protocol=request_protocol,
+                    supplier_protocol=candidate.protocol,
+                    path=path,
+                    body=body,
+                    target_model=candidate.target_model,
+                )
+            except Exception as e:
+                error_msg = str(e)
+                logger.error(
+                    "Error during stream request conversion: provider_id=%s, provider_name=%s, "
+                    "request_protocol=%s, supplier_protocol=%s, error=%s",
+                    candidate.provider_id,
+                    candidate.provider_name,
+                    request_protocol,
+                    candidate.protocol,
+                    error_msg,
+                )
+                return error_gen(error_msg)
+
+            upstream_gen = client.forward_stream(
                 base_url=candidate.base_url,
                 api_key=candidate.api_key,
-                path=path,
+                path=supplier_path,
                 method=method,
                 headers=headers,
-                body=body,
+                body=supplier_body,
                 target_model=candidate.target_model,
+                extra_headers=candidate.extra_headers,
             )
+
+            async def wrapped() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
+                try:
+                    first_chunk, first_resp = await anext(upstream_gen)
+                except StopAsyncIteration:
+                    return
+
+                if not first_resp.is_success:
+                    yield first_chunk, first_resp
+                    async for chunk, resp in upstream_gen:
+                        yield chunk, resp
+                    return
+
+                async def upstream_bytes() -> AsyncGenerator[bytes, None]:
+                    yield first_chunk
+                    async for chunk, _ in upstream_gen:
+                        yield chunk
+
+                try:
+                    same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                    if same_protocol:
+                        async for chunk in upstream_bytes():
+                            yield chunk, first_resp
+                    else:
+                        async for out_chunk in convert_stream_for_user(
+                            request_protocol=request_protocol,
+                            supplier_protocol=candidate.protocol,
+                            upstream=upstream_bytes(),
+                            model=candidate.target_model,
+                        ):
+                            yield out_chunk, first_resp
+                except Exception as e:
+                    err = str(e)
+                    logger.error(
+                        "Error during stream response conversion: provider_id=%s, provider_name=%s, "
+                        "request_protocol=%s, supplier_protocol=%s, error=%s",
+                        candidate.provider_id,
+                        candidate.provider_name,
+                        request_protocol,
+                        candidate.protocol,
+                        err,
+                    )
+                    if (request_protocol or "openai").lower() == "anthropic":
+                        yield (
+                            f"data: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
+                                "utf-8"
+                            ),
+                            first_resp,
+                        )
+                        yield (
+                            f"data: {json.dumps({'type': 'message_stop'}, ensure_ascii=False)}\n\n".encode(
+                                "utf-8"
+                            ),
+                            first_resp,
+                        )
+                    else:
+                        yield (
+                            f"data: {json.dumps({'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
+                                "utf-8"
+                            ),
+                            first_resp,
+                        )
+                        yield (b"data: [DONE]\n\n", first_resp)
+                    return
+
+            return wrapped()
             
         stream_gen = self.retry_handler.execute_with_retry_stream(
             candidates, requested_model, forward_stream_fn
         )
         
-        # 获取第一个块以确定状态
+        # Get first chunk to determine status
         try:
             first_chunk, initial_response, final_provider, retry_count = await anext(stream_gen)
         except StopAsyncIteration:
@@ -373,7 +517,7 @@ class ProxyService:
         except Exception as e:
             raise ServiceError(message=f"Stream connection error: {str(e)}", code="stream_error")
 
-        # 封装生成器以处理日志
+        # Wrap generator to handle logging
         async def wrapped_generator():
             usage_acc = StreamUsageAccumulator(
                 protocol=protocol,
@@ -390,7 +534,7 @@ class ProxyService:
                 stream_error = "client_disconnected"
                 raise
             except Exception as e:
-                # 记录流中断异常，但不向上抛出，避免污染 StreamingResponse 日志
+                # Log stream interruption exception, but do not throw upwards to avoid polluting StreamingResponse logs
                 stream_error = str(e)
                 return
             finally:
@@ -399,8 +543,8 @@ class ProxyService:
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
 
-                # 10. 记录日志 (流结束后)
-                # 注意：流式请求无法稳定获取完整响应体，这里仅记录输出预览（截断）
+                # 10. Record log (after stream ends)
+                # Note: Streaming requests cannot stably obtain the full response body, here only record output preview (truncated)
                 log_data = RequestLogCreate(
                     request_time=request_time,
                     api_key_id=api_key_id,
@@ -434,19 +578,19 @@ class ProxyService:
                     is_stream=True,
                 )
                 
-                # DEBUG: Print log as JSON
+                # DEBUG: Log request details
                 try:
-                    print(f"[DEBUG] Request Log: {log_data.model_dump_json()}")
+                    logger.debug(f"Request Log: {log_data.model_dump_json()}")
                 except AttributeError:
                     # Fallback for Pydantic v1
-                    print(f"[DEBUG] Request Log: {log_data.json()}")
+                    logger.debug(f"Request Log: {log_data.json()}")
 
-                # client disconnect 会触发取消，使用 shield 确保日志仍能写入 DB
+                # client disconnect triggers cancellation, use shield to ensure logs are written to DB
                 try:
                     with anyio.CancelScope(shield=True):
                         await self.log_repo.create(log_data)
                 except Exception:
-                    # 日志写入失败不影响主流程
+                    # Log writing failure does not affect main flow
                     pass
 
         return initial_response, wrapped_generator(), {

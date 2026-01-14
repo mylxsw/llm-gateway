@@ -1,14 +1,14 @@
 /**
- * 供应商管理页面
- * 提供供应商的列表展示和 CRUD 操作
+ * Provider Management Page
+ * Provides provider list display and CRUD operations
  */
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus } from 'lucide-react';
+import { Plus, Download, Upload } from 'lucide-react';
 import { ProviderForm, ProviderList } from '@/components/providers';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
@@ -17,25 +17,26 @@ import {
   useUpdateProvider,
   useDeleteProvider,
 } from '@/lib/hooks';
+import { exportProviders, importProviders } from '@/lib/api';
 import { Provider, ProviderCreate, ProviderUpdate } from '@/types';
 
 /**
- * 供应商管理页面组件
+ * Provider Management Page Component
  */
 export default function ProvidersPage() {
-  // 分页状态
+  // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  // 表单对话框状态
+  // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  // 删除确认对话框状态
+  // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useProviders({
     page,
     page_size: pageSize,
@@ -46,45 +47,48 @@ export default function ProvidersPage() {
   const updateMutation = useUpdateProvider();
   const deleteMutation = useDeleteProvider();
 
-  // 打开新建表单
+  // File Input Ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Open create form
   const handleCreate = () => {
     setEditingProvider(null);
     setFormOpen(true);
   };
 
-  // 打开编辑表单
+  // Open edit form
   const handleEdit = (provider: Provider) => {
     setEditingProvider(provider);
     setFormOpen(true);
   };
 
-  // 打开删除确认
+  // Open delete confirmation
   const handleDelete = (provider: Provider) => {
     setDeletingProvider(provider);
     setDeleteDialogOpen(true);
   };
 
-  // 提交表单
+  // Submit form
   const handleSubmit = async (formData: ProviderCreate | ProviderUpdate) => {
     try {
       if (editingProvider) {
-        // 更新
+        // Update
         await updateMutation.mutateAsync({
           id: editingProvider.id,
           data: formData as ProviderUpdate,
         });
       } else {
-        // 创建
+        // Create
         await createMutation.mutateAsync(formData as ProviderCreate);
       }
       setFormOpen(false);
       setEditingProvider(null);
     } catch (error) {
-      console.error('保存失败:', error);
+      console.error('Save failed:', error);
     }
   };
 
-  // 确认删除
+  // Confirm delete
   const handleConfirmDelete = async () => {
     if (!deletingProvider) return;
     try {
@@ -92,45 +96,104 @@ export default function ProvidersPage() {
       setDeleteDialogOpen(false);
       setDeletingProvider(null);
     } catch (error) {
-      console.error('删除失败:', error);
+      console.error('Delete failed:', error);
     }
+  };
+
+  // Export
+  const handleExport = async () => {
+    try {
+      const data = await exportProviders();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `providers_export_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed');
+    }
+  };
+
+  // Import
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const result = await importProviders(json);
+      alert(`Import complete.\nSuccess: ${result.success}\nSkipped: ${result.skipped}`);
+      refetch();
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('Import failed: ' + (error as any).message);
+    }
+    // Reset input
+    event.target.value = '';
   };
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
+      {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">供应商管理</h1>
+          <h1 className="text-2xl font-bold">Provider Management</h1>
           <p className="mt-1 text-muted-foreground">
-            管理上游 AI 供应商配置
+            Manage upstream AI provider configurations
           </p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          新增供应商
-        </Button>
+        <div className="flex gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept=".json"
+            onChange={handleFileChange}
+          />
+          <Button variant="outline" onClick={handleImportClick}>
+            <Upload className="mr-2 h-4 w-4" />
+            Import
+          </Button>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+          <Button onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
+            Add Provider
+          </Button>
+        </div>
       </div>
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>供应商列表</CardTitle>
+          <CardTitle>Provider List</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载供应商列表失败"
+              message="Failed to load provider list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="暂无供应商"
-              actionText="新增供应商"
+              message="No providers found"
+              actionText="Add Provider"
               onAction={handleCreate}
             />
           )}
@@ -154,7 +217,7 @@ export default function ProvidersPage() {
         </CardContent>
       </Card>
 
-      {/* 新建/编辑表单 */}
+      {/* Create/Edit Form */}
       <ProviderForm
         open={formOpen}
         onOpenChange={setFormOpen}
@@ -163,13 +226,13 @@ export default function ProvidersPage() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {/* 删除确认对话框 */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="删除供应商"
-        description={`确定要删除供应商「${deletingProvider?.name}」吗？如果该供应商被模型引用，将无法删除。`}
-        confirmText="删除"
+        title="Delete Provider"
+        description={`Are you sure you want to delete provider "${deletingProvider?.name}"? It cannot be deleted if referenced by models.`}
+        confirmText="Delete"
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

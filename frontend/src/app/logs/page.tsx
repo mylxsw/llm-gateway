@@ -1,18 +1,20 @@
 /**
- * 请求日志页面
- * 提供日志列表展示和多条件筛选查询
+ * Request Log Page
+ * Provides log list display and multi-condition filtering
  */
 
 'use client';
 
 import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { LogFilters, LogList } from '@/components/logs';
 import { Pagination, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import { useLogs, useProviders } from '@/lib/hooks';
-import { LogQueryParams } from '@/types';
+import { LogQueryParams, RequestLog } from '@/types';
+import { RefreshCw } from 'lucide-react';
 
-/** 默认筛选参数 */
+/** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
   page: 1,
   page_size: 20,
@@ -21,79 +23,122 @@ const DEFAULT_FILTERS: LogQueryParams = {
 };
 
 /**
- * 请求日志页面组件
+ * Request Log Page Component
  */
 export default function LogsPage() {
-  // 筛选参数状态
+  // Filter parameters state
   const [filters, setFilters] = useState<LogQueryParams>(DEFAULT_FILTERS);
 
-  // 数据查询
+  // Data query
   const { data, isLoading, isError, refetch } = useLogs(filters);
   const { data: providersData } = useProviders({ is_active: true });
 
-  // 执行搜索
-  const handleSearch = useCallback(() => {
-    // 重置页码到第一页
-    setFilters((prev) => ({ ...prev, page: 1 }));
-    refetch();
-  }, [refetch]);
+  const areLogQueryParamsEqual = useCallback((a: LogQueryParams, b: LogQueryParams) => {
+    const keys: Array<keyof LogQueryParams> = [
+      'start_time',
+      'end_time',
+      'requested_model',
+      'target_model',
+      'provider_id',
+      'status_min',
+      'status_max',
+      'has_error',
+      'api_key_id',
+      'api_key_name',
+      'retry_count_min',
+      'retry_count_max',
+      'input_tokens_min',
+      'input_tokens_max',
+      'total_time_min',
+      'total_time_max',
+      'page',
+      'page_size',
+      'sort_by',
+      'sort_order',
+    ];
 
-  // 重置筛选条件
-  const handleReset = useCallback(() => {
-    setFilters(DEFAULT_FILTERS);
+    return keys.every((key) => Object.is(a[key], b[key]));
   }, []);
 
-  // 页码改变
+  // Page Change
   const handlePageChange = useCallback((page: number) => {
     setFilters((prev) => ({ ...prev, page }));
   }, []);
 
-  // 每页数量改变
+  // Page Size Change
   const handlePageSizeChange = useCallback((pageSize: number) => {
     setFilters((prev) => ({ ...prev, page_size: pageSize, page: 1 }));
   }, []);
 
+  // Handle filter change from LogFilters component
+  const handleFilterChange = useCallback((newFilters: Partial<LogQueryParams>) => {
+    setFilters((prev) => {
+      const next = { ...prev, ...newFilters, page: 1 };
+      if (areLogQueryParamsEqual(prev, next)) {
+        void refetch();
+        return prev;
+      }
+      return next;
+    }); // Reset to page 1 on filter change
+  }, [areLogQueryParamsEqual, refetch]);
+
+  // View Log Detail
+  const handleViewLog = useCallback((log: RequestLog) => {
+    window.location.href = `/logs/detail?id=${encodeURIComponent(String(log.id))}`;
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
+      {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">请求日志</h1>
+        <h1 className="text-2xl font-bold">Request Logs</h1>
         <p className="mt-1 text-muted-foreground">
-          查看代理请求日志，支持多条件筛选查询
+          View proxy request logs, supports multi-condition filtering
         </p>
       </div>
 
-      {/* 筛选器 */}
+      {/* Filters */}
       <LogFilters
         filters={filters}
-        onFiltersChange={setFilters}
+        onFilterChange={handleFilterChange}
         providers={providersData?.items || []}
-        onSearch={handleSearch}
-        onReset={handleReset}
       />
 
-      {/* 数据列表 */}
+      {/* Data List */}
       <Card>
-        <CardHeader>
-          <CardTitle>日志列表</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Log List</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh log list"
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+              suppressHydrationWarning
+            />
+          </Button>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="加载日志列表失败"
+              message="Failed to load log list"
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
-            <EmptyState message="暂无符合条件的日志记录" />
+            <EmptyState message="No matching log records found" />
           )}
           
           {!isLoading && !isError && data && data.items.length > 0 && (
             <>
-              <LogList logs={data.items} />
+              <LogList logs={data.items} onView={handleViewLog} />
               <Pagination
                 page={filters.page || 1}
                 pageSize={filters.page_size || 20}

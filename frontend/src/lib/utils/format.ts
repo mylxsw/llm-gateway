@@ -1,23 +1,23 @@
 /**
- * 工具函数集合
- * 包含样式合并、格式化等通用函数
+ * Utility Functions Collection
+ * Includes common functions like class name merging, formatting, etc.
  */
 
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 /**
- * 合并 Tailwind CSS 类名
- * 使用 clsx 处理条件类名，twMerge 处理冲突
+ * Merge Tailwind CSS class names
+ * Uses clsx for conditional classes and twMerge for handling conflicts
  */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 /**
- * 格式化日期时间
- * @param dateString - ISO 8601 格式的日期字符串
- * @param options - 格式化选项
+ * Format Date Time
+ * @param dateString - ISO 8601 date string
+ * @param options - Formatting options
  */
 export function formatDateTime(
   dateString: string | null | undefined,
@@ -29,6 +29,7 @@ export function formatDateTime(
   if (!dateString) return '-';
   
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '-';
   const { showTime = true, showSeconds = false } = options || {};
   
   const dateOptions: Intl.DateTimeFormatOptions = {
@@ -45,12 +46,13 @@ export function formatDateTime(
     }
   }
   
-  return date.toLocaleString('zh-CN', dateOptions);
+  // Use the user's current locale + timezone (browser runtime defaults).
+  return date.toLocaleString(undefined, dateOptions);
 }
 
 /**
- * 格式化毫秒为可读时间
- * @param ms - 毫秒数
+ * Format milliseconds to readable duration
+ * @param ms - milliseconds
  */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '-';
@@ -67,17 +69,17 @@ export function formatDuration(ms: number | null | undefined): string {
 }
 
 /**
- * 格式化数字，添加千分位
+ * Format number with thousand separators
  */
 export function formatNumber(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-';
-  return num.toLocaleString('zh-CN');
+  return num.toLocaleString(undefined);
 }
 
 /**
- * 截断字符串
- * @param str - 原字符串
- * @param maxLength - 最大长度
+ * Truncate string
+ * @param str - Original string
+ * @param maxLength - Maximum length
  */
 export function truncate(
   str: string | null | undefined,
@@ -89,8 +91,8 @@ export function truncate(
 }
 
 /**
- * 复制文本到剪贴板
- * @param text - 要复制的文本
+ * Copy text to clipboard
+ * @param text - Text to copy
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -102,24 +104,24 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * 获取状态码对应的颜色类名
+ * Get color class name for status code
  */
 export function getStatusColor(status: number | null | undefined): string {
-  if (status === null || status === undefined) return 'text-gray-500';
-  if (status >= 200 && status < 300) return 'text-green-600';
-  if (status >= 400 && status < 500) return 'text-yellow-600';
-  if (status >= 500) return 'text-red-600';
-  return 'text-gray-500';
+  if (status === null || status === undefined) return 'text-muted-foreground';
+  if (status >= 200 && status < 300) return 'text-green-600 dark:text-green-400';
+  if (status >= 400 && status < 500) return 'text-yellow-600 dark:text-yellow-400';
+  if (status >= 500) return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
 }
 
 /**
- * 获取布尔状态对应的显示文本和颜色
+ * Get display text and color for boolean active status
  */
 export function getActiveStatus(isActive: boolean): {
   text: string;
   className: string;
 } {
   return isActive
-    ? { text: '启用', className: 'bg-green-100 text-green-800' }
-    : { text: '禁用', className: 'bg-gray-100 text-gray-800' };
+    ? { text: 'Active', className: 'border-transparent bg-green-500/15 text-green-700 dark:text-green-300' }
+    : { text: 'Inactive', className: 'bg-muted text-muted-foreground' };
 }

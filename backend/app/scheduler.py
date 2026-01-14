@@ -1,7 +1,7 @@
 """
-定时任务调度模块
+Scheduled Task Module
 
-使用 APScheduler 管理定时任务，包括日志清理等。
+Uses APScheduler to manage scheduled tasks, such as log cleanup.
 """
 
 import logging
@@ -17,15 +17,15 @@ from app.services.log_service import LogService
 
 logger = logging.getLogger(__name__)
 
-# 全局调度器实例
+# Global Scheduler Instance
 _scheduler: Optional[AsyncIOScheduler] = None
 
 
 async def cleanup_logs_task():
     """
-    定时清理旧日志任务
+    Scheduled Log Cleanup Task
 
-    删除超过保留期限的日志记录。
+    Deletes log records exceeding the retention period.
     """
     settings = get_settings()
     logger.info(
@@ -33,18 +33,18 @@ async def cleanup_logs_task():
     )
 
     try:
-        # 获取数据库会话
+        # Get database session
         async for db in get_db():
-            # 创建服务实例
+            # Create service instance
             log_repo = SQLAlchemyLogRepository(db)
             log_service = LogService(log_repo)
 
-            # 执行清理
+            # Execute cleanup
             deleted_count = await log_service.cleanup_old_logs(
                 settings.LOG_RETENTION_DAYS
             )
             logger.info(f"Log cleanup task completed: {deleted_count} logs deleted")
-            break  # 只需要一次迭代
+            break  # Only one iteration needed
 
     except Exception as e:
         logger.error(f"Log cleanup task failed: {str(e)}", exc_info=True)
@@ -52,9 +52,9 @@ async def cleanup_logs_task():
 
 def start_scheduler():
     """
-    启动定时任务调度器
+    Start Scheduled Task Scheduler
 
-    初始化调度器并添加所有定时任务。
+    Initializes the scheduler and adds all scheduled tasks.
     """
     global _scheduler
 
@@ -64,19 +64,19 @@ def start_scheduler():
 
     settings = get_settings()
 
-    # 创建调度器
+    # Create scheduler
     _scheduler = AsyncIOScheduler()
 
-    # 添加日志清理任务（每天在配置的时间执行）
+    # Add log cleanup task (Executes daily at configured time)
     _scheduler.add_job(
         cleanup_logs_task,
         trigger=CronTrigger(hour=settings.LOG_CLEANUP_HOUR, minute=0),
         id="cleanup_old_logs",
-        name="清理旧日志",
+        name="Clean up old logs",
         replace_existing=True,
     )
 
-    # 启动调度器
+    # Start scheduler
     _scheduler.start()
     logger.info(
         f"Scheduler started: log cleanup scheduled daily at {settings.LOG_CLEANUP_HOUR}:00"
@@ -85,9 +85,9 @@ def start_scheduler():
 
 def shutdown_scheduler():
     """
-    关闭定时任务调度器
+    Shutdown Scheduled Task Scheduler
 
-    优雅地停止所有定时任务。
+    Gracefully stops all scheduled tasks.
     """
     global _scheduler
 
@@ -101,9 +101,9 @@ def shutdown_scheduler():
 
 def get_scheduler() -> Optional[AsyncIOScheduler]:
     """
-    获取调度器实例
+    Get Scheduler Instance
 
     Returns:
-        Optional[AsyncIOScheduler]: 调度器实例或 None
+        Optional[AsyncIOScheduler]: Scheduler instance or None
     """
     return _scheduler

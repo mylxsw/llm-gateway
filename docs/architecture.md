@@ -1,34 +1,34 @@
-# LLM Gateway 架构设计文档
+# LLM Gateway Architecture Design Document
 
-## 1. 宏观架构设计
+## 1. Macro Architecture Design
 
-### 1.1 系统架构图
+### 1.1 System Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              客户端层                                        │
+│                              Client Layer                                   │
 │    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                │
-│    │ OpenAI SDK   │    │ Anthropic SDK│    │  直接 HTTP   │                │
+│    │ OpenAI SDK   │    │ Anthropic SDK│    │  Direct HTTP │                │
 │    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘                │
 └───────────┼───────────────────┼───────────────────┼────────────────────────┘
             │                   │                   │
             └───────────────────┼───────────────────┘
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           LLM Gateway 代理层                                 │
+│                           LLM Gateway Proxy Layer                           │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │                        FastAPI 后端服务                                 │ │
+│  │                        FastAPI Backend Service                         │ │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │ │
 │  │  │  Proxy API  │  │  Admin API  │  │   Auth      │  │  Middleware │   │ │
-│  │  │ (代理接口)   │  │ (管理接口)  │  │  (鉴权)     │  │   (中间件)  │   │ │
+│  │  │ (Proxy I/F) │  │ (Admin I/F) │  │  (Auth)     │  │             │   │ │
 │  │  └──────┬──────┘  └──────┬──────┘  └─────────────┘  └─────────────┘   │ │
 │  │         │                │                                             │ │
 │  │         ▼                ▼                                             │ │
 │  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
-│  │  │                      Service 业务层                               │ │ │
+│  │  │                      Service Layer                                │ │ │
 │  │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐    │ │ │
 │  │  │  │  Proxy     │ │  Rule      │ │  Provider  │ │  Strategy  │    │ │ │
-│  │  │  │  Service   │ │  Engine    │ │  Client    │ │  (轮询)    │    │ │ │
+│  │  │  │  Service   │ │  Engine    │ │  Client    │ │(RoundRobin)│    │ │ │
 │  │  │  └────────────┘ └────────────┘ └────────────┘ └────────────┘    │ │ │
 │  │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐    │ │ │
 │  │  │  │  Retry     │ │  Token     │ │  Log       │ │  Provider  │    │ │ │
@@ -38,7 +38,7 @@
 │  │                          │                                             │ │
 │  │                          ▼                                             │ │
 │  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
-│  │  │                    Repository 数据访问层                          │ │ │
+│  │  │                    Repository Data Access Layer                   │ │ │
 │  │  │  ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐    │ │ │
 │  │  │  │  Provider  │ │  Model     │ │  ApiKey    │ │  Log       │    │ │ │
 │  │  │  │  Repo      │ │  Repo      │ │  Repo      │ │  Repo      │    │ │ │
@@ -50,7 +50,7 @@
 │  │  │                     Database Layer                                │ │ │
 │  │  │         ┌───────────────────┬───────────────────┐                │ │ │
 │  │  │         │      SQLite       │    PostgreSQL     │                │ │ │
-│  │  │         │     (默认)        │      (可选)       │                │ │ │
+│  │  │         │     (Default)     │     (Optional)    │                │ │ │
 │  │  │         └───────────────────┴───────────────────┘                │ │ │
 │  │  └──────────────────────────────────────────────────────────────────┘ │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
@@ -58,229 +58,231 @@
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           上游供应商层                                       │
+│                           Upstream Provider Layer                           │
 │    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                │
-│    │   OpenAI     │    │  Anthropic   │    │ 其他兼容供应商│                │
+│    │   OpenAI     │    │  Anthropic   │    │ Other Compat │                │
 │    └──────────────┘    └──────────────┘    └──────────────┘                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           前端管理面板                                       │
+│                           Frontend Admin Dashboard                          │
 │  ┌────────────────────────────────────────────────────────────────────────┐ │
 │  │                     Next.js + TypeScript                               │ │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │ │
-│  │  │供应商管理   │  │ 模型管理    │  │ API Key管理 │  │  日志查询   │   │ │
+│  │  │ Provider    │  │ Model       │  │ API Key     │  │ Log         │   │ │
+│  │  │ Mgmt        │  │ Mgmt        │  │ Mgmt        │  │ Query       │   │ │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 核心请求流程
+### 1.2 Core Request Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          代理请求处理流程                                    │
+│                          Proxy Request Processing Flow                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 
      ┌─────────┐
-     │  开始   │
+     │  Start  │
      └────┬────┘
           │
           ▼
     ┌───────────────┐
-    │ 1. 接收请求    │ ◄── OpenAI/Anthropic 格式请求
+    │ 1. Receive    │ ◄── OpenAI/Anthropic format request
+    │    Request    │
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐     ┌─────────────┐
-    │ 2. API Key    │────►│  验证失败   │──► 返回 401
-    │    鉴权       │     └─────────────┘
-    └───────┬───────┘
-            │ 验证成功
+    │ 2. API Key    │────►│ Validation  │──► Return 401
+    │    Auth       │     │ Failed      │
+    └───────┬───────┘     └─────────────┘
+            │ Success
             ▼
     ┌───────────────┐
-    │ 3. 解析请求体  │ ◄── 提取 requested_model, messages 等
-    └───────┬───────┘
-            │
-            ▼
-    ┌───────────────┐
-    │ 4. 计算输入   │ ◄── Token 计数器
-    │    Token      │
+    │ 3. Parse Body │ ◄── Extract requested_model, messages, etc.
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 5. 规则引擎   │ ◄── 上下文: model, headers, body, token_usage
-    │    匹配       │ ──► 输出: 候选供应商列表 + 各自 target_model
+    │ 4. Calculate  │ ◄── Token Counter
+    │    Input Token│
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 6. 轮询策略   │ ◄── 从候选列表中选择当前供应商
-    │    选择       │
+    │ 5. Rule Engine│ ◄── Context: model, headers, body, token_usage
+    │    Match      │ ──► Output: Candidate provider list + target_model
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 7. 替换 model │ ◄── 仅修改 model 字段
-    │    字段       │
+    │ 6. Strategy   │ ◄── Select current provider from candidates
+    │    Select     │
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 8. 转发请求   │
-    │    到上游     │
+    │ 7. Replace    │ ◄── Only modify model field
+    │    Model      │
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ 8. Forward    │
+    │    Request    │
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐     ┌─────────────────────────────────┐
-    │ 9. 检查响应   │────►│ status >= 500:                  │
-    │    状态码     │     │   - 同供应商重试 (max 3, 1s间隔)│
+    │ 9. Check      │────►│ status >= 500:                  │
+    │    Status     │     │   - Retry same provider (max 3) │
     └───────┬───────┘     │ status < 500:                   │
-            │             │   - 切换下一供应商              │
+            │             │   - Switch to next provider     │
             │             └─────────────┬───────────────────┘
             │                           │
             │ ◄─────────────────────────┘
             ▼
     ┌───────────────┐     ┌─────────────┐
-    │ 10. 所有供应商│────►│ 返回最后    │
-    │     均失败?   │ 是  │ 失败响应    │
+    │ 10. All       │────►│ Return Last │
+    │     Failed?   │ Yes │ Error Resp  │
     └───────┬───────┘     └─────────────┘
-            │ 否
+            │ No
             ▼
     ┌───────────────┐
-    │ 11. 计算输出  │
-    │     Token     │
+    │ 11. Calculate │
+    │     Output Tok│
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 12. 记录日志  │ ◄── 脱敏 authorization 后入库
+    │ 12. Log       │ ◄── Sanitize authorization then save
     └───────┬───────┘
             │
             ▼
     ┌───────────────┐
-    │ 13. 返回响应  │
-    │     给客户端  │
+    │ 13. Return    │
+    │     Response  │
     └───────┬───────┘
             │
             ▼
        ┌─────────┐
-       │  结束   │
+       │   End   │
        └─────────┘
 ```
 
-### 1.3 技术选型
+### 1.3 Technology Stack
 
-| 层级 | 技术栈 | 说明 |
+| Layer | Stack | Description |
 |------|--------|------|
-| 后端框架 | Python + FastAPI | 高性能异步框架 |
-| 数据库 | SQLite (默认) / PostgreSQL | 通过配置切换 |
-| ORM | SQLAlchemy | 支持多数据库 |
-| 数据库迁移 | Alembic | 版本化迁移管理 |
-| HTTP 客户端 | httpx | 异步 HTTP 客户端 |
-| 前端框架 | Next.js + TypeScript | 现代化 React 框架 |
-| UI 组件 | shadcn/ui + Tailwind CSS | 现代化组件库 |
-| 状态管理 | React Query | 服务端状态管理 |
+| Backend Framework | Python + FastAPI | High-performance asynchronous framework |
+| Database | SQLite (Default) / PostgreSQL | Switchable via configuration |
+| ORM | SQLAlchemy | Supports multiple databases |
+| DB Migration | Alembic | Versioned migration management |
+| HTTP Client | httpx | Asynchronous HTTP client |
+| Frontend Framework | Next.js + TypeScript | Modern React framework |
+| UI Components | shadcn/ui + Tailwind CSS | Modern component library |
+| State Management | React Query | Server state management |
 
-## 2. 代码结构设计
+## 2. Code Structure Design
 
-### 2.1 后端目录结构
+### 2.1 Backend Directory Structure
 
 ```
 backend/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                    # FastAPI 应用入口
-│   ├── config.py                  # 配置管理
+│   ├── main.py                    # FastAPI application entry point
+│   ├── config.py                  # Configuration management
 │   │
-│   ├── api/                       # API 路由层
+│   ├── api/                       # API Route Layer
 │   │   ├── __init__.py
-│   │   ├── deps.py                # 依赖注入
-│   │   ├── proxy/                 # 代理接口
+│   │   ├── deps.py                # Dependency injection
+│   │   ├── proxy/                 # Proxy interfaces
 │   │   │   ├── __init__.py
-│   │   │   ├── openai.py          # OpenAI 兼容接口
-│   │   │   └── anthropic.py       # Anthropic 兼容接口
-│   │   └── admin/                 # 管理接口
+│   │   │   ├── openai.py          # OpenAI compatible interface
+│   │   │   └── anthropic.py       # Anthropic compatible interface
+│   │   └── admin/                 # Admin interfaces
 │   │       ├── __init__.py
-│   │       ├── providers.py       # 供应商管理
-│   │       ├── models.py          # 模型管理
-│   │       ├── api_keys.py        # API Key 管理
-│   │       └── logs.py            # 日志查询
+│   │       ├── providers.py       # Provider management
+│   │       ├── models.py          # Model management
+│   │       ├── api_keys.py        # API Key management
+│   │       └── logs.py            # Log query
 │   │
-│   ├── services/                  # 业务服务层
+│   ├── services/                  # Business Service Layer
 │   │   ├── __init__.py
-│   │   ├── proxy_service.py       # 代理核心服务
-│   │   ├── provider_service.py    # 供应商服务
-│   │   ├── model_service.py       # 模型服务
-│   │   ├── api_key_service.py     # API Key 服务
-│   │   ├── log_service.py         # 日志服务
-│   │   ├── retry_handler.py       # 重试处理器
-│   │   └── strategy.py            # 策略服务(轮询)
+│   │   ├── proxy_service.py       # Core proxy service
+│   │   ├── provider_service.py    # Provider management service
+│   │   ├── model_service.py       # Model management service
+│   │   ├── api_key_service.py     # API Key service
+│   │   ├── log_service.py         # Log service
+│   │   ├── retry_handler.py       # Retry handler
+│   │   └── strategy.py            # Strategy service (Round Robin)
 │   │
-│   ├── rules/                     # 规则引擎
+│   ├── rules/                     # Rule Engine
 │   │   ├── __init__.py
-│   │   ├── engine.py              # 规则引擎核心
-│   │   ├── context.py             # 规则上下文
-│   │   ├── evaluator.py           # 规则评估器
-│   │   └── models.py              # 规则模型定义
+│   │   ├── engine.py              # Rule engine core
+│   │   ├── context.py             # Rule context
+│   │   ├── evaluator.py           # Rule evaluator
+│   │   └── models.py              # Rule model definitions
 │   │
-│   ├── providers/                 # 上游供应商适配
+│   ├── providers/                 # Upstream Provider Adapters
 │   │   ├── __init__.py
-│   │   ├── base.py                # 基础适配器接口
-│   │   ├── openai_client.py       # OpenAI 客户端
-│   │   └── anthropic_client.py    # Anthropic 客户端
+│   │   ├── base.py                # Base adapter interface
+│   │   ├── openai_client.py       # OpenAI client
+│   │   └── anthropic_client.py    # Anthropic client
 │   │
-│   ├── repositories/              # 数据访问层
+│   ├── repositories/              # Data Access Layer
 │   │   ├── __init__.py
-│   │   ├── base.py                # 基础 Repository 接口
-│   │   ├── provider_repo.py       # 供应商 Repository 接口
-│   │   ├── model_repo.py          # 模型 Repository 接口
-│   │   ├── api_key_repo.py        # API Key Repository 接口
-│   │   ├── log_repo.py            # 日志 Repository 接口
-│   │   └── sqlalchemy/            # SQLAlchemy 实现
+│   │   ├── base.py                # Base Repository interface
+│   │   ├── provider_repo.py       # Provider Repository interface
+│   │   ├── model_repo.py          # Model Repository interface
+│   │   ├── api_key_repo.py        # API Key Repository interface
+│   │   ├── log_repo.py            # Log Repository interface
+│   │   └── sqlalchemy/            # SQLAlchemy implementation
 │   │       ├── __init__.py
 │   │       ├── provider_repo.py
 │   │       ├── model_repo.py
 │   │       ├── api_key_repo.py
 │   │       └── log_repo.py
 │   │
-│   ├── db/                        # 数据库层
+│   ├── db/                        # Database Layer
 │   │   ├── __init__.py
-│   │   ├── session.py             # 数据库会话管理
-│   │   ├── models.py              # SQLAlchemy ORM 模型
-│   │   └── migrations/            # Alembic 迁移
+│   │   ├── session.py             # Database session management
+│   │   ├── models.py              # SQLAlchemy ORM models
+│   │   └── migrations/            # Alembic migrations
 │   │       ├── env.py
 │   │       ├── versions/
 │   │       └── alembic.ini
 │   │
-│   ├── domain/                    # 领域模型
+│   ├── domain/                    # Domain Models
 │   │   ├── __init__.py
-│   │   ├── provider.py            # 供应商 DTO
-│   │   ├── model.py               # 模型 DTO
+│   │   ├── provider.py            # Provider DTO
+│   │   ├── model.py               # Model DTO
 │   │   ├── api_key.py             # API Key DTO
-│   │   ├── log.py                 # 日志 DTO
-│   │   └── request.py             # 请求/响应 DTO
+│   │   ├── log.py                 # Log DTO
+│   │   └── request.py             # Request/Response DTO
 │   │
-│   └── common/                    # 公共模块
+│   └── common/                    # Common Modules
 │       ├── __init__.py
-│       ├── http_client.py         # HTTP 客户端封装
-│       ├── token_counter.py       # Token 计数器
-│       ├── sanitizer.py           # 数据脱敏
-│       ├── errors.py              # 错误定义
-│       ├── timer.py               # 计时器
-│       └── utils.py               # 工具函数
+│       ├── http_client.py         # HTTP client wrapper
+│       ├── token_counter.py       # Token counter
+│       ├── sanitizer.py           # Data sanitizer
+│       ├── errors.py              # Error definitions
+│       ├── timer.py               # Timer
+│       └── utils.py               # Utility functions
 │
-├── tests/                         # 测试目录
+├── tests/                         # Tests
 │   ├── __init__.py
-│   ├── conftest.py                # 测试配置
-│   ├── unit/                      # 单元测试
+│   ├── conftest.py                # Test configuration
+│   ├── unit/                      # Unit tests
 │   │   ├── test_rules/
 │   │   ├── test_services/
 │   │   ├── test_providers/
 │   │   ├── test_repositories/
 │   │   └── test_common/
-│   └── integration/               # 集成测试
+│   └── integration/               # Integration tests
 │       └── test_proxy_flow.py
 │
 ├── requirements.txt
@@ -289,77 +291,77 @@ backend/
 └── README.md
 ```
 
-### 2.2 前端目录结构
+### 2.2 Frontend Directory Structure
 
 ```
 frontend/
 ├── src/
 │   ├── app/                       # Next.js App Router
-│   │   ├── layout.tsx             # 根布局
-│   │   ├── page.tsx               # 首页
-│   │   ├── providers/             # 供应商管理页面
+│   │   ├── layout.tsx             # Root layout
+│   │   ├── page.tsx               # Homepage
+│   │   ├── providers/             # Provider management page
 │   │   │   ├── page.tsx
 │   │   │   └── [id]/
 │   │   │       └── page.tsx
-│   │   ├── models/                # 模型管理页面
+│   │   ├── models/                # Model management page
 │   │   │   ├── page.tsx
 │   │   │   └── [model]/
 │   │   │       └── page.tsx
-│   │   ├── api-keys/              # API Key 管理页面
+│   │   ├── api-keys/              # API Key management page
 │   │   │   └── page.tsx
-│   │   └── logs/                  # 日志查询页面
+│   │   └── logs/                  # Log query page
 │   │       ├── page.tsx
 │   │       └── [id]/
 │   │           └── page.tsx
 │   │
-│   ├── components/                # 组件
-│   │   ├── ui/                    # 基础 UI 组件 (shadcn)
+│   ├── components/                # Components
+│   │   ├── ui/                    # Base UI components (shadcn)
 │   │   │   ├── button.tsx
 │   │   │   ├── input.tsx
 │   │   │   ├── table.tsx
 │   │   │   ├── dialog.tsx
 │   │   │   ├── form.tsx
 │   │   │   └── ...
-│   │   ├── common/                # 通用业务组件
-│   │   │   ├── DataTable.tsx      # 通用数据表格
-│   │   │   ├── Pagination.tsx     # 分页组件
-│   │   │   ├── FilterBar.tsx      # 筛选栏
-│   │   │   ├── JsonEditor.tsx     # JSON 编辑器
-│   │   │   ├── JsonViewer.tsx     # JSON 查看器
-│   │   │   ├── ConfirmDialog.tsx  # 确认对话框
-│   │   │   └── LoadingState.tsx   # 加载状态
-│   │   ├── providers/             # 供应商相关组件
+│   │   ├── common/                # Common business components
+│   │   │   ├── DataTable.tsx      # Generic data table
+│   │   │   ├── Pagination.tsx     # Pagination component
+│   │   │   ├── FilterBar.tsx      # Filter bar
+│   │   │   ├── JsonEditor.tsx     # JSON editor
+│   │   │   ├── JsonViewer.tsx     # JSON viewer
+│   │   │   ├── ConfirmDialog.tsx  # Confirmation dialog
+│   │   │   └── LoadingState.tsx   # Loading state
+│   │   ├── providers/             # Provider related components
 │   │   │   ├── ProviderForm.tsx
 │   │   │   └── ProviderList.tsx
-│   │   ├── models/                # 模型相关组件
+│   │   ├── models/                # Model related components
 │   │   │   ├── ModelForm.tsx
 │   │   │   ├── ModelProviderForm.tsx
-│   │   │   └── RuleEditor.tsx     # 规则编辑器
-│   │   ├── api-keys/              # API Key 相关组件
+│   │   │   └── RuleEditor.tsx     # Rule editor
+│   │   ├── api-keys/              # API Key related components
 │   │   │   ├── ApiKeyForm.tsx
 │   │   │   └── ApiKeyList.tsx
-│   │   └── logs/                  # 日志相关组件
+│   │   └── logs/                  # Log related components
 │   │       ├── LogFilters.tsx
 │   │       ├── LogList.tsx
 │   │       └── LogDetail.tsx
 │   │
-│   ├── lib/                       # 工具库
-│   │   ├── api/                   # API 客户端
-│   │   │   ├── client.ts          # HTTP 客户端
-│   │   │   ├── providers.ts       # 供应商 API
-│   │   │   ├── models.ts          # 模型 API
+│   ├── lib/                       # Utility libraries
+│   │   ├── api/                   # API clients
+│   │   │   ├── client.ts          # HTTP client
+│   │   │   ├── providers.ts       # Provider API
+│   │   │   ├── models.ts          # Model API
 │   │   │   ├── api-keys.ts        # API Key API
-│   │   │   └── logs.ts            # 日志 API
-│   │   ├── hooks/                 # 自定义 Hooks
+│   │   │   └── logs.ts            # Log API
+│   │   ├── hooks/                 # Custom Hooks
 │   │   │   ├── useProviders.ts
 │   │   │   ├── useModels.ts
 │   │   │   ├── useApiKeys.ts
 │   │   │   └── useLogs.ts
-│   │   └── utils/                 # 工具函数
+│   │   └── utils/                 # Utility functions
 │   │       ├── format.ts
 │   │       └── validation.ts
 │   │
-│   └── types/                     # TypeScript 类型定义
+│   └── types/                     # TypeScript definitions
 │       ├── provider.ts
 │       ├── model.ts
 │       ├── api-key.ts
@@ -374,9 +376,9 @@ frontend/
 └── README.md
 ```
 
-## 3. 数据库模型设计
+## 3. Database Model Design
 
-### 3.1 ER 图
+### 3.1 ER Diagram
 
 ```
 ┌─────────────────────┐
@@ -434,40 +436,40 @@ frontend/
                                 └─────────────────────┘
 ```
 
-### 3.2 表结构详细定义
+### 3.2 Table Structure Detailed Definition
 
 ```sql
--- 供应商表
+-- Service Providers Table
 CREATE TABLE service_providers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(100) NOT NULL UNIQUE,
     base_url VARCHAR(500) NOT NULL,
     protocol VARCHAR(50) NOT NULL,  -- 'openai' | 'anthropic'
     api_type VARCHAR(50) NOT NULL,
-    api_key TEXT,                    -- 供应商的 API Key (加密存储)
+    api_key TEXT,                    -- Provider API Key (Encrypted storage recommended)
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 模型映射表
+-- Model Mappings Table
 CREATE TABLE model_mappings (
     requested_model VARCHAR(100) PRIMARY KEY,
     strategy VARCHAR(50) DEFAULT 'round_robin',
-    matching_rules JSON,             -- 模型级规则
-    capabilities JSON,               -- 功能描述
+    matching_rules JSON,             -- Model level rules
+    capabilities JSON,               -- Capabilities description
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 模型-供应商映射表
+-- Model-Provider Mappings Table
 CREATE TABLE model_mapping_providers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     requested_model VARCHAR(100) NOT NULL,
     provider_id INTEGER NOT NULL,
     target_model_name VARCHAR(100) NOT NULL,
-    provider_rules JSON,             -- 供应商级规则
+    provider_rules JSON,             -- Provider level rules
     priority INTEGER DEFAULT 0,
     weight INTEGER DEFAULT 1,
     is_active BOOLEAN DEFAULT TRUE,
@@ -478,7 +480,7 @@ CREATE TABLE model_mapping_providers (
     UNIQUE (requested_model, provider_id)
 );
 
--- API Key 表
+-- API Keys Table
 CREATE TABLE api_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     key_name VARCHAR(100) NOT NULL UNIQUE,
@@ -488,7 +490,7 @@ CREATE TABLE api_keys (
     last_used_at TIMESTAMP
 );
 
--- 请求日志表
+-- Request Logs Table
 CREATE TABLE request_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     request_time TIMESTAMP NOT NULL,
@@ -503,7 +505,7 @@ CREATE TABLE request_logs (
     total_time_ms INTEGER,
     input_tokens INTEGER,
     output_tokens INTEGER,
-    request_headers JSON,            -- 已脱敏
+    request_headers JSON,            -- Sanitized
     request_body JSON,
     response_status INTEGER,
     response_body TEXT,
@@ -513,7 +515,7 @@ CREATE TABLE request_logs (
     FOREIGN KEY (provider_id) REFERENCES service_providers(id)
 );
 
--- 索引
+-- Indices
 CREATE INDEX idx_request_logs_time ON request_logs(request_time);
 CREATE INDEX idx_request_logs_api_key ON request_logs(api_key_id);
 CREATE INDEX idx_request_logs_model ON request_logs(requested_model);

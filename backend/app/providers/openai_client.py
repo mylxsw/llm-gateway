@@ -1,7 +1,7 @@
 """
-OpenAI 协议客户端
+OpenAI Protocol Client
 
-实现 OpenAI 兼容的请求转发。
+Implements OpenAI-compatible request forwarding.
 """
 
 import json
@@ -19,16 +19,16 @@ logger = logging.getLogger(__name__)
 
 class OpenAIClient(ProviderClient):
     """
-    OpenAI 协议客户端
+    OpenAI Protocol Client
     
-    支持 OpenAI 风格的 API 请求转发，包括：
+    Supports OpenAI-style API request forwarding, including:
     - /v1/chat/completions
     - /v1/completions
     - /v1/embeddings
     """
     
     def __init__(self):
-        """初始化客户端"""
+        """Initialize client"""
         settings = get_settings()
         self.timeout = settings.HTTP_TIMEOUT
     
@@ -41,24 +41,27 @@ class OpenAIClient(ProviderClient):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        response_mode: str = "parsed",
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> ProviderResponse:
         """
-        转发请求到 OpenAI 兼容供应商
+        Forward request to OpenAI-compatible provider
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
-            target_model: 目标模型名
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
+            target_model: Target model name
+            response_mode: Response mode, "parsed" (parse JSON) or "raw" (return raw bytes)
+            extra_headers: Extra headers
         
         Returns:
-            ProviderResponse: 供应商响应
+            ProviderResponse: Provider response
         """
-        # 准备请求
-        # 准备请求
+        # Prepare request
         cleaned_base = base_url.rstrip('/')
         cleaned_path = path
         if cleaned_path.startswith('/v1/'):
@@ -67,9 +70,9 @@ class OpenAIClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
-        prepared_headers = self._prepare_headers(headers, api_key)
+        prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         
-        # 确保 Content-Type 正确
+        # Ensure Content-Type is correct
         prepared_headers["Content-Type"] = "application/json"
         
         logger.debug(
@@ -93,12 +96,14 @@ class OpenAIClient(ProviderClient):
                 
                 timer.mark_first_byte()
                 
-                # 读取响应体
-                response_body = response.text
-                try:
-                    response_body = response.json()
-                except json.JSONDecodeError:
-                    pass
+                if response_mode == "raw":
+                    response_body: Any = response.content
+                else:
+                    response_body = response.text
+                    try:
+                        response_body = response.json()
+                    except json.JSONDecodeError:
+                        pass
                 
                 timer.stop()
                 
@@ -146,23 +151,25 @@ class OpenAIClient(ProviderClient):
         headers: dict[str, str],
         body: dict[str, Any],
         target_model: str,
+        extra_headers: Optional[dict[str, str]] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
-        转发流式请求到 OpenAI 兼容供应商
+        Forward streaming request to OpenAI-compatible provider
         
         Args:
-            base_url: 供应商基础 URL
-            api_key: 供应商 API Key
-            path: 请求路径
-            method: HTTP 方法
-            headers: 请求头
-            body: 请求体
-            target_model: 目标模型名
+            base_url: Provider base URL
+            api_key: Provider API Key
+            path: Request path
+            method: HTTP method
+            headers: Request headers
+            body: Request body
+            target_model: Target model name
+            extra_headers: Extra headers
         
         Yields:
-            tuple[bytes, ProviderResponse]: (数据块, 响应信息)
+            tuple[bytes, ProviderResponse]: (Data chunk, Response info)
         """
-        # 准备请求
+        # Prepare request
         cleaned_base = base_url.rstrip('/')
         cleaned_path = path
         if cleaned_path.startswith('/v1/'):
@@ -171,7 +178,7 @@ class OpenAIClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
-        prepared_headers = self._prepare_headers(headers, api_key)
+        prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         prepared_headers["Content-Type"] = "application/json"
         
         logger.debug(
@@ -193,7 +200,7 @@ class OpenAIClient(ProviderClient):
                     headers=prepared_headers,
                     json=prepared_body,
                 ) as response:
-                    # 创建响应对象
+                    # Create response object
                     provider_response = ProviderResponse(
                         status_code=response.status_code,
                         headers=dict(response.headers),

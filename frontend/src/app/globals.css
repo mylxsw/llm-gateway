@@ -5,6 +5,9 @@
 
 @import "tailwindcss";
 
+/* Make `dark:` respond to `.dark` class (Tailwind v4) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* CSS 变量定义 - 浅色主题 */
 :root {
   --background: 0 0% 100%;
@@ -27,6 +30,7 @@
   --input: 240 5.9% 90%;
   --ring: 240 5.9% 10%;
   --radius: 0.5rem;
+  color-scheme: light;
 }
 
 /* 深色主题（可选） */
@@ -50,6 +54,7 @@
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
   --ring: 240 4.9% 83.9%;
+  color-scheme: dark;
 }
 
 /* Tailwind 主题配置 */
@@ -103,21 +108,41 @@ body {
   to { opacity: 0; }
 }
 
-@keyframes zoomIn {
-  from { transform: scale(0.95); }
-  to { transform: scale(1); }
+@keyframes contentShow {
+  from { 
+    opacity: 0; 
+    transform: translate(-50%, -48%) scale(0.96); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translate(-50%, -50%) scale(1); 
+  }
 }
 
-@keyframes zoomOut {
-  from { transform: scale(1); }
-  to { transform: scale(0.95); }
+@keyframes contentHide {
+  from { 
+    opacity: 1; 
+    transform: translate(-50%, -50%) scale(1); 
+  }
+  to { 
+    opacity: 0; 
+    transform: translate(-50%, -48%) scale(0.96); 
+  }
 }
 
 /* 对话框动画类 */
-[data-state="open"] {
-  animation: fadeIn 200ms ease-out, zoomIn 200ms ease-out;
+.animate-overlay[data-state="open"] {
+  animation: fadeIn 200ms ease-out;
 }
 
-[data-state="closed"] {
-  animation: fadeOut 200ms ease-in, zoomOut 200ms ease-in;
+.animate-overlay[data-state="closed"] {
+  animation: fadeOut 200ms ease-in;
+}
+
+.animate-content[data-state="open"] {
+  animation: contentShow 200ms ease-out;
+}
+
+.animate-content[data-state="closed"] {
+  animation: contentHide 200ms ease-in;
 }

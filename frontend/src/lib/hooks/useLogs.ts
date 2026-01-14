@@ -1,13 +1,13 @@
 /**
- * 日志查询相关 React Query Hooks
- * 提供数据获取和缓存管理
+ * Log Query Related React Query Hooks
+ * Provides data fetching and caching management
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { getLogs, getLogDetail } from '@/lib/api';
 import { LogQueryParams } from '@/types';
 
-/** 查询键常量 */
+/** Query Keys */
 const QUERY_KEYS = {
   all: ['logs'] as const,
   list: (params?: LogQueryParams) => [...QUERY_KEYS.all, 'list', params] as const,
@@ -15,20 +15,20 @@ const QUERY_KEYS = {
 };
 
 /**
- * 获取日志列表 Hook
- * 支持多条件筛选、分页、排序
+ * Get Log List Hook
+ * Supports multi-condition filtering, pagination, sorting
  */
 export function useLogs(params?: LogQueryParams) {
   return useQuery({
     queryKey: QUERY_KEYS.list(params),
     queryFn: () => getLogs(params),
-    // 日志数据变化较快，设置较短的缓存时间
-    staleTime: 30 * 1000, // 30秒
+    // Log data changes frequently, set shorter cache time
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 
 /**
- * 获取日志详情 Hook
+ * Get Log Detail Hook
  */
 export function useLogDetail(id: number) {
   return useQuery({
