@@ -18,7 +18,7 @@ import {
   useDeleteModel,
 } from '@/lib/hooks';
 import { exportModels, importModels } from '@/lib/api';
-import { ModelMapping, ModelMappingCreate, ModelMappingUpdate } from '@/types';
+import { ModelExport, ModelMapping, ModelMappingCreate, ModelMappingUpdate } from '@/types';
 
 /**
  * Model Management Page Component
@@ -130,8 +130,11 @@ export default function ModelsPage() {
 
     try {
       const text = await file.text();
-      const json = JSON.parse(text);
-      const result = await importModels(json);
+      const json = JSON.parse(text) as unknown;
+      if (!Array.isArray(json)) {
+        throw new Error('Invalid import file: expected a JSON array');
+      }
+      const result = await importModels(json as ModelExport[]);
       
       let message = `Import complete.\nSuccess: ${result.success}\nSkipped: ${result.skipped}`;
       if (result.errors && result.errors.length > 0) {
@@ -142,7 +145,9 @@ export default function ModelsPage() {
       refetch();
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Import failed: ' + (error as any).message);
+      const message =
+        error instanceof Error ? error.message : 'Import failed due to an unknown error';
+      alert(`Import failed: ${message}`);
     }
     // Reset input
     event.target.value = '';

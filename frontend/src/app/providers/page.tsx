@@ -130,13 +130,18 @@ export default function ProvidersPage() {
 
     try {
       const text = await file.text();
-      const json = JSON.parse(text);
-      const result = await importProviders(json);
+      const json = JSON.parse(text) as unknown;
+      if (!Array.isArray(json)) {
+        throw new Error('Invalid import file: expected a JSON array');
+      }
+      const result = await importProviders(json as ProviderCreate[]);
       alert(`Import complete.\nSuccess: ${result.success}\nSkipped: ${result.skipped}`);
       refetch();
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Import failed: ' + (error as any).message);
+      const message =
+        error instanceof Error ? error.message : 'Import failed due to an unknown error';
+      alert(`Import failed: ${message}`);
     }
     // Reset input
     event.target.value = '';

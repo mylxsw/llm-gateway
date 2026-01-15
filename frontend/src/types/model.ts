@@ -85,3 +85,18 @@ export interface ModelProviderListParams {
   provider_id?: number;
   is_active?: boolean;
 }
+
+/** Model Provider Export Entity */
+export interface ModelProviderExport {
+  provider_name: string;
+  target_model_name: string;
+  provider_rules?: RuleSet | null;
+  priority?: number;
+  weight?: number;
+  is_active?: boolean;
+}
+
+/** Model Export Entity */
+export interface ModelExport extends ModelMappingCreate {
+  providers?: ModelProviderExport[];
+}

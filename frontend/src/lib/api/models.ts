@@ -13,6 +13,7 @@ import {
   ModelMappingProviderUpdate,
   ModelListParams,
   ModelProviderListParams,
+  ModelExport,
   PaginatedResponse,
 } from '@/types';
 
@@ -115,14 +116,16 @@ export async function deleteModelProvider(id: number): Promise<void> {
 /**
  * Export Models
  */
-export async function exportModels(): Promise<any[]> {
-  return get<any[]>(`${MODELS_URL}/export`);
+export async function exportModels(): Promise<ModelExport[]> {
+  return get<ModelExport[]>(`${MODELS_URL}/export`);
 }
 
 /**
  * Import Models
  * @param data - List of models to import
  */
-export async function importModels(data: any[]): Promise<{success: number; skipped: number; errors: string[]}> {
+export async function importModels(
+  data: ModelExport[]
+): Promise<{ success: number; skipped: number; errors: string[] }> {
   return post<{success: number; skipped: number; errors: string[]}>(`${MODELS_URL}/import`, data);
 }
