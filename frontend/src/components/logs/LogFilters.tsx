@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
 import { LogQueryParams } from '@/types';
+import { normalizeUtcDateString } from '@/lib/utils';
 
 interface LogFiltersProps {
   /** Current filter values */
@@ -57,7 +58,7 @@ function pad2(v: number) {
 
 function isoToLocalDateTimeInputValue(value?: string) {
   if (!value) return undefined;
-  const d = new Date(value);
+  const d = new Date(normalizeUtcDateString(value));
   if (Number.isNaN(d.getTime())) return undefined;
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(
     d.getHours()

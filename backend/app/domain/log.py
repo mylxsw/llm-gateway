@@ -7,7 +7,9 @@ Defines Request Log related Data Transfer Objects (DTOs).
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.common.time import ensure_utc
 
 
 class RequestLogBase(BaseModel):
@@ -27,6 +29,13 @@ class RequestLogBase(BaseModel):
     provider_id: Optional[int] = Field(None, description="Provider ID")
     # Provider Name
     provider_name: Optional[str] = Field(None, description="Provider Name")
+
+    @field_validator("request_time", mode="after")
+    @classmethod
+    def _request_time_utc(cls, v: datetime) -> datetime:
+        dt = ensure_utc(v)
+        assert dt is not None
+        return dt
 
 
 class RequestLogCreate(RequestLogBase):
@@ -140,6 +149,11 @@ class RequestLogQuery(BaseModel):
     sort_by: str = Field("request_time", description="Sort Field")
     sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort Order")
 
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _query_time_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return ensure_utc(v)
+
 
 class LogCostStatsQuery(BaseModel):
     """Cost statistics query conditions"""
@@ -162,6 +176,11 @@ class LogCostStatsQuery(BaseModel):
         le=14 * 60,
         description="Timezone offset minutes for bucketing (UTC to local)",
     )
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _stats_time_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return ensure_utc(v)
 
 
 class LogCostSummary(BaseModel):
@@ -187,6 +206,13 @@ class LogCostTrendPoint(BaseModel):
     output_tokens: int = 0
     error_count: int = 0
     success_count: int = 0
+
+    @field_validator("bucket", mode="after")
+    @classmethod
+    def _bucket_utc(cls, v: datetime) -> datetime:
+        dt = ensure_utc(v)
+        assert dt is not None
+        return dt
 
 
 class LogCostByModel(BaseModel):

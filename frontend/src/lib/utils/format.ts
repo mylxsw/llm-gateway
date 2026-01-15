@@ -7,6 +7,32 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 /**
+ * Normalize backend UTC timestamps for browser parsing.
+ *
+ * Backend contract is UTC for storage/transfer. If a timestamp string is missing an explicit
+ * timezone offset (e.g. `2026-01-15T12:00:00`), treat it as UTC and append `Z`.
+ */
+export function normalizeUtcDateString(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+
+  // Already has timezone info.
+  if (/[zZ]$/.test(trimmed) || /[+-]\d{2}:?\d{2}$/.test(trimmed)) return trimmed;
+
+  // ISO-like without offset: treat as UTC.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed)) {
+    return `${trimmed}Z`;
+  }
+
+  // SQLite-like `YYYY-MM-DD HH:mm:ss(.sss)` without offset: treat as UTC.
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(trimmed)) {
+    return `${trimmed.replace(' ', 'T')}Z`;
+  }
+
+  return trimmed;
+}
+
+/**
  * Merge Tailwind CSS class names
  * Uses clsx for conditional classes and twMerge for handling conflicts
  */
@@ -28,7 +54,7 @@ export function formatDateTime(
 ): string {
   if (!dateString) return '-';
   
-  const date = new Date(dateString);
+  const date = new Date(normalizeUtcDateString(dateString));
   if (Number.isNaN(date.getTime())) return '-';
   const { showTime = true, showSeconds = false } = options || {};
   

@@ -146,8 +146,9 @@ export function HomeCostStats() {
   }, [preset, customStart, customEnd]);
 
   const params = useMemo<LogQueryParams>(() => {
-    const refreshBump = refreshToken * 0;
+    // `refreshToken` nudges the query window forward to "now" for live ranges (e.g. 24h/7d).
     const endAnchor = new Date();
+    endAnchor.setMilliseconds(endAnchor.getMilliseconds() + refreshToken);
     const tzOffsetMinutes = -endAnchor.getTimezoneOffset();
 
     if (preset === 'custom') {
@@ -155,7 +156,7 @@ export function HomeCostStats() {
       const end = parseDateInputValue(customEnd);
       if (!start || !end) return {};
       const startAt = startOfDay(start);
-      const endAt = new Date(endOfDay(end).getTime() + refreshBump);
+      const endAt = endOfDay(end);
       const bucket = resolveBucket(endAt.getTime() - startAt.getTime(), MAX_TREND_BARS);
       return {
         start_time: startAt.toISOString(),
@@ -166,7 +167,7 @@ export function HomeCostStats() {
     }
 
     if (preset === '24h') {
-      const start = new Date(endAnchor.getTime() - DAY_MS + refreshBump);
+      const start = new Date(endAnchor.getTime() - DAY_MS);
       const bucket = resolveBucket(endAnchor.getTime() - start.getTime(), MAX_TREND_BARS);
       return {
         start_time: start.toISOString(),
@@ -177,7 +178,7 @@ export function HomeCostStats() {
     }
 
     const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
-    const start = new Date(endAnchor.getTime() - days * DAY_MS + refreshBump);
+    const start = new Date(endAnchor.getTime() - days * DAY_MS);
     const bucket = resolveBucket(endAnchor.getTime() - start.getTime(), MAX_TREND_BARS);
     return {
       start_time: start.toISOString(),
@@ -213,6 +214,15 @@ export function HomeCostStats() {
   }, [preset, customStart, customEnd]);
 
   const { data, isLoading, isFetching, refetch } = useLogCostStats(params);
+
+  useEffect(() => {
+    if (preset === 'custom') return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      setRefreshToken((t) => t + 1);
+    }, 15_000);
+    return () => window.clearInterval(id);
+  }, [preset]);
 
   return (
     <CostStats
