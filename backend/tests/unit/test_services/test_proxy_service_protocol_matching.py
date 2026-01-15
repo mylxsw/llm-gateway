@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.common.time import utc_now
 from unittest.mock import AsyncMock
 
 import pytest
@@ -33,7 +33,7 @@ class FakeProviderRepo:
 
 @pytest.mark.asyncio
 async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
-    now = datetime.utcnow()
+    now = utc_now()
     model_mapping = ModelMapping(
         requested_model="test-model",
         strategy="round_robin",
@@ -103,7 +103,7 @@ async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
         log_repo=AsyncMock(),
     )
 
-    _, openai_candidates, _, openai_protocol = await service._resolve_candidates(
+    _, openai_candidates, _, openai_protocol, _ = await service._resolve_candidates(
         requested_model="test-model",
         request_protocol="openai",
         headers={},
@@ -113,7 +113,7 @@ async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
     assert {c.provider_id for c in openai_candidates} == {1, 2}
     assert {c.protocol for c in openai_candidates} == {"openai", "anthropic"}
 
-    _, anthropic_candidates, _, anthropic_protocol = await service._resolve_candidates(
+    _, anthropic_candidates, _, anthropic_protocol, _ = await service._resolve_candidates(
         requested_model="test-model",
         request_protocol="anthropic",
         headers={},

@@ -304,6 +304,8 @@ class ModelService:
                         provider_name=pm.provider_name,
                         target_model_name=pm.target_model_name,
                         provider_rules=pm.provider_rules,
+                        input_price=pm.input_price,
+                        output_price=pm.output_price,
                         priority=pm.priority,
                         weight=pm.weight,
                         is_active=pm.is_active
@@ -317,6 +319,8 @@ class ModelService:
                     matching_rules=m.matching_rules,
                     capabilities=m.capabilities,
                     is_active=m.is_active,
+                    input_price=m.input_price,
+                    output_price=m.output_price,
                     providers=providers_export
                 )
             )
@@ -364,6 +368,8 @@ class ModelService:
                             provider_id=provider.id,
                             target_model_name=p_item.target_model_name,
                             provider_rules=p_item.provider_rules,
+                            input_price=p_item.input_price,
+                            output_price=p_item.output_price,
                             priority=p_item.priority,
                             weight=p_item.weight,
                             is_active=p_item.is_active
@@ -405,6 +411,8 @@ class ModelService:
             matching_rules=mapping.matching_rules,
             capabilities=mapping.capabilities,
             is_active=mapping.is_active,
+            input_price=mapping.input_price,
+            output_price=mapping.output_price,
             created_at=mapping.created_at,
             updated_at=mapping.updated_at,
             provider_count=provider_count,

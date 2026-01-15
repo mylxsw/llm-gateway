@@ -7,7 +7,9 @@ Defines Request Log related Data Transfer Objects (DTOs).
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.common.time import ensure_utc
 
 
 class RequestLogBase(BaseModel):
@@ -28,6 +30,13 @@ class RequestLogBase(BaseModel):
     # Provider Name
     provider_name: Optional[str] = Field(None, description="Provider Name")
 
+    @field_validator("request_time", mode="after")
+    @classmethod
+    def _request_time_utc(cls, v: datetime) -> datetime:
+        dt = ensure_utc(v)
+        assert dt is not None
+        return dt
+
 
 class RequestLogCreate(RequestLogBase):
     """Create Request Log Model"""
@@ -42,6 +51,12 @@ class RequestLogCreate(RequestLogBase):
     input_tokens: Optional[int] = Field(None, description="Input Token Count")
     # Output Token Count
     output_tokens: Optional[int] = Field(None, description="Output Token Count")
+    # Cost fields (USD, 4 decimals)
+    total_cost: Optional[float] = Field(None, description="Total cost ($)")
+    input_cost: Optional[float] = Field(None, description="Input cost ($)")
+    output_cost: Optional[float] = Field(None, description="Output cost ($)")
+    # Price source: SupplierOverride / ModelFallback / DefaultZero
+    price_source: Optional[str] = Field(None, description="Price source")
     # Request Headers (Sanitized)
     request_headers: Optional[dict[str, Any]] = Field(None, description="Request Headers")
     # Request Body
@@ -79,6 +94,9 @@ class RequestLogResponse(RequestLogBase):
     total_time_ms: Optional[int] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
+    total_cost: Optional[float] = None
+    input_cost: Optional[float] = None
+    output_cost: Optional[float] = None
     response_status: Optional[int] = None
     trace_id: Optional[str] = None
     is_stream: bool = False
@@ -130,3 +148,84 @@ class RequestLogQuery(BaseModel):
     # Sorting
     sort_by: str = Field("request_time", description="Sort Field")
     sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort Order")
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _query_time_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return ensure_utc(v)
+
+
+class LogCostStatsQuery(BaseModel):
+    """Cost statistics query conditions"""
+
+    # Time Range
+    start_time: Optional[datetime] = Field(None, description="Start Time")
+    end_time: Optional[datetime] = Field(None, description="End Time")
+    # Core dimensions
+    requested_model: Optional[str] = Field(None, description="Requested Model (Exact or fuzzy)")
+    provider_id: Optional[int] = Field(None, description="Provider ID")
+    api_key_id: Optional[int] = Field(None, description="API Key ID")
+    api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
+    # Bucket granularity: hour/day
+    bucket: str = Field("day", pattern="^(hour|day)$", description="Trend bucket")
+    # Timezone offset (minutes) applied to request_time before bucketing.
+    # Example: UTC+8 => 480, UTC-8 => -480.
+    tz_offset_minutes: int = Field(
+        0,
+        ge=-14 * 60,
+        le=14 * 60,
+        description="Timezone offset minutes for bucketing (UTC to local)",
+    )
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def _stats_time_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        return ensure_utc(v)
+
+
+class LogCostSummary(BaseModel):
+    """Aggregated cost summary"""
+
+    request_count: int = 0
+    total_cost: float = 0.0
+    input_cost: float = 0.0
+    output_cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class LogCostTrendPoint(BaseModel):
+    """Cost trend point"""
+
+    bucket: datetime
+    request_count: int = 0
+    total_cost: float = 0.0
+    input_cost: float = 0.0
+    output_cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    error_count: int = 0
+    success_count: int = 0
+
+    @field_validator("bucket", mode="after")
+    @classmethod
+    def _bucket_utc(cls, v: datetime) -> datetime:
+        dt = ensure_utc(v)
+        assert dt is not None
+        return dt
+
+
+class LogCostByModel(BaseModel):
+    """Cost grouped by requested model"""
+
+    requested_model: str
+    request_count: int = 0
+    total_cost: float = 0.0
+
+
+class LogCostStatsResponse(BaseModel):
+    """Cost stats response"""
+
+    summary: LogCostSummary
+    trend: list[LogCostTrendPoint]
+    by_model: list[LogCostByModel]

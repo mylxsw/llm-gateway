@@ -13,6 +13,9 @@ export interface ModelMapping {
   matching_rules?: RuleSet | null;    // Model level rules
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
+  // Pricing (USD per 1,000,000 tokens)
+  input_price?: number | null;
+  output_price?: number | null;
   provider_count?: number;            // Associated provider count
   providers?: ModelMappingProvider[]; // Detail contains provider list
   created_at: string;
@@ -28,6 +31,9 @@ export interface ModelMappingProvider {
   provider_protocol?: ProtocolType | null; // Obtained via join
   target_model_name: string;          // Target model name for this provider
   provider_rules?: RuleSet | null;    // Provider level rules
+  // Provider override pricing (USD per 1,000,000 tokens)
+  input_price?: number | null;
+  output_price?: number | null;
   priority: number;
   weight: number;
   is_active: boolean;
@@ -42,6 +48,8 @@ export interface ModelMappingCreate {
   matching_rules?: RuleSet;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
+  input_price?: number | null;
+  output_price?: number | null;
 }
 
 /** Update Model Mapping Request */
@@ -50,6 +58,8 @@ export interface ModelMappingUpdate {
   matching_rules?: RuleSet | null;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
+  input_price?: number | null;
+  output_price?: number | null;
 }
 
 /** Create Model-Provider Mapping Request */
@@ -58,6 +68,8 @@ export interface ModelMappingProviderCreate {
   provider_id: number;
   target_model_name: string;
   provider_rules?: RuleSet;
+  input_price?: number | null;
+  output_price?: number | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -67,6 +79,8 @@ export interface ModelMappingProviderCreate {
 export interface ModelMappingProviderUpdate {
   target_model_name?: string;
   provider_rules?: RuleSet | null;
+  input_price?: number | null;
+  output_price?: number | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -84,4 +98,21 @@ export interface ModelProviderListParams {
   requested_model?: string;
   provider_id?: number;
   is_active?: boolean;
+}
+
+/** Model Provider Export Entity */
+export interface ModelProviderExport {
+  provider_name: string;
+  target_model_name: string;
+  provider_rules?: RuleSet | null;
+  input_price?: number | null;
+  output_price?: number | null;
+  priority?: number;
+  weight?: number;
+  is_active?: boolean;
+}
+
+/** Model Export Entity */
+export interface ModelExport extends ModelMappingCreate {
+  providers?: ModelProviderExport[];
 }

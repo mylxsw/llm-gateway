@@ -48,3 +48,6 @@ export interface ProviderListParams {
   page?: number;
   page_size?: number;
 }
+
+/** Provider Export Entity (includes API key) */
+export type ProviderExport = ProviderCreate;

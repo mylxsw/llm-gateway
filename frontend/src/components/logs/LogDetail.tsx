@@ -21,7 +21,7 @@ import {
   Waves,
 } from 'lucide-react';
 import { RequestLogDetail } from '@/types';
-import { copyToClipboard, formatDateTime, formatDuration } from '@/lib/utils';
+import { copyToClipboard, formatDateTime, formatDuration, formatUsd } from '@/lib/utils';
 import { JsonViewer } from '@/components/common/JsonViewer';
 
 interface LogDetailProps {
@@ -131,7 +131,10 @@ export function LogDetail({ log }: LogDetailProps) {
               <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">Request Time</div>
-                <div className="truncate font-medium" title={log.request_time}>
+                <div
+                  className="truncate font-medium"
+                  title={formatDateTime(log.request_time, { showTime: true, showSeconds: true })}
+                >
                   {formatDateTime(log.request_time)}
                 </div>
               </div>
@@ -170,7 +173,7 @@ export function LogDetail({ log }: LogDetailProps) {
 
           <div className="rounded-lg border bg-muted/30 p-3">
             <div className="mb-2 text-sm font-medium">Metrics</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-7">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">TTFB</span>
                 <span className="font-medium">
@@ -196,6 +199,13 @@ export function LogDetail({ log }: LogDetailProps) {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Tokens</span>
                 <span className="font-medium">{(log.input_tokens ?? 0) + (log.output_tokens ?? 0)}</span>
+              </div>
+              <div
+                className="flex items-center justify-between gap-2"
+                title={`Input: ${formatUsd(log.input_cost)}\nOutput: ${formatUsd(log.output_cost)}`}
+              >
+                <span className="text-muted-foreground">Cost</span>
+                <span className="font-medium font-mono">{formatUsd(log.total_cost)}</span>
               </div>
             </div>
           </div>

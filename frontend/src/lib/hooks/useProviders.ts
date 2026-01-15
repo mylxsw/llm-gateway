@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   getProviders,
   getProvider,
@@ -59,6 +60,7 @@ export function useCreateProvider() {
     onSuccess: () => {
       // Refresh list cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
+      toast.success('Created successfully');
     },
   });
 }
@@ -79,6 +81,7 @@ export function useUpdateProvider() {
         QUERY_KEYS.detail(updatedProvider.id),
         updatedProvider
       );
+      toast.success('Saved successfully');
     },
   });
 }
@@ -94,6 +97,7 @@ export function useDeleteProvider() {
     onSuccess: () => {
       // Refresh list cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
+      toast.success('Deleted successfully');
     },
   });
 }

@@ -1,6 +1,6 @@
 /**
  * React Query Provider
- * 为应用提供全局状态管理
+ * Provides global state management for the app.
  */
 
 'use client';
@@ -8,23 +8,24 @@
 import React, { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@/components/common/ThemeProvider';
+import { AppToaster } from '@/components/common/AppToaster';
 
 /**
- * 全局 Provider 组件
- * 包装 React Query 等全局状态管理
+ * Global provider component
+ * Wraps React Query and other global providers.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  // 创建 QueryClient 实例（每个客户端独立）
+  // Create QueryClient instance (one per client)
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
           queries: {
-            // 默认缓存时间 5 分钟
+            // Default cache time: 5 minutes
             staleTime: 5 * 60 * 1000,
-            // 失败重试 1 次
+            // Retry once on failure
             retry: 1,
-            // 窗口聚焦时不自动刷新
+            // Do not refetch on window focus
             refetchOnWindowFocus: false,
           },
         },
@@ -33,7 +34,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <AppToaster />
+      </QueryClientProvider>
     </ThemeProvider>
   );
 }

@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -89,6 +90,9 @@ class ModelMapping(Base):
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)
     capabilities: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Default pricing (USD per 1,000,000 tokens)
+    input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time
@@ -133,6 +137,9 @@ class ModelMappingProvider(Base):
     target_model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Provider-level matching rules (JSON format)
     provider_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Provider override pricing (USD per 1,000,000 tokens)
+    input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Priority (Lower value means higher priority)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     # Weight (Used for weighted round-robin, currently unused)
@@ -229,6 +236,12 @@ class RequestLog(Base):
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Output Token Count
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Cost fields (USD, 4 decimals)
+    total_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    input_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    output_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Price source: SupplierOverride / ModelFallback / DefaultZero
+    price_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Request Headers (JSON format, sanitized)
     request_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Request Body (JSON format)

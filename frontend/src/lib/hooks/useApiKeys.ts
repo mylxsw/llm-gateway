@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   getApiKeys,
   getApiKey,
@@ -57,6 +58,7 @@ export function useCreateApiKey() {
     mutationFn: (data: ApiKeyCreate) => createApiKey(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
+      toast.success('Created successfully');
     },
   });
 }
@@ -73,6 +75,7 @@ export function useUpdateApiKey() {
     onSuccess: (updatedKey: ApiKey) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       queryClient.setQueryData(QUERY_KEYS.detail(updatedKey.id), updatedKey);
+      toast.success('Saved successfully');
     },
   });
 }
@@ -87,6 +90,7 @@ export function useDeleteApiKey() {
     mutationFn: (id: number) => deleteApiKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
+      toast.success('Deleted successfully');
     },
   });
 }

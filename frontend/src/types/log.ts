@@ -18,6 +18,9 @@ export interface RequestLog {
   total_time_ms?: number;
   input_tokens?: number;
   output_tokens?: number;
+  total_cost?: number | null;
+  input_cost?: number | null;
+  output_cost?: number | null;
   response_status?: number;
   trace_id?: string;
   is_stream?: boolean;
@@ -31,6 +34,7 @@ export interface RequestLogDetail extends RequestLog {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   response_body?: any;
   error_info?: string;
+  price_source?: 'SupplierOverride' | 'ModelFallback' | 'DefaultZero' | string | null;
 }
 
 /** Log Query Params */
@@ -38,6 +42,12 @@ export interface LogQueryParams {
   // Time range
   start_time?: string;
   end_time?: string;
+
+  // Client timezone offset minutes for stats bucketing (UTC to local)
+  tz_offset_minutes?: number;
+
+  // Trend bucketing hint for stats (hour/day)
+  bucket?: 'hour' | 'day';
   
   // Model filter
   requested_model?: string;
@@ -74,4 +84,37 @@ export interface LogQueryParams {
   page_size?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+}
+
+export interface LogCostSummary {
+  request_count: number;
+  total_cost: number;
+  input_cost: number;
+  output_cost: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface LogCostTrendPoint {
+  bucket: string;
+  request_count: number;
+  total_cost: number;
+  input_cost: number;
+  output_cost: number;
+  input_tokens: number;
+  output_tokens: number;
+  error_count: number;
+  success_count: number;
+}
+
+export interface LogCostByModel {
+  requested_model: string;
+  request_count: number;
+  total_cost: number;
+}
+
+export interface LogCostStatsResponse {
+  summary: LogCostSummary;
+  trend: LogCostTrendPoint[];
+  by_model: LogCostByModel[];
 }

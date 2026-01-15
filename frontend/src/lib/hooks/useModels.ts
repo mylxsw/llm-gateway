@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   getModels,
   getModel,
@@ -69,6 +70,7 @@ export function useCreateModel() {
     mutationFn: (data: ModelMappingCreate) => createModel(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
+      toast.success('Created successfully');
     },
   });
 }
@@ -92,6 +94,7 @@ export function useUpdateModel() {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.modelDetail(variables.requestedModel),
       });
+      toast.success('Saved successfully');
     },
   });
 }
@@ -106,6 +109,7 @@ export function useDeleteModel() {
     mutationFn: (requestedModel: string) => deleteModel(requestedModel),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
+      toast.success('Deleted successfully');
     },
   });
 }
@@ -137,6 +141,7 @@ export function useCreateModelProvider() {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.modelDetail(variables.requested_model),
       });
+      toast.success('Created successfully');
     },
   });
 }
@@ -158,6 +163,7 @@ export function useUpdateModelProvider() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelProviders });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
+      toast.success('Saved successfully');
     },
   });
 }
@@ -173,6 +179,7 @@ export function useDeleteModelProvider() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelProviders });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
+      toast.success('Deleted successfully');
     },
   });
 }

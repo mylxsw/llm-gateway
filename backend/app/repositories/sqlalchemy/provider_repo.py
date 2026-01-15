@@ -4,12 +4,12 @@ Provider Repository SQLAlchemy Implementation
 Provides concrete database operation implementation for Provider data.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import ServiceProvider, ModelMappingProvider as ModelMappingProviderORM
 from app.domain.provider import Provider, ProviderCreate, ProviderUpdate
 from app.repositories.provider_repo import ProviderRepository
@@ -50,8 +50,8 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             api_key=entity.api_key,
             extra_headers=entity.extra_headers,
             is_active=entity.is_active,
-            created_at=entity.created_at,
-            updated_at=entity.updated_at,
+            created_at=ensure_utc(entity.created_at),
+            updated_at=ensure_utc(entity.updated_at),
         )
     
     async def create(self, data: ProviderCreate) -> Provider:
@@ -129,7 +129,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         for key, value in update_data.items():
             setattr(entity, key, value)
         
-        entity.updated_at = datetime.utcnow()
+        entity.updated_at = to_utc_naive(utc_now())
         
         await self.session.commit()
         await self.session.refresh(entity)

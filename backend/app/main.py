@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
@@ -46,6 +46,12 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 settings = get_settings()
+
+repo_root = Path(__file__).resolve().parents[3]
+default_frontend_dist = repo_root / "frontend" / "out"
+frontend_dist_dir = Path(os.getenv("FRONTEND_DIST_DIR", str(default_frontend_dist)))
+frontend_enabled = frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists()
+
 app = FastAPI(
     title=settings.APP_NAME,
     description="LLM Proxy Gateway Service compatible with OpenAI/Anthropic",
@@ -108,8 +114,11 @@ async def root():
     """
     Root Path
     
-    Returns basic service information.
+    When the frontend static bundle exists, serve the dashboard homepage.
+    Otherwise, return basic service information (API-only mode).
     """
+    if frontend_enabled:
+        return FileResponse(frontend_dist_dir / "index.html")
     return {
         "name": settings.APP_NAME,
         "version": "0.1.0",
@@ -158,11 +167,7 @@ class FrontendStaticFiles(StaticFiles):
         return await super().get_response("index.html", scope)
 
 
-repo_root = Path(__file__).resolve().parents[3]
-default_frontend_dist = repo_root / "frontend" / "out"
-frontend_dist_dir = Path(os.getenv("FRONTEND_DIST_DIR", str(default_frontend_dist)))
-
-if frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists():
+if frontend_enabled:
     app.mount("/", FrontendStaticFiles(directory=str(frontend_dist_dir), html=True), name="frontend")
 
 

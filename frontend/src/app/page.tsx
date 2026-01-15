@@ -6,6 +6,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Layers, Key, FileText, ArrowRight } from 'lucide-react';
+import { HomeCostStats } from '@/components/home/HomeCostStats';
 
 /** Feature Card Data */
 const features = [
@@ -43,11 +44,13 @@ export default function HomePage() {
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">LLM Gateway Admin Panel</h1>
+        <h1 className="text-2xl font-bold">LLM Gateway</h1>
         <p className="mt-1 text-muted-foreground">
           Model Routing & Proxy Service Management System
         </p>
       </div>
+
+      <HomeCostStats />
 
       {/* Feature Access Cards */}
       <div className="grid gap-6 md:grid-cols-2">
@@ -77,40 +80,6 @@ export default function HomePage() {
           );
         })}
       </div>
-
-      {/* System Description */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Description</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm text-muted-foreground">
-          <p>
-            LLM Gateway is a model routing and proxy service that supports OpenAI and Anthropic protocol request proxying.
-          </p>
-          <ul className="list-inside list-disc space-y-2">
-            <li>
-              <strong>Transparent Proxy:</strong>
-              Compatible with OpenAI/Anthropic client invocation methods, only modifies the &apos;model&apos; field
-            </li>
-            <li>
-              <strong>Rule Engine:</strong>
-              Supports provider matching based on headers, body, Token usage, etc.
-            </li>
-            <li>
-              <strong>Round Robin Strategy:</strong>
-              Performs round-robin load balancing among multiple providers
-            </li>
-            <li>
-              <strong>Automatic Retry:</strong>
-              Supports automatic failure retry and provider failover
-            </li>
-            <li>
-              <strong>Complete Logging:</strong>
-              Records detailed information for all requests, supports multi-condition queries
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   );
 }

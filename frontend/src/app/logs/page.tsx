@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LogFilters, LogList } from '@/components/logs';
 import { Pagination, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
-import { useLogs, useProviders } from '@/lib/hooks';
+import { useApiKeys, useLogs, useModels, useProviders } from '@/lib/hooks';
 import { LogQueryParams, RequestLog } from '@/types';
 import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 /** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
@@ -32,6 +33,8 @@ export default function LogsPage() {
   // Data query
   const { data, isLoading, isError, refetch } = useLogs(filters);
   const { data: providersData } = useProviders({ is_active: true });
+  const { data: modelsData } = useModels({ is_active: true, page: 1, page_size: 1000 });
+  const { data: apiKeysData } = useApiKeys({ is_active: true, page: 1, page_size: 1000 });
 
   const areLogQueryParamsEqual = useCallback((a: LogQueryParams, b: LogQueryParams) => {
     const keys: Array<keyof LogQueryParams> = [
@@ -91,7 +94,7 @@ export default function LogsPage() {
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">Request Logs</h1>
+        <h1 className="text-2xl font-bold">Logs</h1>
         <p className="mt-1 text-muted-foreground">
           View proxy request logs, supports multi-condition filtering
         </p>
@@ -102,6 +105,8 @@ export default function LogsPage() {
         filters={filters}
         onFilterChange={handleFilterChange}
         providers={providersData?.items || []}
+        models={modelsData?.items || []}
+        apiKeys={apiKeysData?.items || []}
       />
 
       {/* Data List */}
@@ -110,10 +115,18 @@ export default function LogsPage() {
           <CardTitle>Log List</CardTitle>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh log list"
-            onClick={() => refetch()}
+            variant="outline"
+            size="sm"
+            className="h-8"
+            aria-label="Refresh"
+            onClick={async () => {
+              try {
+                await refetch();
+                toast.success('Refreshed');
+              } catch {
+                toast.error('Refresh failed');
+              }
+            }}
             disabled={isLoading}
           >
             <RefreshCw
@@ -121,6 +134,7 @@ export default function LogsPage() {
               suppressHydrationWarning
             />
           </Button>
+          
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}

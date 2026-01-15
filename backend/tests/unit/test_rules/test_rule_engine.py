@@ -6,7 +6,7 @@ import pytest
 from app.rules import RuleContext, TokenUsage, Rule, RuleSet, RuleEvaluator, RuleEngine
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
-from datetime import datetime
+from app.common.time import utc_now
 
 
 class TestRuleContext:
@@ -191,7 +191,7 @@ class TestRuleEngine:
     def setup_method(self):
         """Setup before test"""
         self.engine = RuleEngine()
-        now = datetime.utcnow()
+        now = utc_now()
         
         # Mock Providers
         self.providers = {

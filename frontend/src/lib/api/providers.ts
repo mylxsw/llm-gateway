@@ -9,6 +9,7 @@ import {
   ProviderCreate,
   ProviderUpdate,
   ProviderListParams,
+  ProviderExport,
   PaginatedResponse,
 } from '@/types';
 
@@ -63,14 +64,16 @@ export async function deleteProvider(id: number): Promise<void> {
 /**
  * Export Providers
  */
-export async function exportProviders(): Promise<any[]> {
-  return get<any[]>(`${BASE_URL}/export`);
+export async function exportProviders(): Promise<ProviderExport[]> {
+  return get<ProviderExport[]>(`${BASE_URL}/export`);
 }
 
 /**
  * Import Providers
  * @param data - List of providers to import
  */
-export async function importProviders(data: any[]): Promise<{success: number; skipped: number}> {
-  return post<{success: number; skipped: number}>(`${BASE_URL}/import`, data);
+export async function importProviders(
+  data: ProviderCreate[]
+): Promise<{ success: number; skipped: number }> {
+  return post<{ success: number; skipped: number }>(`${BASE_URL}/import`, data);
 }

@@ -34,7 +34,7 @@ import {
   ModelMappingProviderCreate,
   ModelMappingProviderUpdate,
 } from '@/types';
-import { formatDateTime, getActiveStatus } from '@/lib/utils';
+import { formatDateTime, getActiveStatus, formatUsd } from '@/lib/utils';
 import { ProtocolType } from '@/types/provider';
 
 function protocolLabel(protocol: ProtocolType) {
@@ -44,6 +44,11 @@ function protocolLabel(protocol: ProtocolType) {
     case 'anthropic':
       return 'Anthropic';
   }
+}
+
+function formatPrice(value: number | null | undefined) {
+  if (value === null || value === undefined) return '-';
+  return formatUsd(value);
 }
 
 export default function ModelDetailPage() {
@@ -184,6 +189,14 @@ function ModelDetailContent() {
               <p className="text-sm text-muted-foreground">Updated At</p>
               <p className="text-sm">{formatDateTime(model.updated_at)}</p>
             </div>
+            <div className="md:col-span-2">
+              <p className="text-sm text-muted-foreground">Pricing (USD / 1M tokens)</p>
+              <p className="text-sm">
+                In: <span className="font-mono">{formatPrice(model.input_price)}</span>
+                <span className="mx-2 text-muted-foreground">/</span>
+                Out: <span className="font-mono">{formatPrice(model.output_price)}</span>
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -199,7 +212,7 @@ function ModelDetailContent() {
         </Card>
       )}
 
-      {model.capabilities && (
+      {/* {model.capabilities && (
         <Card>
           <CardHeader>
             <CardTitle>Capabilities</CardTitle>
@@ -208,7 +221,7 @@ function ModelDetailContent() {
             <JsonViewer data={model.capabilities} />
           </CardContent>
         </Card>
-      )}
+      )} */}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -225,6 +238,7 @@ function ModelDetailContent() {
                 <TableRow>
                   <TableHead>Provider</TableHead>
                   <TableHead>Target Model</TableHead>
+                  <TableHead>Price Override</TableHead>
                   <TableHead>Priority</TableHead>
                   <TableHead>Weight</TableHead>
                   <TableHead>Rules</TableHead>
@@ -256,6 +270,11 @@ function ModelDetailContent() {
                       </TableCell>
                       <TableCell>
                         <code className="text-sm">{mapping.target_model_name}</code>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <span className="font-mono">In: {formatPrice(mapping.input_price)}</span>
+                        <span className="mx-2 text-muted-foreground">/</span>
+                        <span className="font-mono">Out: {formatPrice(mapping.output_price)}</span>
                       </TableCell>
                       <TableCell>{mapping.priority}</TableCell>
                       <TableCell>{mapping.weight}</TableCell>
@@ -314,6 +333,7 @@ function ModelDetailContent() {
         onOpenChange={setFormOpen}
         requestedModel={requestedModel}
         providers={providersData?.items || []}
+        defaultPrices={{ input_price: model.input_price ?? null, output_price: model.output_price ?? null }}
         mapping={editingMapping}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}

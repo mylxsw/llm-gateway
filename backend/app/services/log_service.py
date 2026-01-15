@@ -13,6 +13,8 @@ from app.domain.log import (
     RequestLogCreate,
     RequestLogResponse,
     RequestLogQuery,
+    LogCostStatsQuery,
+    LogCostStatsResponse,
 )
 from app.repositories.log_repo import LogRepository
 
@@ -98,6 +100,9 @@ class LogService:
                 total_time_ms=log.total_time_ms,
                 input_tokens=log.input_tokens,
                 output_tokens=log.output_tokens,
+                total_cost=log.total_cost,
+                input_cost=log.input_cost,
+                output_cost=log.output_cost,
                 response_status=log.response_status,
                 trace_id=log.trace_id,
                 is_stream=log.is_stream,
@@ -126,3 +131,6 @@ class LogService:
         except Exception as e:
             logger.error(f"Failed to cleanup old logs: {str(e)}", exc_info=True)
             raise
+
+    async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
+        return await self.repo.get_cost_stats(query)

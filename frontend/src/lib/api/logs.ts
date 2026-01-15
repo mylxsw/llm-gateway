@@ -8,6 +8,7 @@ import {
   RequestLog,
   RequestLogDetail,
   LogQueryParams,
+  LogCostStatsResponse,
   PaginatedResponse,
 } from '@/types';
 
@@ -37,4 +38,32 @@ export async function getLogs(
  */
 export async function getLogDetail(id: number): Promise<RequestLogDetail> {
   return get<RequestLogDetail>(`${BASE_URL}/${id}`);
+}
+
+/**
+ * Get cost stats for log list filters
+ */
+export async function getLogCostStats(
+  params?: LogQueryParams
+): Promise<LogCostStatsResponse> {
+  const picked = params
+    ? {
+        start_time: params.start_time,
+        end_time: params.end_time,
+        requested_model: params.requested_model,
+        provider_id: params.provider_id,
+        api_key_id: params.api_key_id,
+        api_key_name: params.api_key_name,
+        tz_offset_minutes: params.tz_offset_minutes,
+        bucket: params.bucket,
+      }
+    : undefined;
+
+  const cleanParams = picked
+    ? Object.fromEntries(
+        Object.entries(picked).filter(([, v]) => v !== undefined && v !== '')
+      )
+    : undefined;
+
+  return get<LogCostStatsResponse>(`${BASE_URL}/stats`, cleanParams);
 }

@@ -4,13 +4,13 @@ Model Repository SQLAlchemy Implementation
 Provides concrete database operation implementation for Model Mappings and Model-Provider Mappings.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import (
     ModelMapping as ModelMappingORM,
     ModelMappingProvider as ModelMappingProviderORM,
@@ -52,8 +52,10 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
-            created_at=entity.created_at,
-            updated_at=entity.updated_at,
+            input_price=float(entity.input_price) if entity.input_price is not None else None,
+            output_price=float(entity.output_price) if entity.output_price is not None else None,
+            created_at=ensure_utc(entity.created_at),
+            updated_at=ensure_utc(entity.updated_at),
         )
     
     def _provider_mapping_to_domain(
@@ -71,11 +73,13 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_protocol=provider_protocol,
             target_model_name=entity.target_model_name,
             provider_rules=entity.provider_rules,
+            input_price=float(entity.input_price) if entity.input_price is not None else None,
+            output_price=float(entity.output_price) if entity.output_price is not None else None,
             priority=entity.priority,
             weight=entity.weight,
             is_active=entity.is_active,
-            created_at=entity.created_at,
-            updated_at=entity.updated_at,
+            created_at=ensure_utc(entity.created_at),
+            updated_at=ensure_utc(entity.updated_at),
         )
     
     # ============ Model Mapping Operations ============
@@ -88,6 +92,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
+            input_price=data.input_price,
+            output_price=data.output_price,
         )
         self.session.add(entity)
         await self.session.commit()
@@ -149,7 +155,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         for key, value in update_data.items():
             setattr(entity, key, value)
         
-        entity.updated_at = datetime.utcnow()
+        entity.updated_at = to_utc_naive(utc_now())
         
         await self.session.commit()
         await self.session.refresh(entity)
@@ -182,6 +188,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_id=data.provider_id,
             target_model_name=data.target_model_name,
             provider_rules=data.provider_rules,
+            input_price=data.input_price,
+            output_price=data.output_price,
             priority=data.priority,
             weight=data.weight,
             is_active=data.is_active,
@@ -282,7 +290,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         for key, value in update_data.items():
             setattr(entity, key, value)
         
-        entity.updated_at = datetime.utcnow()
+        entity.updated_at = to_utc_naive(utc_now())
         
         await self.session.commit()
         await self.session.refresh(entity)

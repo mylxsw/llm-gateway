@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.time import ensure_utc, to_utc_naive
 from app.db.models import ApiKey as ApiKeyORM
 from app.domain.api_key import ApiKeyModel, ApiKeyCreate, ApiKeyUpdate
 from app.repositories.api_key_repo import ApiKeyRepository
@@ -38,8 +39,8 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
             key_name=entity.key_name,
             key_value=entity.key_value,
             is_active=entity.is_active,
-            created_at=entity.created_at,
-            last_used_at=entity.last_used_at,
+            created_at=ensure_utc(entity.created_at),
+            last_used_at=ensure_utc(entity.last_used_at),
         )
     
     async def create(self, data: ApiKeyCreate, key_value: str) -> ApiKeyModel:
@@ -131,7 +132,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
         entity = result.scalar_one_or_none()
         
         if entity:
-            entity.last_used_at = last_used_at
+            entity.last_used_at = to_utc_naive(last_used_at)
             await self.session.commit()
     
     async def delete(self, id: int) -> bool:

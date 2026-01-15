@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
+from app.common.time import utc_now
 
 @dataclass
 class ProxyRequest:
@@ -34,7 +35,7 @@ class ProxyRequest:
     # Trace ID
     trace_id: str
     # Request Time
-    request_time: datetime = field(default_factory=datetime.utcnow)
+    request_time: datetime = field(default_factory=utc_now)
     
     @property
     def requested_model(self) -> Optional[str]:
