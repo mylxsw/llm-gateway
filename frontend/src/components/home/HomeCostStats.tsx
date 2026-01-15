@@ -9,6 +9,7 @@ import React, { useMemo } from 'react';
 import { CostStats } from '@/components/logs';
 import { useLogCostStats } from '@/lib/hooks';
 import { LogQueryParams } from '@/types';
+import { toast } from 'sonner';
 
 const DEFAULT_RANGE_DAYS = 7;
 
@@ -29,8 +30,13 @@ export function HomeCostStats() {
       stats={data}
       loading={isLoading}
       refreshing={isFetching}
-      onRefresh={() => {
-        void refetch();
+      onRefresh={async () => {
+        try {
+          await refetch();
+          toast.success('Refreshed');
+        } catch {
+          toast.error('Refresh failed');
+        }
       }}
     />
   );

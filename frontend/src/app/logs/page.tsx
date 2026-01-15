@@ -13,6 +13,7 @@ import { Pagination, LoadingSpinner, ErrorState, EmptyState } from '@/components
 import { useApiKeys, useLogs, useModels, useProviders } from '@/lib/hooks';
 import { LogQueryParams, RequestLog } from '@/types';
 import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 /** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
@@ -117,7 +118,14 @@ export default function LogsPage() {
             variant="ghost"
             size="icon"
             aria-label="Refresh log list"
-            onClick={() => refetch()}
+            onClick={async () => {
+              try {
+                await refetch();
+                toast.success('Refreshed');
+              } catch {
+                toast.error('Refresh failed');
+              }
+            }}
             disabled={isLoading}
           >
             <RefreshCw
