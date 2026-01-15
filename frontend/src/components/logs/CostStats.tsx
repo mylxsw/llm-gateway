@@ -10,13 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common';
 import { LogCostStatsResponse } from '@/types';
 import { formatNumber, formatUsd } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 interface CostStatsProps {
   stats?: LogCostStatsResponse;
   loading?: boolean;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
-export function CostStats({ stats, loading }: CostStatsProps) {
+export function CostStats({ stats, loading, onRefresh, refreshing }: CostStatsProps) {
   const trendMax = useMemo(() => {
     const values = stats?.trend?.map((p) => Number(p.total_cost) || 0) ?? [];
     return Math.max(0, ...values);
@@ -29,8 +33,23 @@ export function CostStats({ stats, loading }: CostStatsProps) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Cost Stats</CardTitle>
+        {onRefresh ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh cost stats"
+            onClick={onRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+              suppressHydrationWarning
+            />
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {loading && <LoadingSpinner />}
@@ -127,4 +146,3 @@ export function CostStats({ stats, loading }: CostStatsProps) {
     </Card>
   );
 }
-

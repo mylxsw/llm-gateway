@@ -50,6 +50,8 @@ export default function HomePage() {
         </p>
       </div>
 
+      <HomeCostStats />
+
       {/* Feature Access Cards */}
       <div className="grid gap-6 md:grid-cols-2">
         {features.map((feature) => {
@@ -78,42 +80,6 @@ export default function HomePage() {
           );
         })}
       </div>
-
-      <HomeCostStats />
-
-      {/* System Description */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Description</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm text-muted-foreground">
-          <p>
-            LLM Gateway is a model routing and proxy service that supports OpenAI and Anthropic protocol request proxying.
-          </p>
-          <ul className="list-inside list-disc space-y-2">
-            <li>
-              <strong>Transparent Proxy:</strong>
-              Compatible with OpenAI/Anthropic client invocation methods, only modifies the &apos;model&apos; field
-            </li>
-            <li>
-              <strong>Rule Engine:</strong>
-              Supports provider matching based on headers, body, Token usage, etc.
-            </li>
-            <li>
-              <strong>Round Robin Strategy:</strong>
-              Performs round-robin load balancing among multiple providers
-            </li>
-            <li>
-              <strong>Automatic Retry:</strong>
-              Supports automatic failure retry and provider failover
-            </li>
-            <li>
-              <strong>Complete Logging:</strong>
-              Records detailed information for all requests, supports multi-condition queries
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   );
 }

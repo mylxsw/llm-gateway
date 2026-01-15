@@ -22,8 +22,16 @@ export function HomeCostStats() {
     };
   }, []);
 
-  const { data, isLoading } = useLogCostStats(params);
+  const { data, isLoading, isFetching, refetch } = useLogCostStats(params);
 
-  return <CostStats stats={data} loading={isLoading} />;
+  return (
+    <CostStats
+      stats={data}
+      loading={isLoading}
+      refreshing={isFetching}
+      onRefresh={() => {
+        void refetch();
+      }}
+    />
+  );
 }
-
