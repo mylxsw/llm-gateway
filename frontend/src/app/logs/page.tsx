@@ -115,9 +115,10 @@ export default function LogsPage() {
           <CardTitle>Log List</CardTitle>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh log list"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            aria-label="Refresh"
             onClick={async () => {
               try {
                 await refetch();
@@ -133,6 +134,7 @@ export default function LogsPage() {
               suppressHydrationWarning
             />
           </Button>
+          
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}

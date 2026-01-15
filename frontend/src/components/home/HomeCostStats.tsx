@@ -150,7 +150,7 @@ export function HomeCostStats() {
             onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}
           >
             <SelectTrigger className="h-8 w-[160px]">
-              <SelectValue placeholder="选择时间范围" />
+              <SelectValue placeholder="Select time range" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="24h">Last 24 hours</SelectItem>

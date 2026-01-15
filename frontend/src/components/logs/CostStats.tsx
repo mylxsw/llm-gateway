@@ -54,7 +54,7 @@ export function CostStats({
                   variant="outline"
                   size="sm"
                   className="h-8"
-                  aria-label="刷新"
+                  aria-label="Refresh"
                   onClick={onRefresh}
                   disabled={refreshing}
                 >
@@ -62,7 +62,6 @@ export function CostStats({
                     className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
                     suppressHydrationWarning
                   />
-                  <span className="ml-2">刷新</span>
                 </Button>
               ) : null}
 

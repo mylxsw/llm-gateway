@@ -44,7 +44,7 @@ export default function HomePage() {
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">LLM Gateway Admin Panel</h1>
+        <h1 className="text-2xl font-bold">LLM Gateway</h1>
         <p className="mt-1 text-muted-foreground">
           Model Routing & Proxy Service Management System
         </p>
