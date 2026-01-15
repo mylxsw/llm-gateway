@@ -260,7 +260,7 @@ export function ModelProviderForm({
 
           {/* Pricing Override */}
           <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="mb-2 text-sm font-medium">Price Override (USD / 1,000,000 tokens)</div>
+            <div className="mb-2 text-sm font-medium">Price Override (USD / 1M tokens)</div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="input_price">Input Price</Label>
@@ -313,7 +313,7 @@ export function ModelProviderForm({
 
           {/* Provider Level Rules */}
           <div className="space-y-2">
-            <Label>Provider Level Rules</Label>
+            <Label>Provider Level Rules (Beta)</Label>
             <Controller
               name="provider_rules"
               control={control}

@@ -173,48 +173,11 @@ export function ModelForm({
             )}
           </div>
 
-          {/* Strategy */}
-          <div className="space-y-2">
-            <Label htmlFor="strategy">Select Strategy</Label>
-            <Input
-              id="strategy"
-              value="round_robin"
-              disabled
-              {...register('strategy')}
-            />
-            <p className="text-sm text-muted-foreground">
-              Currently only supports Round Robin strategy (round_robin)
-            </p>
-          </div>
-
-          {/* Matching Rules */}
-          <div className="space-y-2">
-            <Label>Matching Rules</Label>
-            <Controller
-              name="matching_rules"
-              control={control}
-              render={({ field }) => (
-                <RuleBuilder
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                />
-              )}
-            />
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">Enabled Status</Label>
-            <Switch
-              id="is_active"
-              checked={isActive}
-              onCheckedChange={(checked) => setValue('is_active', checked)}
-            />
-          </div>
+          
 
           {/* Pricing */}
           <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="mb-2 text-sm font-medium">Pricing (USD / 1,000,000 tokens)</div>
+            <div className="mb-2 text-sm font-medium">Pricing (USD / 1M tokens)</div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="input_price">Input Price</Label>
@@ -243,6 +206,47 @@ export function ModelForm({
               Used as model fallback price when no provider override exists; empty means unconfigured.
             </p>
           </div>
+
+          {/* Matching Rules */}
+          <div className="space-y-2">
+            <Label>Matching Rules (Beta)</Label>
+            <Controller
+              name="matching_rules"
+              control={control}
+              render={({ field }) => (
+                <RuleBuilder
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+
+          {/* Strategy */}
+          <div className="space-y-2">
+            <Label htmlFor="strategy">Select Strategy</Label>
+            <Input
+              id="strategy"
+              value="round_robin"
+              disabled
+              {...register('strategy')}
+            />
+            <p className="text-sm text-muted-foreground">
+              Currently only supports Round Robin strategy (round_robin)
+            </p>
+          </div>
+
+          {/* Status */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="is_active">Enabled Status</Label>
+            <Switch
+              id="is_active"
+              checked={isActive}
+              onCheckedChange={(checked) => setValue('is_active', checked)}
+            />
+          </div>
+
+          
 
           <DialogFooter>
             <Button

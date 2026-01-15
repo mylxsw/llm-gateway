@@ -1,7 +1,7 @@
 """
 Cost calculation helpers.
 
-All prices are in USD per 1,000,000 tokens.
+All prices are in USD per 1M tokens.
 All costs are rounded to 4 decimal places (ROUND_HALF_UP).
 """
 

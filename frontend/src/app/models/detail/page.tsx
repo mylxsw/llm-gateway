@@ -190,7 +190,7 @@ function ModelDetailContent() {
               <p className="text-sm">{formatDateTime(model.updated_at)}</p>
             </div>
             <div className="md:col-span-2">
-              <p className="text-sm text-muted-foreground">Pricing (USD / 1,000,000 tokens)</p>
+              <p className="text-sm text-muted-foreground">Pricing (USD / 1M tokens)</p>
               <p className="text-sm">
                 In: <span className="font-mono">{formatPrice(model.input_price)}</span>
                 <span className="mx-2 text-muted-foreground">/</span>
@@ -212,7 +212,7 @@ function ModelDetailContent() {
         </Card>
       )}
 
-      {model.capabilities && (
+      {/* {model.capabilities && (
         <Card>
           <CardHeader>
             <CardTitle>Capabilities</CardTitle>
@@ -221,7 +221,7 @@ function ModelDetailContent() {
             <JsonViewer data={model.capabilities} />
           </CardContent>
         </Card>
-      )}
+      )} */}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
