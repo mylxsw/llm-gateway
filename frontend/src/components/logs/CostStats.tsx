@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common';
 import { LogCostStatsResponse } from '@/types';
@@ -130,12 +130,23 @@ function TrendCard({
   totalLabel: string;
   totalValue: string;
 }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
   const maxTotal = useMemo(() => {
     const totals = points.map((p) =>
       segments.reduce((acc, seg) => acc + (Number(seg.getValue(p)) || 0), 0)
     );
     return Math.max(0, ...totals);
   }, [points, segments]);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    const raf = requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [points]);
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border bg-gradient-to-b from-muted/10 to-background p-4">
@@ -154,7 +165,7 @@ function TrendCard({
         ) : null}
       </div>
 
-      <div className="flex items-end gap-1 overflow-x-auto pb-2">
+      <div ref={scrollerRef} className="flex items-end gap-1 overflow-x-auto pb-2">
         {points.length === 0 ? (
           <div className="text-sm text-muted-foreground">No data</div>
         ) : (
