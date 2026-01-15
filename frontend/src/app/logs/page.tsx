@@ -43,7 +43,16 @@ export default function LogsPage() {
     api_key_id: filters.api_key_id,
     api_key_name: filters.api_key_name,
   };
-  const { data: statsData, isLoading: statsLoading } = useLogCostStats(statsParams);
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useLogCostStats(statsParams);
+
+  const refetchAll = useCallback(() => {
+    void refetch();
+    void refetchStats();
+  }, [refetch, refetchStats]);
 
   const areLogQueryParamsEqual = useCallback((a: LogQueryParams, b: LogQueryParams) => {
     const keys: Array<keyof LogQueryParams> = [
@@ -87,12 +96,12 @@ export default function LogsPage() {
     setFilters((prev) => {
       const next = { ...prev, ...newFilters, page: 1 };
       if (areLogQueryParamsEqual(prev, next)) {
-        void refetch();
+        refetchAll();
         return prev;
       }
       return next;
     }); // Reset to page 1 on filter change
-  }, [areLogQueryParamsEqual, refetch]);
+  }, [areLogQueryParamsEqual, refetchAll]);
 
   // View Log Detail
   const handleViewLog = useCallback((log: RequestLog) => {
@@ -129,7 +138,7 @@ export default function LogsPage() {
             variant="ghost"
             size="icon"
             aria-label="Refresh log list"
-            onClick={() => refetch()}
+            onClick={refetchAll}
             disabled={isLoading}
           >
             <RefreshCw
