@@ -22,7 +22,7 @@ import {
   Waves,
 } from 'lucide-react';
 import { RequestLog } from '@/types';
-import { formatDateTime, getStatusColor, formatDuration } from '@/lib/utils';
+import { formatDateTime, getStatusColor, formatDuration, formatUsd } from '@/lib/utils';
 
 interface LogListProps {
   /** Log list data */
@@ -42,6 +42,7 @@ export function LogList({ logs, onView }: LogListProps) {
           <TableHead className="w-[180px]">Time</TableHead>
           <TableHead>Model Mapping</TableHead>
           <TableHead>Provider</TableHead>
+          <TableHead>Cost</TableHead>
           <TableHead>Status/Retry</TableHead>
           <TableHead>Latency/Total</TableHead>
           <TableHead>In/Out Token</TableHead>
@@ -81,6 +82,12 @@ export function LogList({ logs, onView }: LogListProps) {
                 </div>
               </TableCell>
               <TableCell>{log.provider_name}</TableCell>
+              <TableCell
+                className="font-mono text-xs"
+                title={`Input: ${formatUsd(log.input_cost)}\nOutput: ${formatUsd(log.output_cost)}`}
+              >
+                {formatUsd(log.total_cost)}
+              </TableCell>
               <TableCell>
                 <div className="flex flex-col items-start gap-1">
                   <Badge variant="outline" className={statusColor}>

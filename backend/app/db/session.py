@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy import inspect, text
 
 from app.config import get_settings
 
@@ -73,3 +74,48 @@ async def init_db() -> None:
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_run_migrations)
+
+
+def _run_migrations(sync_conn) -> None:
+    """
+    Lightweight, in-place schema migrations for existing databases.
+
+    This project doesn't ship Alembic migrations; `create_all()` won't add new columns
+    for already-created tables, so we ensure additive columns exist.
+    """
+    inspector = inspect(sync_conn)
+    table_names = set(inspector.get_table_names())
+
+    def ensure_columns(table: str, columns: dict[str, str]) -> None:
+        if table not in table_names:
+            return
+        existing = {c["name"] for c in inspector.get_columns(table)}
+        for col_name, ddl in columns.items():
+            if col_name in existing:
+                continue
+            sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+
+    ensure_columns(
+        "model_mappings",
+        {
+            "input_price": "input_price NUMERIC(12,4)",
+            "output_price": "output_price NUMERIC(12,4)",
+        },
+    )
+    ensure_columns(
+        "model_mapping_providers",
+        {
+            "input_price": "input_price NUMERIC(12,4)",
+            "output_price": "output_price NUMERIC(12,4)",
+        },
+    )
+    ensure_columns(
+        "request_logs",
+        {
+            "total_cost": "total_cost NUMERIC(12,4)",
+            "input_cost": "input_cost NUMERIC(12,4)",
+            "output_cost": "output_cost NUMERIC(12,4)",
+            "price_source": "price_source VARCHAR(50)",
+        },
+    )

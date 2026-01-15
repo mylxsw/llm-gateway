@@ -21,9 +21,10 @@ from app.common.protocol_conversion import (
     normalize_protocol,
 )
 from app.common.token_counter import get_token_counter
+from app.common.costs import calculate_cost, resolve_price
 from app.common.utils import generate_trace_id
 from app.domain.log import RequestLogCreate
-from app.domain.model import ModelMapping
+from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
 from app.providers import get_provider_client, ProviderResponse
 from app.repositories.model_repo import ModelRepository
@@ -81,12 +82,12 @@ class ProxyService:
         request_protocol: str,
         headers: dict[str, str],
         body: dict[str, Any],
-    ) -> tuple[ModelMapping, list[CandidateProvider], int, str]:
+    ) -> tuple[ModelMapping, list[CandidateProvider], int, str, dict[int, ModelMappingProviderResponse]]:
         """
         Resolve model and provider candidate list
 
         Returns:
-            tuple: (model_mapping, candidates, input_tokens, protocol)
+            tuple: (model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id)
         """
         request_protocol = (request_protocol or "openai").lower()
         model_mapping = await self.model_repo.get_mapping(requested_model)
@@ -128,6 +129,8 @@ class ProxyService:
         if not eligible_provider_mappings:
             raise ServiceError(message="No available providers", code="no_available_provider")
 
+        provider_mapping_by_id = {pm.provider_id: pm for pm in eligible_provider_mappings}
+
         token_counter = get_token_counter(request_protocol)
         messages = body.get("messages", [])
         input_tokens = token_counter.count_messages(messages, requested_model)
@@ -152,7 +155,7 @@ class ProxyService:
                 code="no_available_provider",
             )
 
-        return model_mapping, candidates, input_tokens, request_protocol
+        return model_mapping, candidates, input_tokens, request_protocol, provider_mapping_by_id
     
     async def process_request(
         self,
@@ -194,7 +197,7 @@ class ProxyService:
             )
         
         # 2. Get model mapping
-        model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
+        model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
             headers=headers,
@@ -299,6 +302,22 @@ class ProxyService:
                 pass
         
         # 10. Record log
+        final_provider_id = result.final_provider.provider_id if result.final_provider else None
+        provider_mapping = (
+            provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
+        )
+        resolved_price = resolve_price(
+            model_input_price=model_mapping.input_price,
+            model_output_price=model_mapping.output_price,
+            provider_input_price=provider_mapping.input_price if provider_mapping else None,
+            provider_output_price=provider_mapping.output_price if provider_mapping else None,
+        )
+        cost = calculate_cost(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            input_price=resolved_price.input_price,
+            output_price=resolved_price.output_price,
+        )
         log_data = RequestLogCreate(
             request_time=request_time,
             api_key_id=api_key_id,
@@ -313,6 +332,10 @@ class ProxyService:
             total_time_ms=result.response.total_time_ms,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            total_cost=cost.total_cost,
+            input_cost=cost.input_cost,
+            output_cost=cost.output_cost,
+            price_source=resolved_price.price_source,
             request_headers=sanitize_headers(headers),
             request_body=body,
 
@@ -382,7 +405,7 @@ class ProxyService:
         if not requested_model:
             raise ServiceError(message="Model is required", code="missing_model")
 
-        model_mapping, candidates, input_tokens, protocol = await self._resolve_candidates(
+        model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
             headers=headers,
@@ -545,6 +568,22 @@ class ProxyService:
 
                 # 10. Record log (after stream ends)
                 # Note: Streaming requests cannot stably obtain the full response body, here only record output preview (truncated)
+                final_provider_id = final_provider.provider_id if final_provider else None
+                provider_mapping = (
+                    provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
+                )
+                resolved_price = resolve_price(
+                    model_input_price=model_mapping.input_price,
+                    model_output_price=model_mapping.output_price,
+                    provider_input_price=provider_mapping.input_price if provider_mapping else None,
+                    provider_output_price=provider_mapping.output_price if provider_mapping else None,
+                )
+                cost = calculate_cost(
+                    input_tokens=input_tokens,
+                    output_tokens=usage_result.output_tokens,
+                    input_price=resolved_price.input_price,
+                    output_price=resolved_price.output_price,
+                )
                 log_data = RequestLogCreate(
                     request_time=request_time,
                     api_key_id=api_key_id,
@@ -559,6 +598,10 @@ class ProxyService:
                     total_time_ms=total_time_ms,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
+                    total_cost=cost.total_cost,
+                    input_cost=cost.input_cost,
+                    output_cost=cost.output_cost,
+                    price_source=resolved_price.price_source,
                     request_headers=sanitize_headers(headers),
                     request_body=body,
 

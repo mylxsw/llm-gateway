@@ -7,7 +7,13 @@ Defines the data access interface for request logs.
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 
-from app.domain.log import RequestLogModel, RequestLogCreate, RequestLogQuery
+from app.domain.log import (
+    RequestLogModel,
+    RequestLogCreate,
+    RequestLogQuery,
+    LogCostStatsQuery,
+    LogCostStatsResponse,
+)
 
 
 class LogRepository(ABC):
@@ -63,4 +69,9 @@ class LogRepository(ABC):
         Returns:
             int: Number of deleted logs
         """
+        pass
+
+    @abstractmethod
+    async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
+        """Get aggregated cost stats for logs"""
         pass

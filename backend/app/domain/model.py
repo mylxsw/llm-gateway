@@ -30,6 +30,9 @@ class ModelMappingCreate(ModelMappingBase):
     capabilities: Optional[dict[str, Any]] = Field(None, description="Model Capabilities")
     # Is Active
     is_active: bool = Field(True, description="Is Active")
+    # Default pricing (USD per 1,000,000 tokens)
+    input_price: Optional[float] = Field(None, description="Input price ($/1M tokens)")
+    output_price: Optional[float] = Field(None, description="Output price ($/1M tokens)")
 
 
 class ModelMappingUpdate(BaseModel):
@@ -39,6 +42,8 @@ class ModelMappingUpdate(BaseModel):
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
 
 
 class ModelMapping(ModelMappingBase):
@@ -47,6 +52,8 @@ class ModelMapping(ModelMappingBase):
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: bool = True
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
     created_at: datetime
     updated_at: datetime
     
@@ -90,6 +97,9 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
     weight: int = Field(1, ge=1, description="Weight")
     # Is Active
     is_active: bool = Field(True, description="Is Active")
+    # Provider override pricing (USD per 1,000,000 tokens)
+    input_price: Optional[float] = Field(None, description="Input price override ($/1M tokens)")
+    output_price: Optional[float] = Field(None, description="Output price override ($/1M tokens)")
 
 
 class ModelMappingProviderUpdate(BaseModel):
@@ -100,6 +110,8 @@ class ModelMappingProviderUpdate(BaseModel):
     priority: Optional[int] = None
     weight: Optional[int] = Field(None, ge=1)
     is_active: Optional[bool] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
 
 
 class ModelMappingProvider(ModelMappingProviderBase):
@@ -107,6 +119,8 @@ class ModelMappingProvider(ModelMappingProviderBase):
     
     id: int
     provider_rules: Optional[dict[str, Any]] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
     priority: int = 0
     weight: int = 1
     is_active: bool = True
@@ -134,6 +148,8 @@ class ModelProviderExport(BaseModel):
     provider_name: str
     target_model_name: str
     provider_rules: Optional[dict[str, Any]] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
     priority: int = 0
     weight: int = 1
     is_active: bool = True

@@ -43,6 +43,8 @@ interface FormData {
   matching_rules: RuleSet | null;
   capabilities: string;
   is_active: boolean;
+  input_price: string;
+  output_price: string;
 }
 
 /**
@@ -74,6 +76,8 @@ export function ModelForm({
       matching_rules: null,
       capabilities: '',
       is_active: true,
+      input_price: '',
+      output_price: '',
     },
   });
 
@@ -90,6 +94,14 @@ export function ModelForm({
           ? JSON.stringify(model.capabilities, null, 2)
           : '',
         is_active: model.is_active,
+        input_price:
+          model.input_price === null || model.input_price === undefined
+            ? ''
+            : String(model.input_price),
+        output_price:
+          model.output_price === null || model.output_price === undefined
+            ? ''
+            : String(model.output_price),
       });
     } else {
       reset({
@@ -98,6 +110,8 @@ export function ModelForm({
         matching_rules: null,
         capabilities: '',
         is_active: true,
+        input_price: '',
+        output_price: '',
       });
     }
   }, [model, reset]);
@@ -125,6 +139,11 @@ export function ModelForm({
         // Ignore parse errors
       }
     }
+
+    const inputPrice = data.input_price.trim();
+    const outputPrice = data.output_price.trim();
+    submitData.input_price = inputPrice ? Number(inputPrice) : null;
+    submitData.output_price = outputPrice ? Number(outputPrice) : null;
     
     onSubmit(submitData);
   };
@@ -233,6 +252,38 @@ export function ModelForm({
               checked={isActive}
               onCheckedChange={(checked) => setValue('is_active', checked)}
             />
+          </div>
+
+          {/* Pricing */}
+          <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="mb-2 text-sm font-medium">Pricing (USD / 1,000,000 tokens)</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="input_price">Input Price</Label>
+                <Input
+                  id="input_price"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder="e.g. 5"
+                  {...register('input_price')}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="output_price">Output Price</Label>
+                <Input
+                  id="output_price"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder="e.g. 15"
+                  {...register('output_price')}
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Used as model fallback price when no provider override exists; empty means unconfigured.
+            </p>
           </div>
 
           <DialogFooter>

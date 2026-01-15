@@ -21,7 +21,7 @@ import {
   Waves,
 } from 'lucide-react';
 import { RequestLogDetail } from '@/types';
-import { copyToClipboard, formatDateTime, formatDuration } from '@/lib/utils';
+import { copyToClipboard, formatDateTime, formatDuration, formatUsd } from '@/lib/utils';
 import { JsonViewer } from '@/components/common/JsonViewer';
 
 interface LogDetailProps {
@@ -72,6 +72,15 @@ export function LogDetail({ log }: LogDetailProps) {
   );
 
   if (!log) return null;
+
+  const priceSourceLabel =
+    log.price_source === 'SupplierOverride'
+      ? 'Supplier override'
+      : log.price_source === 'ModelFallback'
+        ? 'Model fallback'
+        : log.price_source === 'DefaultZero'
+          ? 'Default zero'
+          : log.price_source || '-';
 
   return (
     <div className="space-y-6">
@@ -170,7 +179,7 @@ export function LogDetail({ log }: LogDetailProps) {
 
           <div className="rounded-lg border bg-muted/30 p-3">
             <div className="mb-2 text-sm font-medium">Metrics</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-8">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">TTFB</span>
                 <span className="font-medium">
@@ -196,6 +205,17 @@ export function LogDetail({ log }: LogDetailProps) {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">Tokens</span>
                 <span className="font-medium">{(log.input_tokens ?? 0) + (log.output_tokens ?? 0)}</span>
+              </div>
+              <div
+                className="flex items-center justify-between gap-2"
+                title={`Input: ${formatUsd(log.input_cost)}\nOutput: ${formatUsd(log.output_cost)}`}
+              >
+                <span className="text-muted-foreground">Cost</span>
+                <span className="font-medium font-mono">{formatUsd(log.total_cost)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Price Source</span>
+                <span className="font-medium">{priceSourceLabel}</span>
               </div>
             </div>
           </div>

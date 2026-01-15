@@ -19,6 +19,8 @@ from app.domain.log import (
     RequestLogQuery,
     RequestLogResponse,
     RequestLogDetailResponse,
+    LogCostStatsQuery,
+    LogCostStatsResponse,
 )
 
 router = APIRouter(
@@ -40,6 +42,42 @@ class CleanupResponse(BaseModel):
     """Log Cleanup Response"""
     deleted_count: int
     message: str
+
+
+@router.get("/stats", response_model=LogCostStatsResponse)
+async def get_log_cost_stats(
+    service: LogServiceDep,
+    start_time: Optional[datetime] = Query(None, description="Start Time"),
+    end_time: Optional[datetime] = Query(None, description="End Time"),
+    requested_model: Optional[str] = Query(None, description="Requested Model (Fuzzy Match)"),
+    provider_id: Optional[int] = Query(None, description="Provider ID"),
+    api_key_id: Optional[int] = Query(None, description="API Key ID"),
+    api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
+):
+    """
+    Aggregated cost stats for logs.
+
+    Dimensions: time range, model, provider, API key.
+    """
+    try:
+        bucket = "day"
+        if start_time and end_time:
+            delta = end_time - start_time
+            if delta.total_seconds() <= 48 * 3600:
+                bucket = "hour"
+
+        query = LogCostStatsQuery(
+            start_time=start_time,
+            end_time=end_time,
+            requested_model=requested_model,
+            provider_id=provider_id,
+            api_key_id=api_key_id,
+            api_key_name=api_key_name,
+            bucket=bucket,
+        )
+        return await service.get_cost_stats(query)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
 @router.get("", response_model=PaginatedLogResponse)

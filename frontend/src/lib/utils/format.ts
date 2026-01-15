@@ -77,6 +77,16 @@ export function formatNumber(num: number | null | undefined): string {
 }
 
 /**
+ * Format USD cost with 4 decimals
+ */
+export function formatUsd(cost: number | null | undefined): string {
+  if (cost === null || cost === undefined) return '$0.0000';
+  const num = Number(cost);
+  if (Number.isNaN(num)) return '$0.0000';
+  return `$${num.toFixed(4)}`;
+}
+
+/**
  * Truncate string
  * @param str - Original string
  * @param maxLength - Maximum length

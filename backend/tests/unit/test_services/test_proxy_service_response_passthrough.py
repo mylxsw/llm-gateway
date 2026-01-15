@@ -37,7 +37,7 @@ async def test_process_request_same_protocol_response_body_passthrough_bytes():
         provider_repo=AsyncMock(),
         log_repo=AsyncMock(),
     )
-    service._resolve_candidates = AsyncMock(return_value=(model_mapping, [candidate], 0, "openai"))  # type: ignore[method-assign]
+    service._resolve_candidates = AsyncMock(return_value=(model_mapping, [candidate], 0, "openai", {}))  # type: ignore[method-assign]
 
     async def forward(*, response_mode: str = "parsed", **kwargs):
         assert response_mode == "raw"

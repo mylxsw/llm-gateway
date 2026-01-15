@@ -42,6 +42,12 @@ class RequestLogCreate(RequestLogBase):
     input_tokens: Optional[int] = Field(None, description="Input Token Count")
     # Output Token Count
     output_tokens: Optional[int] = Field(None, description="Output Token Count")
+    # Cost fields (USD, 4 decimals)
+    total_cost: Optional[float] = Field(None, description="Total cost ($)")
+    input_cost: Optional[float] = Field(None, description="Input cost ($)")
+    output_cost: Optional[float] = Field(None, description="Output cost ($)")
+    # Price source: SupplierOverride / ModelFallback / DefaultZero
+    price_source: Optional[str] = Field(None, description="Price source")
     # Request Headers (Sanitized)
     request_headers: Optional[dict[str, Any]] = Field(None, description="Request Headers")
     # Request Body
@@ -79,6 +85,9 @@ class RequestLogResponse(RequestLogBase):
     total_time_ms: Optional[int] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
+    total_cost: Optional[float] = None
+    input_cost: Optional[float] = None
+    output_cost: Optional[float] = None
     response_status: Optional[int] = None
     trace_id: Optional[str] = None
     is_stream: bool = False
@@ -130,3 +139,53 @@ class RequestLogQuery(BaseModel):
     # Sorting
     sort_by: str = Field("request_time", description="Sort Field")
     sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort Order")
+
+
+class LogCostStatsQuery(BaseModel):
+    """Cost statistics query conditions"""
+
+    # Time Range
+    start_time: Optional[datetime] = Field(None, description="Start Time")
+    end_time: Optional[datetime] = Field(None, description="End Time")
+    # Core dimensions
+    requested_model: Optional[str] = Field(None, description="Requested Model (Exact or fuzzy)")
+    provider_id: Optional[int] = Field(None, description="Provider ID")
+    api_key_id: Optional[int] = Field(None, description="API Key ID")
+    api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
+    # Bucket granularity: hour/day
+    bucket: str = Field("day", pattern="^(hour|day)$", description="Trend bucket")
+
+
+class LogCostSummary(BaseModel):
+    """Aggregated cost summary"""
+
+    request_count: int = 0
+    total_cost: float = 0.0
+    input_cost: float = 0.0
+    output_cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class LogCostTrendPoint(BaseModel):
+    """Cost trend point"""
+
+    bucket: str
+    request_count: int = 0
+    total_cost: float = 0.0
+
+
+class LogCostByModel(BaseModel):
+    """Cost grouped by requested model"""
+
+    requested_model: str
+    request_count: int = 0
+    total_cost: float = 0.0
+
+
+class LogCostStatsResponse(BaseModel):
+    """Cost stats response"""
+
+    summary: LogCostSummary
+    trend: list[LogCostTrendPoint]
+    by_model: list[LogCostByModel]

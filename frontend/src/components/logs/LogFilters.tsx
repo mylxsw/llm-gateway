@@ -27,6 +27,10 @@ interface LogFiltersProps {
   onFilterChange: (filters: Partial<LogQueryParams>) => void;
   /** Providers list (for dropdown) */
   providers: Array<{ id: number; name: string }>;
+  /** Models list (for dropdown) */
+  models: Array<{ requested_model: string }>;
+  /** API keys list (for dropdown) */
+  apiKeys: Array<{ id: number; key_name: string }>;
 }
 
 const FILTER_KEYS: Array<keyof LogQueryParams> = [
@@ -54,6 +58,8 @@ export function LogFilters({
   filters,
   onFilterChange,
   providers,
+  models,
+  apiKeys,
 }: LogFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -139,6 +145,12 @@ export function LogFilters({
   const providerValue =
     watch('provider_id') === undefined ? 'all' : String(watch('provider_id'));
 
+  const modelValue =
+    watch('requested_model') === undefined ? 'all' : String(watch('requested_model'));
+
+  const apiKeyValue =
+    watch('api_key_id') === undefined ? 'all' : String(watch('api_key_id'));
+
   const errorValue =
     watch('has_error') === undefined
       ? 'all'
@@ -164,19 +176,47 @@ export function LogFilters({
           </div>
 
           <div className="space-y-2">
-            <Label>Requested Model</Label>
-            <Input
-              placeholder="Fuzzy match"
-              {...register('requested_model')}
-            />
+            <Label>Model</Label>
+            <Select
+              value={modelValue}
+              onValueChange={(value) =>
+                setValue('requested_model', value === 'all' ? undefined : value, { shouldDirty: true })
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {models.map((m) => (
+                  <SelectItem key={m.requested_model} value={m.requested_model}>
+                    {m.requested_model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Target Model</Label>
-            <Input
-              placeholder="Fuzzy match"
-              {...register('target_model')}
-            />
+            <Label>API Key</Label>
+            <Select
+              value={apiKeyValue}
+              onValueChange={(value) =>
+                setValue('api_key_id', value === 'all' ? undefined : Number(value), { shouldDirty: true })
+              }
+            >
+              <SelectTrigger className="w-full min-w-0">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {apiKeys.map((k) => (
+                  <SelectItem key={k.id} value={String(k.id)}>
+                    {k.key_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -343,6 +383,13 @@ export function LogFilters({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label>Target Model</Label>
+                <Input
+                  placeholder="Fuzzy match"
+                  {...register('target_model')}
+                />
+              </div>
               <div className="space-y-2">
                 <Label>Total Duration Range (ms)</Label>
                 <div className="flex gap-2">

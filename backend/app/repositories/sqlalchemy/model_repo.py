@@ -52,6 +52,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
+            input_price=float(entity.input_price) if entity.input_price is not None else None,
+            output_price=float(entity.output_price) if entity.output_price is not None else None,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
         )
@@ -71,6 +73,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_protocol=provider_protocol,
             target_model_name=entity.target_model_name,
             provider_rules=entity.provider_rules,
+            input_price=float(entity.input_price) if entity.input_price is not None else None,
+            output_price=float(entity.output_price) if entity.output_price is not None else None,
             priority=entity.priority,
             weight=entity.weight,
             is_active=entity.is_active,
@@ -88,6 +92,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
+            input_price=data.input_price,
+            output_price=data.output_price,
         )
         self.session.add(entity)
         await self.session.commit()
@@ -182,6 +188,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_id=data.provider_id,
             target_model_name=data.target_model_name,
             provider_rules=data.provider_rules,
+            input_price=data.input_price,
+            output_price=data.output_price,
             priority=data.priority,
             weight=data.weight,
             is_active=data.is_active,
