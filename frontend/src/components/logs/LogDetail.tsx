@@ -73,15 +73,6 @@ export function LogDetail({ log }: LogDetailProps) {
 
   if (!log) return null;
 
-  const priceSourceLabel =
-    log.price_source === 'SupplierOverride'
-      ? 'Supplier override'
-      : log.price_source === 'ModelFallback'
-        ? 'Model fallback'
-        : log.price_source === 'DefaultZero'
-          ? 'Default zero'
-          : log.price_source || '-';
-
   return (
     <div className="space-y-6">
       <Card>
@@ -179,7 +170,7 @@ export function LogDetail({ log }: LogDetailProps) {
 
           <div className="rounded-lg border bg-muted/30 p-3">
             <div className="mb-2 text-sm font-medium">Metrics</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-8">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-7">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">TTFB</span>
                 <span className="font-medium">
@@ -212,10 +203,6 @@ export function LogDetail({ log }: LogDetailProps) {
               >
                 <span className="text-muted-foreground">Cost</span>
                 <span className="font-medium font-mono">{formatUsd(log.total_cost)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Price Source</span>
-                <span className="font-medium">{priceSourceLabel}</span>
               </div>
             </div>
           </div>

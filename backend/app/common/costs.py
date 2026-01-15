@@ -8,7 +8,7 @@ All costs are rounded to 4 decimal places (ROUND_HALF_UP).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_UP
 from typing import Optional
 
 
@@ -28,7 +28,8 @@ def _to_decimal(value: Optional[float]) -> Decimal:
 
 
 def _q4(value: Decimal) -> Decimal:
-    return value.quantize(_Q4, rounding=ROUND_HALF_UP)
+    # Round-up (ceiling) to 4 decimal places for cost accounting.
+    return value.quantize(_Q4, rounding=ROUND_UP)
 
 
 @dataclass(frozen=True)
@@ -110,4 +111,3 @@ def calculate_cost(
         input_cost=float(input_cost),
         output_cost=float(output_cost),
     )
-
