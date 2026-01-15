@@ -5,23 +5,121 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CostStats } from '@/components/logs';
 import { useLogCostStats } from '@/lib/hooks';
 import { LogQueryParams } from '@/types';
-import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
-const DEFAULT_RANGE_DAYS = 7;
+type RangePreset = '7d' | '30d' | '90d' | '365d' | 'custom';
+
+const STORAGE_KEY = 'home_cost_stats_range_v1';
+const DEFAULT_PRESET: RangePreset = '7d';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function formatDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInputValue(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
+
+function endOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function getDefaultRangeState() {
+  const now = new Date();
+  const defaultCustomEnd = formatDateInputValue(now);
+  const defaultCustomStart = formatDateInputValue(new Date(now.getTime() - 6 * DAY_MS));
+  return {
+    preset: DEFAULT_PRESET as RangePreset,
+    customStart: defaultCustomStart,
+    customEnd: defaultCustomEnd,
+  };
+}
+
+function loadRangeState() {
+  const defaults = getDefaultRangeState();
+  if (typeof window === 'undefined') return defaults;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as Partial<{
+      preset: RangePreset;
+      customStart: string;
+      customEnd: string;
+    }>;
+    return {
+      preset: parsed.preset ?? defaults.preset,
+      customStart:
+        parsed.customStart && parseDateInputValue(parsed.customStart)
+          ? parsed.customStart
+          : defaults.customStart,
+      customEnd:
+        parsed.customEnd && parseDateInputValue(parsed.customEnd)
+          ? parsed.customEnd
+          : defaults.customEnd,
+    };
+  } catch {
+    return defaults;
+  }
+}
 
 export function HomeCostStats() {
+  const [{ preset, customStart, customEnd }, setRangeState] = useState(loadRangeState);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          preset,
+          customStart,
+          customEnd,
+        })
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }, [preset, customStart, customEnd]);
+
   const params = useMemo<LogQueryParams>(() => {
-    const end = new Date();
-    const start = new Date(end.getTime() - DEFAULT_RANGE_DAYS * 24 * 60 * 60 * 1000);
-    return {
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-    };
-  }, []);
+    const refreshBump = refreshToken * 0;
+    const endAnchor = new Date();
+
+    if (preset === 'custom') {
+      const start = parseDateInputValue(customStart);
+      const end = parseDateInputValue(customEnd);
+      if (!start || !end) return {};
+      const startAt = startOfDay(start);
+      const endAt = new Date(endOfDay(end).getTime() + refreshBump);
+      return { start_time: startAt.toISOString(), end_time: endAt.toISOString() };
+    }
+
+    const days =
+      preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
+    const start = new Date(endAnchor.getTime() - days * 24 * 60 * 60 * 1000 + refreshBump);
+    return { start_time: start.toISOString(), end_time: endAnchor.toISOString() };
+  }, [preset, customStart, customEnd, refreshToken]);
 
   const { data, isLoading, isFetching, refetch } = useLogCostStats(params);
 
@@ -30,13 +128,73 @@ export function HomeCostStats() {
       stats={data}
       loading={isLoading}
       refreshing={isFetching}
-      onRefresh={async () => {
-        try {
-          await refetch();
-          toast.success('Refreshed');
-        } catch {
-          toast.error('Refresh failed');
+      toolbar={
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">Range</Label>
+            <Select
+              value={preset}
+              onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}
+            >
+              <SelectTrigger className="h-8 w-[150px]">
+                <SelectValue placeholder="Select range" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="365d">Last 365 days</SelectItem>
+                <SelectItem value="custom">Custom…</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {preset === 'custom' ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  className="h-8 w-[140px]"
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => {
+                    const nextStart = e.target.value;
+                    if (!nextStart) return;
+                    setRangeState((s) => ({
+                      ...s,
+                      customStart: nextStart,
+                      customEnd: nextStart > s.customEnd ? nextStart : s.customEnd,
+                    }));
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input
+                  className="h-8 w-[140px]"
+                  type="date"
+                  value={customEnd}
+                  onChange={(e) => {
+                    const nextEnd = e.target.value;
+                    if (!nextEnd) return;
+                    setRangeState((s) => ({
+                      ...s,
+                      customEnd: nextEnd,
+                      customStart: nextEnd < s.customStart ? nextEnd : s.customStart,
+                    }));
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      }
+      onRefresh={() => {
+        if (preset === 'custom') {
+          void refetch();
+          return;
         }
+        setRefreshToken((v) => v + 1);
       }}
     />
   );

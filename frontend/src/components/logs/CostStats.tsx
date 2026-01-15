@@ -18,9 +18,10 @@ interface CostStatsProps {
   loading?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
+  toolbar?: React.ReactNode;
 }
 
-export function CostStats({ stats, loading, onRefresh, refreshing }: CostStatsProps) {
+export function CostStats({ stats, loading, onRefresh, refreshing, toolbar }: CostStatsProps) {
   const trendMax = useMemo(() => {
     const values = stats?.trend?.map((p) => Number(p.total_cost) || 0) ?? [];
     return Math.max(0, ...values);
@@ -34,7 +35,10 @@ export function CostStats({ stats, loading, onRefresh, refreshing }: CostStatsPr
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Cost Stats</CardTitle>
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+          <CardTitle className="shrink-0">Cost Stats</CardTitle>
+          {toolbar ? <div className="min-w-0">{toolbar}</div> : null}
+        </div>
         {onRefresh ? (
           <Button
             type="button"
