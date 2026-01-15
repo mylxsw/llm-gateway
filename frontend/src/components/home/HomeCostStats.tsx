@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-type RangePreset = '7d' | '30d' | '90d' | '365d' | 'custom';
+type RangePreset = '24h' | '7d' | '30d' | '90d' | '365d' | 'custom';
 
 const STORAGE_KEY = 'home_cost_stats_range_v1';
 const DEFAULT_PRESET: RangePreset = '7d';
@@ -127,9 +127,13 @@ export function HomeCostStats() {
       return { start_time: startAt.toISOString(), end_time: endAt.toISOString() };
     }
 
-    const days =
-      preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
-    const start = new Date(endAnchor.getTime() - days * 24 * 60 * 60 * 1000 + refreshBump);
+    if (preset === '24h') {
+      const start = new Date(endAnchor.getTime() - DAY_MS + refreshBump);
+      return { start_time: start.toISOString(), end_time: endAnchor.toISOString() };
+    }
+
+    const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
+    const start = new Date(endAnchor.getTime() - days * DAY_MS + refreshBump);
     return { start_time: start.toISOString(), end_time: endAnchor.toISOString() };
   }, [preset, customStart, customEnd, refreshToken]);
 
@@ -152,6 +156,7 @@ export function HomeCostStats() {
                 <SelectValue placeholder="Select range" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
                 <SelectItem value="7d">Last 7 days</SelectItem>
                 <SelectItem value="30d">Last 30 days</SelectItem>
                 <SelectItem value="90d">Last 90 days</SelectItem>
