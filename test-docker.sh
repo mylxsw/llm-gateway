@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SERVER_HOST="http://127.0.0.1:8000"
-AUTH_TOKEN="lgw-5196e201d436d62b7e883755a65fa70b"
+AUTH_TOKEN="lgw-a83aeb7131fbcc02aa9a20685c3d9c9b"
 
 curl $SERVER_HOST/v1/chat/completions \
   -H "Content-Type: application/json" \
