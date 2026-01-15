@@ -11,7 +11,6 @@ import { useLogCostStats } from '@/lib/hooks';
 import { LogQueryParams } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 type RangePreset = '24h' | '7d' | '30d' | '90d' | '365d' | 'custom';
 
@@ -144,66 +143,65 @@ export function HomeCostStats() {
       stats={data}
       loading={isLoading}
       refreshing={isFetching}
-      toolbar={
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <Select
-              value={preset}
-              onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}
-            >
-              <SelectTrigger className="h-8 w-[150px]">
-                <SelectValue placeholder="Select range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="24h">Last 24 hours</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="365d">Last 365 days</SelectItem>
-                <SelectItem value="custom">Custom…</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {preset === 'custom' ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2">
-                <Input
-                  className="h-8 w-[140px]"
-                  type="date"
-                  value={customStart}
-                  aria-label="Start date"
-                  onChange={(e) => {
-                    const nextStart = e.target.value;
-                    if (!nextStart) return;
-                    setRangeState((s) => ({
-                      ...s,
-                      customStart: nextStart,
-                      customEnd: nextStart > s.customEnd ? nextStart : s.customEnd,
-                    }));
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  className="h-8 w-[140px]"
-                  type="date"
-                  value={customEnd}
-                  aria-label="End date"
-                  onChange={(e) => {
-                    const nextEnd = e.target.value;
-                    if (!nextEnd) return;
-                    setRangeState((s) => ({
-                      ...s,
-                      customEnd: nextEnd,
-                      customStart: nextEnd < s.customStart ? nextEnd : s.customStart,
-                    }));
-                  }}
-                />
-              </div>
-            </div>
-          ) : null}
+      headerActions={
+        <div className="flex items-center justify-end">
+          <Select
+            value={preset}
+            onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}
+          >
+            <SelectTrigger className="h-8 w-[160px]">
+              <SelectValue placeholder="选择时间范围" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="24h">Last 24 hours</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="365d">Last 365 days</SelectItem>
+              <SelectItem value="custom">Custom…</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
+      }
+      headerExtras={
+        preset === 'custom' ? (
+          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-8 w-[140px]"
+                type="date"
+                value={customStart}
+                aria-label="Start date"
+                onChange={(e) => {
+                  const nextStart = e.target.value;
+                  if (!nextStart) return;
+                  setRangeState((s) => ({
+                    ...s,
+                    customStart: nextStart,
+                    customEnd: nextStart > s.customEnd ? nextStart : s.customEnd,
+                  }));
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                className="h-8 w-[140px]"
+                type="date"
+                value={customEnd}
+                aria-label="End date"
+                onChange={(e) => {
+                  const nextEnd = e.target.value;
+                  if (!nextEnd) return;
+                  setRangeState((s) => ({
+                    ...s,
+                    customEnd: nextEnd,
+                    customStart: nextEnd < s.customStart ? nextEnd : s.customStart,
+                  }));
+                }}
+              />
+            </div>
+          </div>
+        ) : null
       }
       onRefresh={() => {
         if (preset === 'custom') {

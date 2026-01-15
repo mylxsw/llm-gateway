@@ -18,10 +18,18 @@ interface CostStatsProps {
   loading?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
-  toolbar?: React.ReactNode;
+  headerActions?: React.ReactNode;
+  headerExtras?: React.ReactNode;
 }
 
-export function CostStats({ stats, loading, onRefresh, refreshing, toolbar }: CostStatsProps) {
+export function CostStats({
+  stats,
+  loading,
+  onRefresh,
+  refreshing,
+  headerActions,
+  headerExtras,
+}: CostStatsProps) {
   const trendMax = useMemo(() => {
     const values = stats?.trend?.map((p) => Number(p.total_cost) || 0) ?? [];
     return Math.max(0, ...values);
@@ -34,25 +42,35 @@ export function CostStats({ stats, loading, onRefresh, refreshing, toolbar }: Co
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <CardTitle className="shrink-0">Activity</CardTitle>
-          {toolbar ? <div className="min-w-0">{toolbar}</div> : null}
-        </div>
-        {onRefresh ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Refresh activity"
-            onClick={onRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
-              suppressHydrationWarning
-            />
-          </Button>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <CardTitle className="shrink-0">Activity</CardTitle>
+
+        {onRefresh || headerActions || headerExtras ? (
+          <div className="ml-auto flex w-full flex-col items-end gap-2 sm:w-auto">
+            <div className="flex items-center justify-end gap-2">
+              {onRefresh ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  aria-label="刷新"
+                  onClick={onRefresh}
+                  disabled={refreshing}
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+                    suppressHydrationWarning
+                  />
+                  <span className="ml-2">刷新</span>
+                </Button>
+              ) : null}
+
+              {headerActions ? <div className="min-w-0">{headerActions}</div> : null}
+            </div>
+
+            {headerExtras ? <div className="w-full sm:w-auto">{headerExtras}</div> : null}
+          </div>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
