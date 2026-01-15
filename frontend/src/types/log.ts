@@ -42,6 +42,9 @@ export interface LogQueryParams {
   // Time range
   start_time?: string;
   end_time?: string;
+
+  // Client timezone offset minutes for stats bucketing (UTC to local)
+  tz_offset_minutes?: number;
   
   // Model filter
   requested_model?: string;

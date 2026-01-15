@@ -131,7 +131,10 @@ export function LogDetail({ log }: LogDetailProps) {
               <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
               <div className="min-w-0">
                 <div className="text-muted-foreground">Request Time</div>
-                <div className="truncate font-medium" title={log.request_time}>
+                <div
+                  className="truncate font-medium"
+                  title={formatDateTime(log.request_time, { showTime: true, showSeconds: true })}
+                >
                   {formatDateTime(log.request_time)}
                 </div>
               </div>

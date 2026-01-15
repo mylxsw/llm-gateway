@@ -53,6 +53,12 @@ async def get_log_cost_stats(
     provider_id: Optional[int] = Query(None, description="Provider ID"),
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
+    tz_offset_minutes: int = Query(
+        0,
+        ge=-14 * 60,
+        le=14 * 60,
+        description="Timezone offset minutes for bucketing (UTC to local). Example: UTC+8 => 480",
+    ),
 ):
     """
     Aggregated cost stats for logs.
@@ -74,6 +80,7 @@ async def get_log_cost_stats(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
             bucket=bucket,
+            tz_offset_minutes=tz_offset_minutes,
         )
         return await service.get_cost_stats(query)
     except AppError as e:

@@ -154,6 +154,14 @@ class LogCostStatsQuery(BaseModel):
     api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
     # Bucket granularity: hour/day
     bucket: str = Field("day", pattern="^(hour|day)$", description="Trend bucket")
+    # Timezone offset (minutes) applied to request_time before bucketing.
+    # Example: UTC+8 => 480, UTC-8 => -480.
+    tz_offset_minutes: int = Field(
+        0,
+        ge=-14 * 60,
+        le=14 * 60,
+        description="Timezone offset minutes for bucketing (UTC to local)",
+    )
 
 
 class LogCostSummary(BaseModel):

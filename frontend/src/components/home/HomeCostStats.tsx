@@ -142,6 +142,7 @@ export function HomeCostStats() {
   const params = useMemo<LogQueryParams>(() => {
     const refreshBump = refreshToken * 0;
     const endAnchor = new Date();
+    const tzOffsetMinutes = -endAnchor.getTimezoneOffset();
 
     if (preset === 'custom') {
       const start = parseDateInputValue(customStart);
@@ -149,17 +150,29 @@ export function HomeCostStats() {
       if (!start || !end) return {};
       const startAt = startOfDay(start);
       const endAt = new Date(endOfDay(end).getTime() + refreshBump);
-      return { start_time: startAt.toISOString(), end_time: endAt.toISOString() };
+      return {
+        start_time: startAt.toISOString(),
+        end_time: endAt.toISOString(),
+        tz_offset_minutes: tzOffsetMinutes,
+      };
     }
 
     if (preset === '24h') {
       const start = new Date(endAnchor.getTime() - DAY_MS + refreshBump);
-      return { start_time: start.toISOString(), end_time: endAnchor.toISOString() };
+      return {
+        start_time: start.toISOString(),
+        end_time: endAnchor.toISOString(),
+        tz_offset_minutes: tzOffsetMinutes,
+      };
     }
 
     const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
     const start = new Date(endAnchor.getTime() - days * DAY_MS + refreshBump);
-    return { start_time: start.toISOString(), end_time: endAnchor.toISOString() };
+    return {
+      start_time: start.toISOString(),
+      end_time: endAnchor.toISOString(),
+      tz_offset_minutes: tzOffsetMinutes,
+    };
   }, [preset, customStart, customEnd, refreshToken]);
 
   const rangeDays = useMemo(() => {
@@ -177,6 +190,16 @@ export function HomeCostStats() {
     return 365;
   }, [preset, customStart, customEnd]);
 
+  const rangeLabel = useMemo(() => {
+    if (preset === 'custom') {
+      const start = parseDateInputValue(customStart);
+      const end = parseDateInputValue(customEnd);
+      if (!start || !end) return getRangeLabel(preset);
+      return `${customStart} ~ ${customEnd}`;
+    }
+    return getRangeLabel(preset);
+  }, [preset, customStart, customEnd]);
+
   const { data, isLoading, isFetching, refetch } = useLogCostStats(params);
 
   return (
@@ -184,7 +207,7 @@ export function HomeCostStats() {
       stats={data}
       loading={isLoading}
       refreshing={isFetching}
-      rangeLabel={getRangeLabel(preset)}
+      rangeLabel={rangeLabel}
       rangeDays={rangeDays}
       headerActions={
         <div className="flex items-center justify-end">

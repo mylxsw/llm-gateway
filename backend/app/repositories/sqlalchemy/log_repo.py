@@ -239,6 +239,7 @@ class SQLAlchemyLogRepository(LogRepository):
 
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
         conditions = []
+        tz_offset_minutes = int(query.tz_offset_minutes or 0)
 
         if query.start_time:
             conditions.append(RequestLogORM.request_time >= query.start_time)
@@ -293,20 +294,32 @@ class SQLAlchemyLogRepository(LogRepository):
         bind = self.session.get_bind()
         dialect_name = bind.dialect.name if bind is not None else "sqlite"
 
+        if tz_offset_minutes != 0:
+            if dialect_name == "sqlite":
+                shifted_time_expr = func.datetime(
+                    RequestLogORM.request_time, f"{tz_offset_minutes:+d} minutes"
+                )
+            else:
+                shifted_time_expr = RequestLogORM.request_time + func.make_interval(
+                    mins=tz_offset_minutes
+                )
+        else:
+            shifted_time_expr = RequestLogORM.request_time
+
         if query.bucket == "hour":
             if dialect_name == "sqlite":
-                bucket_expr = func.strftime("%Y-%m-%d %H:00", RequestLogORM.request_time)
+                bucket_expr = func.strftime("%Y-%m-%d %H:00", shifted_time_expr)
             else:
                 bucket_expr = func.to_char(
-                    func.date_trunc("hour", RequestLogORM.request_time),
+                    func.date_trunc("hour", shifted_time_expr),
                     "YYYY-MM-DD HH24:00",
                 )
         else:
             if dialect_name == "sqlite":
-                bucket_expr = func.strftime("%Y-%m-%d", RequestLogORM.request_time)
+                bucket_expr = func.strftime("%Y-%m-%d", shifted_time_expr)
             else:
                 bucket_expr = func.to_char(
-                    func.date_trunc("day", RequestLogORM.request_time),
+                    func.date_trunc("day", shifted_time_expr),
                     "YYYY-MM-DD",
                 )
 
