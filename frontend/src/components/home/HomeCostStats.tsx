@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CostStats } from '@/components/logs';
 import { useLogCostStats } from '@/lib/hooks';
 import { LogQueryParams } from '@/types';
@@ -56,9 +56,8 @@ function getDefaultRangeState() {
   };
 }
 
-function loadRangeState() {
+function loadRangeStateFromStorage() {
   const defaults = getDefaultRangeState();
-  if (typeof window === 'undefined') return defaults;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
@@ -84,10 +83,23 @@ function loadRangeState() {
 }
 
 export function HomeCostStats() {
-  const [{ preset, customStart, customEnd }, setRangeState] = useState(loadRangeState);
+  const [{ preset, customStart, customEnd }, setRangeState] = useState(getDefaultRangeState);
   const [refreshToken, setRefreshToken] = useState(0);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        setRangeState(loadRangeStateFromStorage());
+      } catch {
+        // ignore storage failures
+      }
+      restoredRef.current = true;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!restoredRef.current) return;
     try {
       localStorage.setItem(
         STORAGE_KEY,
