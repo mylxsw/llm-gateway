@@ -4,10 +4,10 @@ API Key Management Service Module
 Provides business logic processing for API Keys.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from app.common.errors import ConflictError, NotFoundError, AuthenticationError
+from app.common.time import utc_now
 from app.common.sanitizer import sanitize_api_key_display
 from app.common.utils import generate_api_key
 from app.domain.api_key import (
@@ -206,7 +206,7 @@ class ApiKeyService:
             )
         
         # Update last used time
-        await self.repo.update_last_used(api_key.id, datetime.utcnow())
+        await self.repo.update_last_used(api_key.id, utc_now())
         
         return api_key
     

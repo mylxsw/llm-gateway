@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.common.time import utc_now
 from unittest.mock import AsyncMock
 
 import pytest
@@ -33,7 +33,7 @@ class FakeProviderRepo:
 
 @pytest.mark.asyncio
 async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
-    now = datetime.utcnow()
+    now = utc_now()
     model_mapping = ModelMapping(
         requested_model="test-model",
         strategy="round_robin",

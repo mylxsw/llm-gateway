@@ -23,6 +23,7 @@ from app.common.protocol_conversion import (
 from app.common.token_counter import get_token_counter
 from app.common.costs import calculate_cost, resolve_price
 from app.common.utils import generate_trace_id
+from app.common.time import utc_now
 from app.domain.log import RequestLogCreate
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
@@ -186,7 +187,7 @@ class ProxyService:
             ServiceError: No available provider
         """
         trace_id = generate_trace_id()
-        request_time = datetime.utcnow()
+        request_time = utc_now()
         
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -397,7 +398,7 @@ class ProxyService:
             tuple: (Initial response, Stream generator, Log info)
         """
         trace_id = generate_trace_id()
-        request_time = datetime.utcnow()
+        request_time = utc_now()
         start_monotonic = time.monotonic()
         
         # 1-7. Same model resolution and rule matching logic

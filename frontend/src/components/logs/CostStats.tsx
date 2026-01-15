@@ -50,6 +50,15 @@ function formatCompactNumber(value: number) {
 
 function parseBucketToLocalDate(bucket: string) {
   const trimmed = bucket.trim();
+  const looksLikeIso =
+    trimmed.includes('T') ||
+    trimmed.endsWith('Z') ||
+    /[+-]\\d{2}:?\\d{2}$/.test(trimmed);
+  if (looksLikeIso) {
+    const d = new Date(trimmed);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
   const matchHour = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):00$/.exec(trimmed);
   if (matchHour) {
     const year = Number(matchHour[1]);
@@ -141,6 +150,96 @@ function getModelColorClass(modelName: string) {
   return MODEL_COLOR_CLASSES[idx]!;
 }
 
+function TrendBars({
+  title,
+  points,
+  segments,
+  maxTotal,
+  height,
+  barWidthClassName,
+  scroller,
+  bucketUnit,
+}: {
+  title: string;
+  points: LogCostStatsResponse['trend'];
+  segments: Segment[];
+  maxTotal: number;
+  height: number;
+  barWidthClassName: string;
+  scroller?: React.RefObject<HTMLDivElement | null>;
+  bucketUnit: 'hour' | 'day';
+}) {
+  return (
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+      <div ref={scroller} className="flex items-end gap-1 overflow-x-auto pb-2">
+        {points.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No data</div>
+        ) : (
+          points.map((p) => {
+            const rawValues = segments.map((seg) => Math.max(0, Number(seg.getValue(p)) || 0));
+            const total = rawValues.reduce((acc, v) => acc + v, 0);
+            const normalizedMax = maxTotal > 0 ? maxTotal : 1;
+            const totalHeight = Math.max(
+              2,
+              Math.round((Math.min(total, normalizedMax) / normalizedMax) * height)
+            );
+            const bucketDate = parseBucketToLocalDate(String(p.bucket));
+            const bucketLabel = bucketDate ? formatBucketLabel(bucketDate, bucketUnit) : String(p.bucket);
+
+            return (
+              <div key={p.bucket} className="flex flex-col items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={`flex ${barWidthClassName} flex-col justify-end overflow-hidden rounded-sm bg-muted/15 p-0 outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+                      style={{ height }}
+                      aria-label={`Show details for ${title} at ${bucketLabel}`}
+                    >
+                      {total > 0 ? (
+                        <div className="flex flex-col-reverse" style={{ height: totalHeight }}>
+                          {segments.map((seg, idx) => {
+                            const segValue = rawValues[idx] ?? 0;
+                            const segHeight =
+                              total > 0 ? Math.max(1, Math.round((segValue / total) * totalHeight)) : 0;
+                            return (
+                              <div
+                                key={seg.label}
+                                className={seg.colorClassName}
+                                style={{ height: segHeight }}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="h-px w-full bg-muted-foreground/30" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="center" className="min-w-[220px]">
+                    <div className="text-xs font-medium">{bucketLabel}</div>
+                    <div className="mt-2 space-y-1 text-xs">
+                      {segments.map((seg, idx) => (
+                        <div key={seg.label} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-sm ${seg.colorClassName}`} />
+                            <span className="text-muted-foreground">{seg.label}</span>
+                          </div>
+                          <span className="font-mono">{seg.formatValue(rawValues[idx] ?? 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
+
 function TrendCard({
   title,
   points,
@@ -149,6 +248,7 @@ function TrendCard({
   avgValue,
   totalLabel,
   totalValue,
+  bucketUnit,
 }: {
   title: string;
   points: LogCostStatsResponse['trend'];
@@ -157,6 +257,7 @@ function TrendCard({
   avgValue: string;
   totalLabel: string;
   totalValue: string;
+  bucketUnit: 'hour' | 'day';
 }) {
   const [open, setOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -189,82 +290,6 @@ function TrendCard({
     return () => cancelAnimationFrame(raf);
   }, [open, points]);
 
-  const Bars = ({
-    height,
-    barWidthClassName,
-    scroller,
-  }: {
-    height: number;
-    barWidthClassName: string;
-    scroller?: React.RefObject<HTMLDivElement | null>;
-  }) => (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-      <div ref={scroller} className="flex items-end gap-1 overflow-x-auto pb-2">
-        {points.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No data</div>
-        ) : (
-          points.map((p) => {
-            const rawValues = segments.map((seg) => Math.max(0, Number(seg.getValue(p)) || 0));
-            const total = rawValues.reduce((acc, v) => acc + v, 0);
-            const normalizedMax = maxTotal > 0 ? maxTotal : 1;
-            const totalHeight = Math.max(
-              2,
-              Math.round((Math.min(total, normalizedMax) / normalizedMax) * height)
-            );
-
-            return (
-              <div key={p.bucket} className="flex flex-col items-center gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className={`flex ${barWidthClassName} flex-col justify-end overflow-hidden rounded-sm bg-muted/15 p-0 outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
-                      style={{ height }}
-                      aria-label={`Show details for ${title} at ${p.bucket}`}
-                    >
-                      {total > 0 ? (
-                        <div className="flex flex-col-reverse" style={{ height: totalHeight }}>
-                          {segments.map((seg, idx) => {
-                            const segValue = rawValues[idx] ?? 0;
-                            const segHeight =
-                              total > 0 ? Math.max(1, Math.round((segValue / total) * totalHeight)) : 0;
-                            return (
-                              <div
-                                key={seg.label}
-                                className={seg.colorClassName}
-                                style={{ height: segHeight }}
-                              />
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="h-px w-full bg-muted-foreground/30" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" align="center" className="min-w-[220px]">
-                    <div className="text-xs font-medium">{p.bucket}</div>
-                    <div className="mt-2 space-y-1 text-xs">
-                      {segments.map((seg, idx) => (
-                        <div key={seg.label} className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-sm ${seg.colorClassName}`} />
-                            <span className="text-muted-foreground">{seg.label}</span>
-                          </div>
-                          <span className="font-mono">{seg.formatValue(rawValues[idx] ?? 0)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </TooltipProvider>
-  );
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <div className="group relative overflow-hidden rounded-2xl border bg-gradient-to-b from-muted/10 to-background p-4">
@@ -283,7 +308,16 @@ function TrendCard({
         </DialogTrigger>
       </div>
 
-      <Bars height={96} barWidthClassName="w-3" scroller={scrollerRef} />
+      <TrendBars
+        title={title}
+        points={points}
+        segments={segments}
+        maxTotal={maxTotal}
+        height={96}
+        barWidthClassName="w-3"
+        scroller={scrollerRef}
+        bucketUnit={bucketUnit}
+      />
 
       <div className="mt-1 flex items-end justify-between gap-6">
         <div className="min-w-0">
@@ -303,7 +337,16 @@ function TrendCard({
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
 
-          <Bars height={220} barWidthClassName="w-4" scroller={modalScrollerRef} />
+          <TrendBars
+            title={title}
+            points={points}
+            segments={segments}
+            maxTotal={maxTotal}
+            height={220}
+            barWidthClassName="w-4"
+            scroller={modalScrollerRef}
+            bucketUnit={bucketUnit}
+          />
 
           <div className="mt-2 flex items-end justify-between gap-6">
             <div className="min-w-0">
@@ -528,6 +571,7 @@ export function CostStats({
                 }
                 totalLabel={rangeLabel}
                 totalValue={formatUsd(stats.summary.total_cost)}
+                bucketUnit={bucket}
               />
 
               <TrendCard
@@ -546,6 +590,7 @@ export function CostStats({
                 }
                 totalLabel={rangeLabel}
                 totalValue={formatCompactNumber(stats.summary.input_tokens + stats.summary.output_tokens)}
+                bucketUnit={bucket}
               />
 
               <TrendCard
@@ -560,6 +605,7 @@ export function CostStats({
                 }
                 totalLabel={rangeLabel}
                 totalValue={formatNumber(stats.summary.request_count)}
+                bucketUnit={bucket}
               />
             </div>
 

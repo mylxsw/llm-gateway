@@ -51,6 +51,39 @@ const FILTER_KEYS: Array<keyof LogQueryParams> = [
   'total_time_max',
 ];
 
+function pad2(v: number) {
+  return String(v).padStart(2, '0');
+}
+
+function isoToLocalDateTimeInputValue(value?: string) {
+  if (!value) return undefined;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(
+    d.getHours()
+  )}:${pad2(d.getMinutes())}`;
+}
+
+function localDateTimeInputValueToIso(value?: string) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T\\s](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] ? Number(match[6]) : 0;
+
+  const local = new Date(year, month - 1, day, hour, minute, second, 0);
+  if (Number.isNaN(local.getTime())) return undefined;
+  return local.toISOString();
+}
+
 /**
  * Log Filter Component
  */
@@ -65,8 +98,8 @@ export function LogFilters({
 
   const defaultValues = useMemo<Partial<LogQueryParams>>(
     () => ({
-      start_time: filters.start_time,
-      end_time: filters.end_time,
+      start_time: isoToLocalDateTimeInputValue(filters.start_time),
+      end_time: isoToLocalDateTimeInputValue(filters.end_time),
       requested_model: filters.requested_model,
       target_model: filters.target_model,
       provider_id: filters.provider_id,
@@ -136,7 +169,12 @@ export function LogFilters({
         normalized[key] = undefined;
         continue;
       }
-      (normalized as Record<keyof LogQueryParams, unknown>)[key] = value;
+      if (key === 'start_time' || key === 'end_time') {
+        (normalized as Record<keyof LogQueryParams, unknown>)[key] =
+          localDateTimeInputValueToIso(value as string | undefined);
+      } else {
+        (normalized as Record<keyof LogQueryParams, unknown>)[key] = value;
+      }
     }
 
     onFilterChange(normalized);

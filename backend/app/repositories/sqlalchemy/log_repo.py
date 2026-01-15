@@ -4,12 +4,13 @@ Log Repository SQLAlchemy Implementation
 Provides concrete database operation implementation for request logs.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import func, select, and_, or_, delete, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import RequestLog as RequestLogORM
 from app.domain.log import (
     RequestLogModel,
@@ -42,9 +43,7 @@ class SQLAlchemyLogRepository(LogRepository):
     
     def _to_domain(self, entity: RequestLogORM) -> RequestLogModel:
         """Convert ORM entity to domain model"""
-        request_time = entity.request_time
-        if request_time and request_time.tzinfo is None:
-            request_time = request_time.replace(tzinfo=timezone.utc)
+        request_time = ensure_utc(entity.request_time)
         return RequestLogModel(
             id=entity.id,
             request_time=request_time,
@@ -76,7 +75,7 @@ class SQLAlchemyLogRepository(LogRepository):
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
         """Create request log"""
         entity = RequestLogORM(
-            request_time=data.request_time,
+            request_time=to_utc_naive(data.request_time),
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
             requested_model=data.requested_model,
@@ -129,9 +128,9 @@ class SQLAlchemyLogRepository(LogRepository):
         
         # Time range filter
         if query.start_time:
-            conditions.append(RequestLogORM.request_time >= query.start_time)
+            conditions.append(RequestLogORM.request_time >= to_utc_naive(query.start_time))
         if query.end_time:
-            conditions.append(RequestLogORM.request_time <= query.end_time)
+            conditions.append(RequestLogORM.request_time <= to_utc_naive(query.end_time))
         
         # Model filter (fuzzy match)
         if query.requested_model:
@@ -231,7 +230,9 @@ class SQLAlchemyLogRepository(LogRepository):
         Returns:
             int: Number of deleted logs
         """
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff_time = to_utc_naive(utc_now() - timedelta(days=days_to_keep))
+        if cutoff_time is None:
+            return 0
         stmt = delete(RequestLogORM).where(RequestLogORM.request_time < cutoff_time)
         result = await self.session.execute(stmt)
         await self.session.commit()
@@ -242,9 +243,9 @@ class SQLAlchemyLogRepository(LogRepository):
         tz_offset_minutes = int(query.tz_offset_minutes or 0)
 
         if query.start_time:
-            conditions.append(RequestLogORM.request_time >= query.start_time)
+            conditions.append(RequestLogORM.request_time >= to_utc_naive(query.start_time))
         if query.end_time:
-            conditions.append(RequestLogORM.request_time <= query.end_time)
+            conditions.append(RequestLogORM.request_time <= to_utc_naive(query.end_time))
         if query.provider_id:
             conditions.append(RequestLogORM.provider_id == query.provider_id)
         if query.api_key_id:
@@ -306,25 +307,40 @@ class SQLAlchemyLogRepository(LogRepository):
         else:
             shifted_time_expr = RequestLogORM.request_time
 
+        # Build bucket start timestamp in UTC (returned as a UTC-aware datetime at API boundary).
+        # For timezone bucketing, we:
+        # 1) shift request_time (UTC) into "local" (UTC + offset)
+        # 2) truncate to bucket boundary in that local clock
+        # 3) shift the bucket start back to UTC for stable API output
         if query.bucket == "hour":
             if dialect_name == "sqlite":
-                bucket_expr = func.strftime("%Y-%m-%d %H:00", shifted_time_expr)
-            else:
-                bucket_expr = func.to_char(
-                    func.date_trunc("hour", shifted_time_expr),
-                    "YYYY-MM-DD HH24:00",
+                bucket_local_start_expr = func.strftime(
+                    "%Y-%m-%d %H:00:00", shifted_time_expr
                 )
+            else:
+                bucket_local_start_expr = func.date_trunc("hour", shifted_time_expr)
         else:
             if dialect_name == "sqlite":
-                bucket_expr = func.strftime("%Y-%m-%d", shifted_time_expr)
-            else:
-                bucket_expr = func.to_char(
-                    func.date_trunc("day", shifted_time_expr),
-                    "YYYY-MM-DD",
+                bucket_local_start_expr = func.strftime(
+                    "%Y-%m-%d 00:00:00", shifted_time_expr
                 )
+            else:
+                bucket_local_start_expr = func.date_trunc("day", shifted_time_expr)
+
+        if tz_offset_minutes != 0:
+            if dialect_name == "sqlite":
+                bucket_start_utc_expr = func.datetime(
+                    bucket_local_start_expr, f"{-tz_offset_minutes:+d} minutes"
+                )
+            else:
+                bucket_start_utc_expr = bucket_local_start_expr - func.make_interval(
+                    mins=tz_offset_minutes
+                )
+        else:
+            bucket_start_utc_expr = bucket_local_start_expr
 
         trend_stmt = select(
-            bucket_expr.label("bucket"),
+            bucket_start_utc_expr.label("bucket"),
             func.count().label("request_count"),
             sum_total.label("total_cost"),
             sum_input.label("input_cost"),
@@ -332,13 +348,17 @@ class SQLAlchemyLogRepository(LogRepository):
             sum_in_tokens.label("input_tokens"),
             sum_out_tokens.label("output_tokens"),
             sum_error.label("error_count"),
-        ).group_by(bucket_expr).order_by(bucket_expr)
+        ).group_by(bucket_start_utc_expr).order_by(bucket_start_utc_expr)
         if where_clause is not None:
             trend_stmt = trend_stmt.where(where_clause)
         trend_rows = (await self.session.execute(trend_stmt)).mappings().all()
         trend = [
             LogCostTrendPoint(
-                bucket=str(r["bucket"]),
+                bucket=ensure_utc(
+                    datetime.fromisoformat(r["bucket"])
+                    if isinstance(r["bucket"], str)
+                    else r["bucket"]
+                ),
                 request_count=int(r["request_count"] or 0),
                 total_cost=float(r["total_cost"] or 0),
                 input_cost=float(r["input_cost"] or 0),

@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.common.time import utc_now
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,7 +11,7 @@ from app.services.proxy_service import ProxyService
 
 @pytest.mark.asyncio
 async def test_process_request_same_protocol_response_body_passthrough_bytes():
-    now = datetime.utcnow()
+    now = utc_now()
     model_mapping = ModelMapping(
         requested_model="test-model",
         strategy="round_robin",

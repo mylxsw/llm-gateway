@@ -178,7 +178,7 @@ class LogCostSummary(BaseModel):
 class LogCostTrendPoint(BaseModel):
     """Cost trend point"""
 
-    bucket: str
+    bucket: datetime
     request_count: int = 0
     total_cost: float = 0.0
     input_cost: float = 0.0

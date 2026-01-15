@@ -1,6 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from datetime import datetime
+from app.common.time import utc_now
 from app.main import app
 from app.api.deps import get_db, get_current_api_key
 from app.domain.model import ModelMappingCreate
@@ -18,7 +18,7 @@ async def test_list_models(db_session):
         key_name="test-key",
         key_value="sk-test...",
         is_active=True,
-        created_at=datetime.utcnow(),
+        created_at=utc_now(),
         last_used_at=None
     )
     app.dependency_overrides[get_current_api_key] = lambda: mock_api_key
