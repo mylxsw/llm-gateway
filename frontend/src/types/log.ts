@@ -45,6 +45,9 @@ export interface LogQueryParams {
 
   // Client timezone offset minutes for stats bucketing (UTC to local)
   tz_offset_minutes?: number;
+
+  // Trend bucketing hint for stats (hour/day)
+  bucket?: 'hour' | 'day';
   
   // Model filter
   requested_model?: string;

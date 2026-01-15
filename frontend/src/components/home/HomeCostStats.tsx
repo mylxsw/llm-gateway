@@ -17,6 +17,12 @@ type RangePreset = '24h' | '7d' | '30d' | '90d' | '365d' | 'custom';
 const STORAGE_KEY = 'home_cost_stats_range_v1';
 const DEFAULT_PRESET: RangePreset = '24h';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_TREND_BARS = 30;
+
+function resolveBucket(rangeMs: number, maxBars: number) {
+  const perBarMs = rangeMs / Math.max(1, maxBars);
+  return perBarMs < DAY_MS ? 'hour' : 'day';
+}
 
 function getRangeLabel(preset: RangePreset) {
   switch (preset) {
@@ -150,28 +156,34 @@ export function HomeCostStats() {
       if (!start || !end) return {};
       const startAt = startOfDay(start);
       const endAt = new Date(endOfDay(end).getTime() + refreshBump);
+      const bucket = resolveBucket(endAt.getTime() - startAt.getTime(), MAX_TREND_BARS);
       return {
         start_time: startAt.toISOString(),
         end_time: endAt.toISOString(),
         tz_offset_minutes: tzOffsetMinutes,
+        bucket,
       };
     }
 
     if (preset === '24h') {
       const start = new Date(endAnchor.getTime() - DAY_MS + refreshBump);
+      const bucket = resolveBucket(endAnchor.getTime() - start.getTime(), MAX_TREND_BARS);
       return {
         start_time: start.toISOString(),
         end_time: endAnchor.toISOString(),
         tz_offset_minutes: tzOffsetMinutes,
+        bucket,
       };
     }
 
     const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365;
     const start = new Date(endAnchor.getTime() - days * DAY_MS + refreshBump);
+    const bucket = resolveBucket(endAnchor.getTime() - start.getTime(), MAX_TREND_BARS);
     return {
       start_time: start.toISOString(),
       end_time: endAnchor.toISOString(),
       tz_offset_minutes: tzOffsetMinutes,
+      bucket,
     };
   }, [preset, customStart, customEnd, refreshToken]);
 
@@ -209,6 +221,10 @@ export function HomeCostStats() {
       refreshing={isFetching}
       rangeLabel={rangeLabel}
       rangeDays={rangeDays}
+      rangeStart={params.start_time}
+      rangeEnd={params.end_time}
+      bucket={params.bucket}
+      maxBars={MAX_TREND_BARS}
       headerActions={
         <div className="flex items-center justify-end">
           <Select

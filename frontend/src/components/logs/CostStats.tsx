@@ -23,6 +23,10 @@ interface CostStatsProps {
   headerExtras?: React.ReactNode;
   rangeLabel?: string;
   rangeDays?: number;
+  rangeStart?: string;
+  rangeEnd?: string;
+  bucket?: 'hour' | 'day';
+  maxBars?: number;
 }
 
 type Segment = {
@@ -32,12 +36,79 @@ type Segment = {
   formatValue: (v: number) => string;
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
 function formatCompactNumber(value: number) {
   if (!Number.isFinite(value)) return '0';
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return String(Math.round(value));
+}
+
+function parseBucketToLocalDate(bucket: string) {
+  const trimmed = bucket.trim();
+  const matchHour = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):00$/.exec(trimmed);
+  if (matchHour) {
+    const year = Number(matchHour[1]);
+    const month = Number(matchHour[2]);
+    const day = Number(matchHour[3]);
+    const hour = Number(matchHour[4]);
+    return new Date(year, month - 1, day, hour, 0, 0, 0);
+  }
+
+  const matchDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (matchDay) {
+    const year = Number(matchDay[1]);
+    const month = Number(matchDay[2]);
+    const day = Number(matchDay[3]);
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  }
+
+  return null;
+}
+
+function formatBucketLabel(date: Date, unit: 'hour' | 'day') {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  if (unit === 'day') return `${y}-${m}-${d}`;
+  const hh = String(date.getHours()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:00`;
+}
+
+function formatBucketRangeLabel(start: Date, end: Date, unit: 'hour' | 'day', step: number) {
+  if (unit === 'day' && step === 1) return formatBucketLabel(start, 'day');
+  if (unit === 'hour' && step === 1) return formatBucketLabel(start, 'hour');
+  const endInclusive = new Date(end.getTime() - 1);
+  return `${formatBucketLabel(start, unit)} ~ ${formatBucketLabel(endInclusive, unit)}`;
+}
+
+function floorToUnit(date: Date, unit: 'hour' | 'day') {
+  const d = new Date(date);
+  if (unit === 'day') d.setHours(0, 0, 0, 0);
+  else d.setMinutes(0, 0, 0);
+  return d;
+}
+
+function ceilToUnitExclusive(date: Date, unit: 'hour' | 'day') {
+  const floored = floorToUnit(date, unit);
+  if (floored.getTime() === date.getTime()) return floored;
+  const bumped = new Date(floored);
+  bumped.setTime(bumped.getTime() + (unit === 'day' ? DAY_MS : HOUR_MS));
+  return bumped;
+}
+
+function computeStep(rangeMs: number, unit: 'hour' | 'day', maxBars: number) {
+  const unitMs = unit === 'day' ? DAY_MS : HOUR_MS;
+  const raw = rangeMs / Math.max(1, maxBars) / unitMs;
+  return Math.max(1, Math.ceil(raw));
+}
+
+function stepLabel(unit: 'hour' | 'day', step: number) {
+  if (unit === 'day') return step === 1 ? 'Day' : `${step}d`;
+  return step === 1 ? 'Hour' : `${step}h`;
 }
 
 function TrendCard({
@@ -90,8 +161,11 @@ function TrendCard({
           points.map((p) => {
             const rawValues = segments.map((seg) => Math.max(0, Number(seg.getValue(p)) || 0));
             const total = rawValues.reduce((acc, v) => acc + v, 0);
-            const totalHeight =
-              maxTotal > 0 ? Math.max(2, Math.round((Math.min(total, maxTotal) / maxTotal) * 96)) : 0;
+            const normalizedMax = maxTotal > 0 ? maxTotal : 1;
+            const totalHeight = Math.max(
+              2,
+              Math.round((Math.min(total, normalizedMax) / normalizedMax) * 96)
+            );
 
             const toolLines = [
               p.bucket,
@@ -105,20 +179,24 @@ function TrendCard({
                   style={{ height: 96 }}
                   title={toolLines.join('\n')}
                 >
-                  <div className="flex flex-col-reverse" style={{ height: totalHeight }}>
-                    {segments.map((seg, idx) => {
-                      const segValue = rawValues[idx] ?? 0;
-                      const height =
-                        total > 0 ? Math.max(1, Math.round((segValue / total) * totalHeight)) : 0;
-                      return (
-                        <div
-                          key={seg.label}
-                          className={seg.colorClassName}
-                          style={{ height }}
-                        />
-                      );
-                    })}
-                  </div>
+                  {total > 0 ? (
+                    <div className="flex flex-col-reverse" style={{ height: totalHeight }}>
+                      {segments.map((seg, idx) => {
+                        const segValue = rawValues[idx] ?? 0;
+                        const height =
+                          total > 0 ? Math.max(1, Math.round((segValue / total) * totalHeight)) : 0;
+                        return (
+                          <div
+                            key={seg.label}
+                            className={seg.colorClassName}
+                            style={{ height }}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="h-px w-full bg-muted-foreground/30" />
+                  )}
                 </div>
               </div>
             );
@@ -149,6 +227,10 @@ export function CostStats({
   headerExtras,
   rangeLabel = 'Selected Range',
   rangeDays = 1,
+  rangeStart,
+  rangeEnd,
+  bucket = 'day',
+  maxBars = 30,
 }: CostStatsProps) {
   const modelMax = useMemo(() => {
     const values = stats?.by_model?.map((p) => Number(p.total_cost) || 0) ?? [];
@@ -156,6 +238,77 @@ export function CostStats({
   }, [stats?.by_model]);
 
   const safeRangeDays = Math.max(1, Math.round(rangeDays));
+
+  const computedTrend = useMemo(() => {
+    if (!stats) return [];
+    if (!rangeStart || !rangeEnd) return stats.trend;
+
+    const startLocal = new Date(rangeStart);
+    const endLocal = new Date(rangeEnd);
+    if (Number.isNaN(startLocal.getTime()) || Number.isNaN(endLocal.getTime())) return stats.trend;
+
+    const alignedStart = floorToUnit(startLocal, bucket);
+    const alignedEnd = ceilToUnitExclusive(endLocal, bucket);
+    const alignedRangeMs = Math.max(0, alignedEnd.getTime() - alignedStart.getTime());
+    if (alignedRangeMs <= 0) return stats.trend;
+
+    const step = computeStep(alignedRangeMs, bucket, maxBars);
+    const unitMs = bucket === 'day' ? DAY_MS : HOUR_MS;
+    const bucketMs = step * unitMs;
+    const bars = Math.max(1, Math.ceil(alignedRangeMs / bucketMs));
+
+    const emptyPoints: LogCostStatsResponse['trend'] = Array.from({ length: bars }).map((_, idx) => {
+      const bucketStart = new Date(alignedStart.getTime() + idx * bucketMs);
+      const bucketEnd = new Date(Math.min(alignedEnd.getTime(), bucketStart.getTime() + bucketMs));
+      return {
+        bucket: formatBucketRangeLabel(bucketStart, bucketEnd, bucket, step),
+        request_count: 0,
+        total_cost: 0,
+        input_cost: 0,
+        output_cost: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        error_count: 0,
+        success_count: 0,
+      };
+    });
+
+    const parsed = stats.trend
+      .map((p) => {
+        const t = parseBucketToLocalDate(p.bucket);
+        return t ? { t, p } : null;
+      })
+      .filter((x): x is { t: Date; p: LogCostStatsResponse['trend'][number] } => Boolean(x));
+
+    for (const { t, p } of parsed) {
+      const offsetMs = t.getTime() - alignedStart.getTime();
+      if (offsetMs < 0 || offsetMs >= alignedRangeMs) continue;
+      const idx = Math.min(bars - 1, Math.floor(offsetMs / bucketMs));
+      const target = emptyPoints[idx];
+      target.request_count += Number(p.request_count) || 0;
+      target.total_cost += Number(p.total_cost) || 0;
+      target.input_cost += Number(p.input_cost) || 0;
+      target.output_cost += Number(p.output_cost) || 0;
+      target.input_tokens += Number(p.input_tokens) || 0;
+      target.output_tokens += Number(p.output_tokens) || 0;
+      target.error_count += Number(p.error_count) || 0;
+      target.success_count += Number(p.success_count) || 0;
+    }
+
+    return emptyPoints;
+  }, [stats, rangeStart, rangeEnd, bucket, maxBars]);
+
+  const avgTrendLabel = useMemo(() => {
+    if (!rangeStart || !rangeEnd) return 'Avg Day';
+    const startLocal = new Date(rangeStart);
+    const endLocal = new Date(rangeEnd);
+    if (Number.isNaN(startLocal.getTime()) || Number.isNaN(endLocal.getTime())) return 'Avg Day';
+    const alignedStart = floorToUnit(startLocal, bucket);
+    const alignedEnd = ceilToUnitExclusive(endLocal, bucket);
+    const alignedRangeMs = Math.max(0, alignedEnd.getTime() - alignedStart.getTime());
+    const step = computeStep(alignedRangeMs, bucket, maxBars);
+    return `Avg ${stepLabel(bucket, step)}`;
+  }, [rangeStart, rangeEnd, bucket, maxBars]);
 
   const spendSegments = useMemo<Segment[]>(
     () => [
@@ -255,10 +408,14 @@ export function CostStats({
               <TrendCard
                 title="Spend"
                 href="/logs"
-                points={stats.trend}
+                points={computedTrend}
                 segments={spendSegments}
-                avgLabel="Avg Day"
-                avgValue={formatUsd(stats.summary.total_cost / safeRangeDays)}
+                avgLabel={avgTrendLabel}
+                avgValue={
+                  computedTrend.length > 0
+                    ? formatUsd(stats.summary.total_cost / computedTrend.length)
+                    : formatUsd(stats.summary.total_cost / safeRangeDays)
+                }
                 totalLabel={rangeLabel}
                 totalValue={formatUsd(stats.summary.total_cost)}
               />
@@ -266,10 +423,18 @@ export function CostStats({
               <TrendCard
                 title="Tokens"
                 href="/logs"
-                points={stats.trend}
+                points={computedTrend}
                 segments={tokenSegments}
-                avgLabel="Avg Day"
-                avgValue={formatCompactNumber((stats.summary.input_tokens + stats.summary.output_tokens) / safeRangeDays)}
+                avgLabel={avgTrendLabel}
+                avgValue={
+                  computedTrend.length > 0
+                    ? formatCompactNumber(
+                        (stats.summary.input_tokens + stats.summary.output_tokens) / computedTrend.length
+                      )
+                    : formatCompactNumber(
+                        (stats.summary.input_tokens + stats.summary.output_tokens) / safeRangeDays
+                      )
+                }
                 totalLabel={rangeLabel}
                 totalValue={formatCompactNumber(stats.summary.input_tokens + stats.summary.output_tokens)}
               />
@@ -277,10 +442,14 @@ export function CostStats({
               <TrendCard
                 title="Requests"
                 href="/logs"
-                points={stats.trend}
+                points={computedTrend}
                 segments={requestSegments}
-                avgLabel="Avg Day"
-                avgValue={formatNumber(stats.summary.request_count / safeRangeDays)}
+                avgLabel={avgTrendLabel}
+                avgValue={
+                  computedTrend.length > 0
+                    ? formatNumber(stats.summary.request_count / computedTrend.length)
+                    : formatNumber(stats.summary.request_count / safeRangeDays)
+                }
                 totalLabel={rangeLabel}
                 totalValue={formatNumber(stats.summary.request_count)}
               />

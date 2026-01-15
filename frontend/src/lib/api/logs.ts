@@ -55,6 +55,7 @@ export async function getLogCostStats(
         api_key_id: params.api_key_id,
         api_key_name: params.api_key_name,
         tz_offset_minutes: params.tz_offset_minutes,
+        bucket: params.bucket,
       }
     : undefined;
 

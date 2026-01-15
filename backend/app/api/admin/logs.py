@@ -53,6 +53,11 @@ async def get_log_cost_stats(
     provider_id: Optional[int] = Query(None, description="Provider ID"),
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
+    bucket: Optional[str] = Query(
+        None,
+        pattern="^(hour|day)$",
+        description="Trend bucket override (hour/day). If omitted, server picks a default.",
+    ),
     tz_offset_minutes: int = Query(
         0,
         ge=-14 * 60,
@@ -66,11 +71,13 @@ async def get_log_cost_stats(
     Dimensions: time range, model, provider, API key.
     """
     try:
-        bucket = "day"
-        if start_time and end_time:
-            delta = end_time - start_time
-            if delta.total_seconds() <= 48 * 3600:
-                bucket = "hour"
+        resolved_bucket = bucket
+        if not resolved_bucket:
+            resolved_bucket = "day"
+            if start_time and end_time:
+                delta = end_time - start_time
+                if delta.total_seconds() <= 48 * 3600:
+                    resolved_bucket = "hour"
 
         query = LogCostStatsQuery(
             start_time=start_time,
@@ -79,7 +86,7 @@ async def get_log_cost_stats(
             provider_id=provider_id,
             api_key_id=api_key_id,
             api_key_name=api_key_name,
-            bucket=bucket,
+            bucket=resolved_bucket,
             tz_offset_minutes=tz_offset_minutes,
         )
         return await service.get_cost_stats(query)
