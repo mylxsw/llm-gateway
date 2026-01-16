@@ -223,6 +223,7 @@ class ProviderService:
             protocol=provider.protocol,
             api_type=provider.api_type,
             api_key=sanitize_api_key_display(provider.api_key) if provider.api_key else None,
+            extra_headers=provider.extra_headers,
             is_active=provider.is_active,
             created_at=provider.created_at,
             updated_at=provider.updated_at,
