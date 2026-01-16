@@ -167,6 +167,8 @@ class ProxyService:
         method: str,
         headers: dict[str, str],
         body: dict[str, Any],
+        *,
+        force_parse_response: bool = False,
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
         Process Proxy Request
@@ -237,7 +239,7 @@ class ProxyService:
                     headers=headers,
                     body=supplier_body,
                     target_model=candidate.target_model,
-                    response_mode="raw" if same_protocol else "parsed",
+                    response_mode="parsed" if force_parse_response else ("raw" if same_protocol else "parsed"),
                     extra_headers=candidate.extra_headers,
                 )
             except Exception as e:
