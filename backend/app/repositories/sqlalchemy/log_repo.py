@@ -25,6 +25,10 @@ from app.domain.log import (
 from app.repositories.log_repo import LogRepository
 
 
+def _pg_make_interval_minutes(minutes: int):
+    return func.make_interval(0, 0, 0, 0, 0, minutes, 0)
+
+
 class SQLAlchemyLogRepository(LogRepository):
     """
     Log Repository SQLAlchemy Implementation
@@ -301,8 +305,8 @@ class SQLAlchemyLogRepository(LogRepository):
                     RequestLogORM.request_time, f"{tz_offset_minutes:+d} minutes"
                 )
             else:
-                shifted_time_expr = RequestLogORM.request_time + func.make_interval(
-                    mins=tz_offset_minutes
+                shifted_time_expr = (
+                    RequestLogORM.request_time + _pg_make_interval_minutes(tz_offset_minutes)
                 )
         else:
             shifted_time_expr = RequestLogORM.request_time
@@ -333,8 +337,8 @@ class SQLAlchemyLogRepository(LogRepository):
                     bucket_local_start_expr, f"{-tz_offset_minutes:+d} minutes"
                 )
             else:
-                bucket_start_utc_expr = bucket_local_start_expr - func.make_interval(
-                    mins=tz_offset_minutes
+                bucket_start_utc_expr = bucket_local_start_expr - _pg_make_interval_minutes(
+                    tz_offset_minutes
                 )
         else:
             bucket_start_utc_expr = bucket_local_start_expr

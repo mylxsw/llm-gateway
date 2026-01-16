@@ -5,9 +5,11 @@ Test log repository timezone handling.
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
 
 from app.domain.log import RequestLogCreate
-from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
+from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository, _pg_make_interval_minutes
 
 
 @pytest.mark.asyncio
@@ -35,3 +37,8 @@ async def test_log_request_time_is_utc_aware(db_session):
     assert fetched is not None
     assert fetched.request_time.tzinfo == timezone.utc
 
+
+def test_pg_make_interval_minutes_compiles():
+    stmt = select(_pg_make_interval_minutes(480).label("iv"))
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+    assert "make_interval" in compiled
