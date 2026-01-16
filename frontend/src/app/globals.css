@@ -97,6 +97,17 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+@layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+}
+
 /* 动画 */
 @keyframes fadeIn {
   from { opacity: 0; }

@@ -171,7 +171,7 @@ function TrendBars({
 }) {
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-      <div ref={scroller} className="flex items-end gap-1 overflow-x-auto pb-2">
+      <div ref={scroller} className="scrollbar-hidden flex items-end gap-1 overflow-x-auto pb-2">
         {points.length === 0 ? (
           <div className="text-sm text-muted-foreground">No data</div>
         ) : (
