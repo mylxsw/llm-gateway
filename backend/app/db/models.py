@@ -84,7 +84,7 @@ class ModelMapping(Base):
     requested_model: Mapped[str] = mapped_column(
         String(100), primary_key=True, nullable=False
     )
-    # Selection strategy, currently only supports round_robin
+    # Selection strategy: round_robin or cost_first
     strategy: Mapped[str] = mapped_column(String(50), default="round_robin")
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)

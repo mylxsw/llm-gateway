@@ -6,10 +6,13 @@
 import { RuleSet } from './common';
 import { ProtocolType } from './provider';
 
+/** Selection Strategy Type */
+export type SelectionStrategy = 'round_robin' | 'cost_first';
+
 /** Model Mapping Entity */
 export interface ModelMapping {
   requested_model: string;            // Primary Key
-  strategy: string;                   // Strategy, default round_robin
+  strategy: SelectionStrategy;        // Selection strategy
   matching_rules?: RuleSet | null;    // Model level rules
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
@@ -54,7 +57,7 @@ export interface ModelMappingProvider {
 /** Create Model Mapping Request */
 export interface ModelMappingCreate {
   requested_model: string;
-  strategy?: string;
+  strategy?: SelectionStrategy;
   matching_rules?: RuleSet;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
@@ -64,7 +67,7 @@ export interface ModelMappingCreate {
 
 /** Update Model Mapping Request */
 export interface ModelMappingUpdate {
-  strategy?: string;
+  strategy?: SelectionStrategy;
   matching_rules?: RuleSet | null;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;

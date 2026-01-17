@@ -59,7 +59,9 @@ export function ModelList({
                 {model.requested_model}
               </TableCell>
               <TableCell>
-                <Badge variant="outline">{model.strategy}</Badge>
+                <Badge variant="outline">
+                  {model.strategy === 'cost_first' ? 'Cost First' : 'Round Robin'}
+                </Badge>
               </TableCell>
               <TableCell>
                 <Badge variant="secondary">{model.provider_count || 0}</Badge>

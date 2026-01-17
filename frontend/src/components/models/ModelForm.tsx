@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RuleBuilder } from '@/components/common';
-import { ModelMapping, ModelMappingCreate, ModelMappingUpdate, RuleSet } from '@/types';
+import {
+  ModelMapping,
+  ModelMappingCreate,
+  ModelMappingUpdate,
+  RuleSet,
+  SelectionStrategy
+} from '@/types';
 import { isValidModelName } from '@/lib/utils';
 
 interface ModelFormProps {
@@ -45,7 +51,7 @@ interface ModelFormProps {
 /** Form Field Definition */
 interface FormData {
   requested_model: string;
-  strategy: string;
+  strategy: SelectionStrategy;
   matching_rules: RuleSet | null;
   is_active: boolean;
   input_price: string;
