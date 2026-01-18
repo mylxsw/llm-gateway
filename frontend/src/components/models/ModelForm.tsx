@@ -18,13 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Card } from '@/components/ui/card';
 import {
   ModelMapping,
   ModelMappingCreate,
@@ -212,42 +206,91 @@ export function ModelForm({
           </div>
 
           {/* Strategy */}
-          <div className="space-y-2">
-            <Label htmlFor="strategy">Selection Strategy</Label>
+          <div className="space-y-3">
+            <Label>Selection Strategy</Label>
             <Controller
               name="strategy"
               control={control}
               render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={field.onChange}
-                >
-                  <SelectTrigger id="strategy">
-                    <SelectValue placeholder="Select strategy" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="round_robin">
-                      <div className="flex flex-col">
-                        <span className="font-medium">Round Robin</span>
-                        <span className="text-xs text-muted-foreground">
-                          Distribute requests evenly across providers
-                        </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Round Robin Strategy */}
+                  <Card
+                    className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      field.value === 'round_robin'
+                        ? 'border-primary border-2 bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => field.onChange('round_robin')}
+                  >
+                    <div className="p-4 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          field.value === 'round_robin'
+                            ? 'border-primary bg-primary'
+                            : 'border-muted-foreground'
+                        }`}>
+                          {field.value === 'round_robin' && (
+                            <div className="w-2 h-2 rounded-full bg-white"></div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">🔄</span>
+                          <span className="font-semibold text-base">Round Robin</span>
+                        </div>
                       </div>
-                    </SelectItem>
-                    <SelectItem value="cost_first">
-                      <div className="flex flex-col">
-                        <span className="font-medium">Cost First</span>
-                        <span className="text-xs text-muted-foreground">
-                          Prioritize lowest-cost providers based on input tokens
-                        </span>
+                      <p className="text-sm text-muted-foreground pl-8">
+                        Evenly distribute requests across all available providers
+                      </p>
+                      <div className="pl-8 pt-1">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs">
+                          <span>⚖️</span>
+                          <span>Load Balancing</span>
+                        </div>
                       </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </div>
+                  </Card>
+
+                  {/* Cost First Strategy */}
+                  <Card
+                    className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      field.value === 'cost_first'
+                        ? 'border-primary border-2 bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => field.onChange('cost_first')}
+                  >
+                    <div className="p-4 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          field.value === 'cost_first'
+                            ? 'border-primary bg-primary'
+                            : 'border-muted-foreground'
+                        }`}>
+                          {field.value === 'cost_first' && (
+                            <div className="w-2 h-2 rounded-full bg-white"></div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">💰</span>
+                          <span className="font-semibold text-base">Cost First</span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground pl-8">
+                        Prioritize providers with the lowest estimated cost
+                      </p>
+                      <div className="pl-8 pt-1">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs">
+                          <span>📊</span>
+                          <span>Cost Optimization</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
               )}
             />
-            <p className="text-sm text-muted-foreground">
-              Round Robin: Evenly distributes requests. Cost First: Selects provider with lowest estimated cost.
+            <p className="text-xs text-muted-foreground">
+              💡 Choose how the gateway selects providers for this model
             </p>
           </div>
 
