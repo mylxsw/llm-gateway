@@ -55,9 +55,11 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Notify remote endpoint
-      if: ${{ secrets.NOTIFICATION_REMOTE_URL != '' }}
+      env:
+        NOTIFICATION_REMOTE_URL: ${{ secrets.NOTIFICATION_REMOTE_URL }}
+      if: ${{ env.NOTIFICATION_REMOTE_URL != '' }}
       run: |
-        curl -X POST "${{ secrets.NOTIFICATION_REMOTE_URL }}" \
+        curl -X POST "${{ env.NOTIFICATION_REMOTE_URL }}" \
           -H "Content-Type: application/json" \
           -d '{
                 "branch": "${{ github.ref_name }}",
