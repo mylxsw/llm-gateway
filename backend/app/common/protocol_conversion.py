@@ -217,8 +217,16 @@ def _ensure_openai_tooling_fields(
         if tools is not None:
             out["tools"] = tools
 
-    if "tool_choice" not in out and "tool_choice" in source_anthropic_body:
-        out["tool_choice"] = _anthropic_tool_choice_to_openai(source_anthropic_body.get("tool_choice"))
+    current_tool_choice = out.get("tool_choice")
+    needs_tool_choice_fix = isinstance(current_tool_choice, dict) and (
+        current_tool_choice.get("type") in ("auto", "any", "tool")
+    )
+    if needs_tool_choice_fix:
+        out["tool_choice"] = _anthropic_tool_choice_to_openai(current_tool_choice)
+    elif "tool_choice" not in out and "tool_choice" in source_anthropic_body:
+        out["tool_choice"] = _anthropic_tool_choice_to_openai(
+            source_anthropic_body.get("tool_choice")
+        )
 
     return out
 

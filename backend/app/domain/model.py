@@ -36,6 +36,10 @@ class ModelMappingBase(BaseModel):
     )
     # Selection Strategy: round_robin or cost_first
     strategy: SelectionStrategyType = Field("round_robin", description="Selection Strategy")
+    # Model-level matching rules (JSON format)
+    matching_rules: Optional[dict[str, Any]] = Field(
+        None, description="Model Level Matching Rules"
+    )
 
 
 class ModelMappingCreate(ModelMappingBase):
@@ -54,6 +58,7 @@ class ModelMappingUpdate(BaseModel):
     """Update Model Mapping Request Model"""
 
     strategy: Optional[SelectionStrategyType] = None
+    matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
     input_price: Optional[float] = None

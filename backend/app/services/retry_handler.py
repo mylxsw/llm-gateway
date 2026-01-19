@@ -419,15 +419,24 @@ class RetryHandler:
         Returns:
             Optional[CandidateProvider]: Next provider
         """
+        candidate_provider_ids = {c.provider_id for c in candidates}
+        if candidate_provider_ids and candidate_provider_ids.issubset(tried_providers):
+            return None
+
         # Use the strategy to get the next provider
         next_provider = await self.strategy.get_next(
             candidates, requested_model, current_provider, input_tokens
         )
 
-        # Keep trying until we find an untried provider or run out of options
-        while next_provider is not None and next_provider.provider_id in tried_providers:
+        # Keep trying until we find an untried provider or run out of options.
+        # Some strategies can cycle indefinitely; cap iterations to avoid infinite loops.
+        for _ in range(max(1, len(candidate_provider_ids))):
+            if next_provider is None:
+                return None
+            if next_provider.provider_id not in tried_providers:
+                return next_provider
             next_provider = await self.strategy.get_next(
                 candidates, requested_model, next_provider, input_tokens
             )
 
-        return next_provider
+        return None
