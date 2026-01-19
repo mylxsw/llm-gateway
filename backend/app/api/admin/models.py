@@ -102,7 +102,7 @@ async def list_models(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.get("/models/{requested_model}", response_model=ModelMappingResponse)
+@router.get("/models/{requested_model:path}", response_model=ModelMappingResponse)
 async def get_model(
     requested_model: str,
     service: ModelServiceDep,
@@ -130,7 +130,7 @@ async def create_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.put("/models/{requested_model}", response_model=ModelMappingResponse)
+@router.put("/models/{requested_model:path}", response_model=ModelMappingResponse)
 async def update_model(
     requested_model: str,
     data: ModelMappingUpdate,
@@ -145,7 +145,7 @@ async def update_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.delete("/models/{requested_model}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/models/{requested_model:path}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_model(
     requested_model: str,
     service: ModelServiceDep,

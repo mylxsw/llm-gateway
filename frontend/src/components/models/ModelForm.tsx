@@ -150,12 +150,14 @@ export function ModelForm({
             </Label>
             <Input
               id="requested_model"
-              placeholder="e.g.: gpt-4, claude-3-opus"
+              placeholder="e.g.: gpt-4, claude-3-opus, coding/kimi"
               disabled={isEdit}
               {...register('requested_model', {
                 required: !isEdit ? 'Requested model name is required' : false,
                 validate: !isEdit
-                  ? (v) => isValidModelName(v) || 'Model name can only contain letters, numbers, underscores, hyphens, and dots'
+                  ? (v) =>
+                      isValidModelName(v) ||
+                      'Model name can only contain letters, numbers, underscores, hyphens, dots, and slashes'
                   : undefined,
               })}
             />
