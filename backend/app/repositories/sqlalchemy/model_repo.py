@@ -49,7 +49,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return ModelMapping(
             requested_model=entity.requested_model,
             strategy=entity.strategy,
-            model_type=entity.model_type,
+            model_type=entity.model_type or "chat",
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
