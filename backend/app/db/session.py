@@ -99,6 +99,7 @@ def _run_migrations(sync_conn) -> None:
     ensure_columns(
         "model_mappings",
         {
+            "model_type": "model_type VARCHAR(50)",
             "input_price": "input_price NUMERIC(12,4)",
             "output_price": "output_price NUMERIC(12,4)",
         },
