@@ -126,7 +126,8 @@ class AnthropicClient(ProviderClient):
         timer = Timer().start()
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
+            proxy_url = proxy_config.get("all://") if proxy_config else None
+            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -233,7 +234,8 @@ class AnthropicClient(ProviderClient):
         first_chunk = True
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
+            proxy_url = proxy_config.get("all://") if proxy_config else None
+            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
                 async with client.stream(
                     method=method,
                     url=url,

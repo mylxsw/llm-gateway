@@ -112,7 +112,8 @@ class OpenAIClient(ProviderClient):
         timer = Timer().start()
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
+            proxy_url = proxy_config.get("all://") if proxy_config else None
+            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
                 request_kwargs: dict[str, Any] = {
                     "method": method,
                     "url": url,
@@ -250,7 +251,8 @@ class OpenAIClient(ProviderClient):
         first_chunk = True
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
+            proxy_url = proxy_config.get("all://") if proxy_config else None
+            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
                 stream_kwargs: dict[str, Any] = {
                     "method": method,
                     "url": url,
