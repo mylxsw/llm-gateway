@@ -12,7 +12,6 @@ export interface Provider {
   name: string;
   base_url: string;
   protocol: ProtocolType;
-  api_type: string;
   api_key?: string;          // Sanitized display
   extra_headers?: Record<string, string>;
   proxy_enabled?: boolean;
@@ -27,7 +26,6 @@ export interface ProviderCreate {
   name: string;
   base_url: string;
   protocol: ProtocolType;
-  api_type: string;
   api_key?: string;
   extra_headers?: Record<string, string>;
   proxy_enabled?: boolean;
@@ -40,7 +38,6 @@ export interface ProviderUpdate {
   name?: string;
   base_url?: string;
   protocol?: ProtocolType;
-  api_type?: string;
   api_key?: string;
   extra_headers?: Record<string, string>;
   proxy_enabled?: boolean;

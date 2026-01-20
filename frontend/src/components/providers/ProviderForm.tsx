@@ -47,7 +47,6 @@ interface FormData {
   name: string;
   base_url: string;
   protocol: ProtocolType;
-  api_type: string;
   api_key: string;
   is_active: boolean;
   proxy_enabled: boolean;
@@ -58,13 +57,6 @@ interface FormData {
 const PROTOCOL_OPTIONS: { value: ProtocolType; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
-];
-
-/** API Type Options */
-const API_TYPE_OPTIONS = [
-  { value: 'chat', label: 'Chat Completions' },
-  { value: 'completion', label: 'Text Completions' },
-  { value: 'embedding', label: 'Embeddings' },
 ];
 
 /**
@@ -93,7 +85,6 @@ export function ProviderForm({
       name: '',
       base_url: '',
       protocol: 'openai',
-      api_type: 'chat',
       api_key: '',
       is_active: true,
       proxy_enabled: false,
@@ -135,7 +126,6 @@ export function ProviderForm({
         name: provider.name,
         base_url: provider.base_url,
         protocol: provider.protocol,
-        api_type: provider.api_type,
         api_key: '', // API Key not echoed
         is_active: provider.is_active,
         proxy_enabled: provider.proxy_enabled ?? false,
@@ -158,7 +148,6 @@ export function ProviderForm({
         name: '',
         base_url: '',
         protocol: 'openai',
-        api_type: 'chat',
         api_key: '',
         is_active: true,
         proxy_enabled: false,
@@ -183,7 +172,6 @@ export function ProviderForm({
       name: data.name,
       base_url: data.base_url,
       protocol: data.protocol,
-      api_type: data.api_type,
       is_active: data.is_active,
       extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
       proxy_enabled: data.proxy_enabled,
@@ -258,28 +246,6 @@ export function ProviderForm({
               </SelectTrigger>
               <SelectContent>
                 {PROTOCOL_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* API Type */}
-          <div className="space-y-2">
-            <Label htmlFor="api_type">
-              API Type <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={watch('api_type')}
-              onValueChange={(value) => setValue('api_type', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select API Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {API_TYPE_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
