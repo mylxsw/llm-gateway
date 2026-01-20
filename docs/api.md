@@ -142,6 +142,62 @@ Embeddings Proxy Interface
 
 ---
 
+#### POST /v1/audio/speech
+
+Audio Speech Proxy Interface
+
+**Request Body**
+```json
+{
+  "model": "gpt-4o-mini-tts",
+  "input": "Hello world",
+  "voice": "alloy",
+  "format": "mp3"
+}
+```
+
+**Response**: Binary audio stream (content-type depends on format).
+
+---
+
+#### POST /v1/audio/transcriptions
+
+Audio Transcriptions Proxy Interface (multipart/form-data)
+
+**Form Fields**
+- `model`: string (e.g. `whisper-1`)
+- `file`: audio file
+- `language`: optional
+- `prompt`: optional
+- `response_format`: optional
+
+---
+
+#### POST /v1/audio/translations
+
+Audio Translations Proxy Interface (multipart/form-data)
+
+**Form Fields**
+- `model`: string (e.g. `whisper-1`)
+- `file`: audio file
+- `prompt`: optional
+- `response_format`: optional
+
+---
+
+#### POST /v1/images/generations
+
+Images Generations Proxy Interface
+
+**Request Body**
+```json
+{
+  "model": "gpt-image-1",
+  "prompt": "A vivid watercolor landscape",
+  "size": "1024x1024"
+}
+```
+
 ### 1.2 Anthropic Compatible Interface
 
 #### POST /v1/messages
@@ -371,6 +427,7 @@ Get Single Model Mapping Details (Includes Provider Config)
 {
   "requested_model": "gpt-4",
   "strategy": "round_robin",
+  "model_type": "chat",
   "matching_rules": {
     "rules": [
       {"field": "headers.x-priority", "operator": "eq", "value": "high"}
@@ -431,6 +488,7 @@ Create Model Mapping
 |-------|------|----------|-------------|
 | requested_model | string | Yes | Requested model name, Primary Key |
 | strategy | string | No | Selection strategy, default round_robin |
+| model_type | string | No | Model type: chat/audio/embedding/images, default chat |
 | matching_rules | object | No | Model level matching rules |
 | capabilities | object | No | Model capabilities description |
 | is_active | boolean | No | Active status, default true |
@@ -880,7 +938,7 @@ interface Provider {
   name: string;
   base_url: string;
   protocol: "openai" | "anthropic";
-  api_type: string;
+  api_type: string; // deprecated
   api_key?: string;
   is_active: boolean;
   created_at: string;
@@ -891,7 +949,7 @@ interface ProviderCreate {
   name: string;
   base_url: string;
   protocol: "openai" | "anthropic";
-  api_type: string;
+  api_type?: string; // deprecated
   api_key?: string;
   is_active?: boolean;
 }
@@ -900,7 +958,7 @@ interface ProviderUpdate {
   name?: string;
   base_url?: string;
   protocol?: "openai" | "anthropic";
-  api_type?: string;
+  api_type?: string; // deprecated
   api_key?: string;
   is_active?: boolean;
 }
@@ -909,6 +967,7 @@ interface ProviderUpdate {
 interface ModelMapping {
   requested_model: string;
   strategy: string;
+  model_type: string;
   matching_rules?: RuleSet;
   capabilities?: Record<string, any>;
   is_active: boolean;

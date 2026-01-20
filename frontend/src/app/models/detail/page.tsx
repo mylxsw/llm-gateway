@@ -233,6 +233,10 @@ function ModelDetailContent() {
               <Badge variant="outline">{model.strategy}</Badge>
             </div>
             <div>
+              <p className="text-sm text-muted-foreground">Model Type</p>
+              <Badge variant="secondary">{model.model_type ?? 'chat'}</Badge>
+            </div>
+            <div>
               <p className="text-sm text-muted-foreground">Status</p>
               <Badge className={status.className}>{status.text}</Badge>
             </div>

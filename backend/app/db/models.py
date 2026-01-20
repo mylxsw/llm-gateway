@@ -48,8 +48,8 @@ class ServiceProvider(Base):
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     # Protocol type: openai or anthropic
     protocol: Mapped[str] = mapped_column(String(50), nullable=False)
-    # API Type: chat / completion / embedding
-    api_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # API Type: chat / completion / embedding (deprecated)
+    api_type: Mapped[str] = mapped_column(String(50), nullable=False, default="chat")
     # Provider API Key (Encrypted storage recommended)
     api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Extra Headers (JSON format)
@@ -90,6 +90,8 @@ class ModelMapping(Base):
     )
     # Selection strategy: round_robin or cost_first
     strategy: Mapped[str] = mapped_column(String(50), default="round_robin")
+    # Model type: chat / audio / embedding / images
+    model_type: Mapped[str] = mapped_column(String(50), default="chat")
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)

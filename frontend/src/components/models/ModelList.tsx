@@ -42,6 +42,7 @@ export function ModelList({
       <TableHeader>
         <TableRow>
           <TableHead>Requested Model Name</TableHead>
+          <TableHead>Type</TableHead>
           <TableHead>Strategy</TableHead>
           <TableHead>Provider Count</TableHead>
           <TableHead>Status</TableHead>
@@ -56,6 +57,9 @@ export function ModelList({
             <TableRow key={model.requested_model}>
               <TableCell className="font-medium font-mono">
                 {model.requested_model}
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary">{model.model_type ?? 'chat'}</Badge>
               </TableCell>
               <TableCell>
                 <Badge variant="outline">

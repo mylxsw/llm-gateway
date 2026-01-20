@@ -340,6 +340,7 @@ class ModelService:
                 ModelExport(
                     requested_model=m.requested_model,
                     strategy=m.strategy,
+                    model_type=m.model_type,
                     capabilities=m.capabilities,
                     is_active=m.is_active,
                     input_price=m.input_price,
@@ -444,6 +445,7 @@ class ModelService:
         return ModelMappingResponse(
             requested_model=mapping.requested_model,
             strategy=mapping.strategy,
+            model_type=mapping.model_type,
             capabilities=mapping.capabilities,
             is_active=mapping.is_active,
             input_price=mapping.input_price,

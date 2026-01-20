@@ -8,11 +8,13 @@ import { ProtocolType } from './provider';
 
 /** Selection Strategy Type */
 export type SelectionStrategy = 'round_robin' | 'cost_first';
+export type ModelType = 'chat' | 'audio' | 'embedding' | 'images';
 
 /** Model Mapping Entity */
 export interface ModelMapping {
   requested_model: string;            // Primary Key
   strategy: SelectionStrategy;        // Selection strategy
+  model_type: ModelType;              // Model type
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
   // Pricing (USD per 1,000,000 tokens)
@@ -57,6 +59,7 @@ export interface ModelMappingProvider {
 export interface ModelMappingCreate {
   requested_model: string;
   strategy?: SelectionStrategy;
+  model_type?: ModelType;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;
@@ -66,6 +69,7 @@ export interface ModelMappingCreate {
 /** Update Model Mapping Request */
 export interface ModelMappingUpdate {
   strategy?: SelectionStrategy;
+  model_type?: ModelType;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;

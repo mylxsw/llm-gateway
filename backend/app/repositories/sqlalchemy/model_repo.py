@@ -49,6 +49,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return ModelMapping(
             requested_model=entity.requested_model,
             strategy=entity.strategy,
+            model_type=entity.model_type,
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
@@ -94,6 +95,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         entity = ModelMappingORM(
             requested_model=data.requested_model,
             strategy=data.strategy,
+            model_type=data.model_type,
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,

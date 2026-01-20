@@ -25,6 +25,8 @@ class OpenAIClient(ProviderClient):
     - /v1/chat/completions
     - /v1/completions
     - /v1/embeddings
+    - /v1/audio/*
+    - /v1/images/generations
     """
     
     def __init__(self):
@@ -71,29 +73,58 @@ class OpenAIClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
+        multipart = self._split_multipart_body(prepared_body)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
+        prepared_files = None
+        prepared_data = None
+
+        if multipart is not None:
+            prepared_data, prepared_files = multipart
+        else:
+            # Ensure Content-Type is correct
+            prepared_headers["Content-Type"] = "application/json"
         
-        # Ensure Content-Type is correct
-        prepared_headers["Content-Type"] = "application/json"
-        
+        log_body = prepared_body
+        if multipart is not None and isinstance(prepared_body, dict):
+            safe_files = []
+            for item in prepared_body.get("_files", []):
+                if not isinstance(item, dict):
+                    continue
+                data = item.get("data")
+                safe_files.append(
+                    {
+                        "field": item.get("field"),
+                        "filename": item.get("filename"),
+                        "content_type": item.get("content_type"),
+                        "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
+                    }
+                )
+            log_body = {**prepared_body, "_files": safe_files}
+
         logger.debug(
             "OpenAI Request: method=%s url=%s headers=%s body=%s",
             method,
             url,
             prepared_headers,
-            json.dumps(prepared_body, ensure_ascii=False),
+            json.dumps(log_body, ensure_ascii=False),
         )
         
         timer = Timer().start()
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
-                response = await client.request(
-                    method=method,
-                    url=url,
-                    headers=prepared_headers,
-                    json=prepared_body,
-                )
+                request_kwargs: dict[str, Any] = {
+                    "method": method,
+                    "url": url,
+                    "headers": prepared_headers,
+                }
+                if prepared_files is not None:
+                    request_kwargs["data"] = prepared_data
+                    request_kwargs["files"] = prepared_files
+                else:
+                    request_kwargs["json"] = prepared_body
+
+                response = await client.request(**request_kwargs)
                 
                 timer.mark_first_byte()
                 
@@ -180,15 +211,39 @@ class OpenAIClient(ProviderClient):
             cleaned_path = ''
         url = f"{cleaned_base}{cleaned_path}"
         prepared_body = self._prepare_body(body, target_model)
+        multipart = self._split_multipart_body(prepared_body)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
-        prepared_headers["Content-Type"] = "application/json"
+        prepared_files = None
+        prepared_data = None
+
+        if multipart is not None:
+            prepared_data, prepared_files = multipart
+        else:
+            prepared_headers["Content-Type"] = "application/json"
         
+        log_body = prepared_body
+        if multipart is not None and isinstance(prepared_body, dict):
+            safe_files = []
+            for item in prepared_body.get("_files", []):
+                if not isinstance(item, dict):
+                    continue
+                data = item.get("data")
+                safe_files.append(
+                    {
+                        "field": item.get("field"),
+                        "filename": item.get("filename"),
+                        "content_type": item.get("content_type"),
+                        "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
+                    }
+                )
+            log_body = {**prepared_body, "_files": safe_files}
+
         logger.debug(
             "OpenAI Stream Request: method=%s url=%s headers=%s body=%s",
             method,
             url,
             prepared_headers,
-            json.dumps(prepared_body, ensure_ascii=False),
+            json.dumps(log_body, ensure_ascii=False),
         )
         
         timer = Timer().start()
@@ -196,12 +251,18 @@ class OpenAIClient(ProviderClient):
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout, proxies=proxy_config) as client:
-                async with client.stream(
-                    method=method,
-                    url=url,
-                    headers=prepared_headers,
-                    json=prepared_body,
-                ) as response:
+                stream_kwargs: dict[str, Any] = {
+                    "method": method,
+                    "url": url,
+                    "headers": prepared_headers,
+                }
+                if prepared_files is not None:
+                    stream_kwargs["data"] = prepared_data
+                    stream_kwargs["files"] = prepared_files
+                else:
+                    stream_kwargs["json"] = prepared_body
+
+                async with client.stream(**stream_kwargs) as response:
                     # Create response object
                     provider_response = ProviderResponse(
                         status_code=response.status_code,
@@ -238,3 +299,40 @@ class OpenAIClient(ProviderClient):
                 first_byte_delay_ms=timer.first_byte_delay_ms,
                 total_time_ms=timer.total_time_ms,
             )
+
+    def _split_multipart_body(
+        self, body: dict[str, Any]
+    ) -> Optional[tuple[list[tuple[str, str]], list[tuple[str, tuple[str, bytes, str]]]]]:
+        if not isinstance(body, dict) or "_files" not in body:
+            return None
+
+        files_payload: list[tuple[str, tuple[str, bytes, str]]] = []
+        for item in body.get("_files", []):
+            if not isinstance(item, dict):
+                continue
+            data = item.get("data")
+            if not isinstance(data, (bytes, bytearray)):
+                continue
+            filename = item.get("filename") or "file"
+            content_type = item.get("content_type") or "application/octet-stream"
+            files_payload.append(
+                (
+                    item.get("field") or "file",
+                    (filename, bytes(data), content_type),
+                )
+            )
+
+        if not files_payload:
+            return None
+
+        data_payload: list[tuple[str, str]] = []
+        for key, value in body.items():
+            if key == "_files":
+                continue
+            if isinstance(value, list):
+                for item in value:
+                    data_payload.append((key, str(item)))
+            elif value is not None:
+                data_payload.append((key, str(value)))
+
+        return data_payload, files_payload

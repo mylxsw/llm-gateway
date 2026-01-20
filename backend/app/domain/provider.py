@@ -20,7 +20,7 @@ class ProviderBase(BaseModel):
     # Protocol Type: openai or anthropic
     protocol: str = Field(..., pattern="^(openai|anthropic)$", description="Protocol Type")
     # API Type: chat / completion / embedding
-    api_type: str = Field(..., description="API Type")
+    api_type: str = Field("chat", description="API Type (deprecated)")
     # Extra Headers
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
     # Proxy Enabled

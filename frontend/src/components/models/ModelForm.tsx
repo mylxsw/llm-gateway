@@ -20,9 +20,17 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card } from '@/components/ui/card';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   ModelMapping,
   ModelMappingCreate,
   ModelMappingUpdate,
+  ModelType,
   SelectionStrategy
 } from '@/types';
 import { isValidModelName } from '@/lib/utils';
@@ -44,6 +52,7 @@ interface ModelFormProps {
 interface FormData {
   requested_model: string;
   strategy: SelectionStrategy;
+  model_type: ModelType;
   is_active: boolean;
   input_price: string;
   output_price: string;
@@ -75,6 +84,7 @@ export function ModelForm({
     defaultValues: {
       requested_model: '',
       strategy: 'round_robin',
+      model_type: 'chat',
       is_active: true,
       input_price: '',
       output_price: '',
@@ -89,6 +99,7 @@ export function ModelForm({
       reset({
         requested_model: model.requested_model,
         strategy: model.strategy,
+        model_type: model.model_type ?? 'chat',
         is_active: model.is_active,
         input_price:
           model.input_price === null || model.input_price === undefined
@@ -103,6 +114,7 @@ export function ModelForm({
       reset({
         requested_model: '',
         strategy: 'round_robin',
+        model_type: 'chat',
         is_active: true,
         input_price: '',
         output_price: '',
@@ -114,6 +126,7 @@ export function ModelForm({
   const onFormSubmit = (data: FormData) => {
     const submitData: ModelMappingCreate | ModelMappingUpdate = {
       strategy: data.strategy,
+      model_type: data.model_type,
       is_active: data.is_active,
     };
 
@@ -205,6 +218,28 @@ export function ModelForm({
             <p className="mt-2 text-xs text-muted-foreground">
               Used as model fallback price when no provider override exists; empty means unconfigured.
             </p>
+          </div>
+
+          {/* Model Type */}
+          <div className="space-y-2">
+            <Label>Model Type</Label>
+            <Controller
+              name="model_type"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select model type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chat">Chat</SelectItem>
+                    <SelectItem value="audio">Audio</SelectItem>
+                    <SelectItem value="embedding">Embedding</SelectItem>
+                    <SelectItem value="images">Images</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
 
           {/* Strategy */}

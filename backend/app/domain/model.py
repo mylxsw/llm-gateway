@@ -13,6 +13,7 @@ from typing_extensions import Literal
 
 BillingMode = Literal["token_flat", "token_tiered", "per_request"]
 SelectionStrategyType = Literal["round_robin", "cost_first"]
+ModelType = Literal["chat", "audio", "embedding", "images"]
 
 
 class TokenTierPrice(BaseModel):
@@ -36,6 +37,8 @@ class ModelMappingBase(BaseModel):
     )
     # Selection Strategy: round_robin or cost_first
     strategy: SelectionStrategyType = Field("round_robin", description="Selection Strategy")
+    # Model Type: chat / audio / embedding / images
+    model_type: ModelType = Field("chat", description="Model Type")
     # Model-level matching rules (JSON format)
     matching_rules: Optional[dict[str, Any]] = Field(
         None, description="Model Level Matching Rules"
@@ -58,6 +61,7 @@ class ModelMappingUpdate(BaseModel):
     """Update Model Mapping Request Model"""
 
     strategy: Optional[SelectionStrategyType] = None
+    model_type: Optional[ModelType] = None
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None

@@ -39,6 +39,14 @@ from app.services.strategy import RoundRobinStrategy, CostFirstStrategy, Selecti
 
 logger = logging.getLogger(__name__)
 
+MAX_LOG_TEXT_LENGTH = 10000
+
+
+def _truncate_log_text(text: str) -> str:
+    if len(text) <= MAX_LOG_TEXT_LENGTH:
+        return text
+    return f"{text[:MAX_LOG_TEXT_LENGTH]}...[truncated]"
+
 
 class ProxyService:
     """
@@ -101,8 +109,36 @@ class ProxyService:
         if isinstance(body, (dict, list)):
             return json.dumps(body, ensure_ascii=False)
         if isinstance(body, (bytes, bytearray)):
-            return body.decode("utf-8", errors="ignore")
-        return str(body)
+            if b"\x00" in body:
+                return f"[binary data: {len(body)} bytes]"
+            try:
+                decoded = body.decode("utf-8")
+            except UnicodeDecodeError:
+                return f"[binary data: {len(body)} bytes]"
+            return _truncate_log_text(decoded)
+        return _truncate_log_text(str(body))
+
+    @staticmethod
+    def _sanitize_request_body_for_log(body: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(body, dict) or "_files" not in body:
+            return body
+
+        safe_files = []
+        for item in body.get("_files", []):
+            if not isinstance(item, dict):
+                continue
+            data = item.get("data")
+            safe_files.append(
+                {
+                    "field": item.get("field"),
+                    "filename": item.get("filename"),
+                    "content_type": item.get("content_type"),
+                    "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
+                }
+            )
+        sanitized = dict(body)
+        sanitized["_files"] = safe_files
+        return sanitized
 
     async def _resolve_candidates(
         self,
@@ -217,6 +253,7 @@ class ProxyService:
         """
         trace_id = generate_trace_id()
         request_time = utc_now()
+        sanitized_body = self._sanitize_request_body_for_log(body)
         
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -284,7 +321,7 @@ class ProxyService:
                 output_cost=None,
                 price_source=billing.price_source,
                 request_headers=sanitize_headers(headers),
-                request_body=body,
+                request_body=sanitized_body,
                 response_status=attempt.response.status_code,
                 response_body=self._serialize_response_body(attempt.response.body),
                 error_info=attempt.response.error,
@@ -429,7 +466,7 @@ class ProxyService:
             output_cost=cost.output_cost,
             price_source=billing.price_source,
             request_headers=sanitize_headers(headers),
-            request_body=body,
+            request_body=sanitized_body,
 
             response_status=result.response.status_code,
             response_body=self._serialize_response_body(result.response.body),
@@ -482,6 +519,7 @@ class ProxyService:
         trace_id = generate_trace_id()
         request_time = utc_now()
         start_monotonic = time.monotonic()
+        sanitized_body = self._sanitize_request_body_for_log(body)
         
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
@@ -651,7 +689,7 @@ class ProxyService:
                 output_cost=None,
                 price_source=billing.price_source,
                 request_headers=sanitize_headers(headers),
-                request_body=body,
+                request_body=sanitized_body,
                 response_status=attempt.response.status_code,
                 response_body=self._serialize_response_body(attempt.response.body),
                 error_info=attempt.response.error,
@@ -746,7 +784,7 @@ class ProxyService:
                     output_cost=cost.output_cost,
                     price_source=billing.price_source,
                     request_headers=sanitize_headers(headers),
-                    request_body=body,
+                    request_body=sanitized_body,
 
                     response_status=initial_response.status_code,
                     response_body=json.dumps(
