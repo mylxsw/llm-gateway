@@ -50,6 +50,39 @@ class TokenCounter(ABC):
         """
         pass
 
+    def count_input(self, input_data: str | list[Any], model: str = "") -> int:
+        """
+        Count tokens in input (for embeddings)
+
+        Args:
+            input_data: Input string or list of strings/tokens
+            model: Model name
+
+        Returns:
+            int: Token count
+        """
+        if isinstance(input_data, str):
+            return self.count_tokens(input_data, model)
+        
+        if isinstance(input_data, list):
+            total = 0
+            for item in input_data:
+                if isinstance(item, str):
+                    total += self.count_tokens(item, model)
+                elif isinstance(item, list) and all(isinstance(x, int) for x in item):
+                    # List of tokens
+                    total += len(item)
+                elif isinstance(item, int):
+                    # Single token? Usually input is list of tokens or list of list of tokens?
+                    # OpenAI API: "Token array" -> [1, 2, 3]
+                    # "Array of token arrays" -> [[1, 2], [3, 4]]
+                    # If input is [1, 2, 3], loop gets 1 (int).
+                    # So if item is int, it counts as 1 token.
+                    total += 1
+            return total
+        
+        return 0
+
 
 class OpenAITokenCounter(TokenCounter):
     """

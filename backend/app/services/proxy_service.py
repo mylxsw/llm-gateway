@@ -48,6 +48,30 @@ def _truncate_log_text(text: str) -> str:
     return f"{text[:MAX_LOG_TEXT_LENGTH]}...[truncated]"
 
 
+def _smart_truncate(data: Any, max_list: int = 20, max_str: int = 1000) -> Any:
+    """
+    Recursively truncate data structures for logging.
+    """
+    if isinstance(data, dict):
+        return {k: _smart_truncate(v, max_list, max_str) for k, v in data.items()}
+    
+    if isinstance(data, list):
+        if len(data) > max_list:
+            # Check if it's a list of numbers (likely embedding vector)
+            if data and isinstance(data[0], (int, float)):
+                 return data[:5] + [f"...({len(data)-5} items)..."]
+            
+            truncated = [_smart_truncate(x, max_list, max_str) for x in data[:max_list]]
+            truncated.append(f"...({len(data)-max_list} more items)...")
+            return truncated
+        return [_smart_truncate(x, max_list, max_str) for x in data]
+    
+    if isinstance(data, str) and len(data) > max_str:
+        return data[:max_str] + "...[truncated]"
+    
+    return data
+
+
 class ProxyService:
     """
     Proxy Core Service
@@ -106,17 +130,31 @@ class ProxyService:
     def _serialize_response_body(body: Any) -> str | None:
         if body is None:
             return None
-        if isinstance(body, (dict, list)):
-            return json.dumps(body, ensure_ascii=False)
+            
+        data = body
         if isinstance(body, (bytes, bytearray)):
             if b"\x00" in body:
                 return f"[binary data: {len(body)} bytes]"
             try:
                 decoded = body.decode("utf-8")
+                # Try to parse as JSON first
+                try:
+                    data = json.loads(decoded)
+                except json.JSONDecodeError:
+                    return _truncate_log_text(decoded)
             except UnicodeDecodeError:
                 return f"[binary data: {len(body)} bytes]"
-            return _truncate_log_text(decoded)
-        return _truncate_log_text(str(body))
+
+        # If it's already a dict/list or successfully parsed
+        if isinstance(data, (dict, list)):
+            try:
+                truncated_data = _smart_truncate(data)
+                return json.dumps(truncated_data, ensure_ascii=False)
+            except Exception:
+                # Fallback
+                return _truncate_log_text(str(data))
+        
+        return _truncate_log_text(str(data))
 
     @staticmethod
     def _sanitize_request_body_for_log(body: dict[str, Any]) -> dict[str, Any]:
@@ -196,8 +234,11 @@ class ProxyService:
         provider_mapping_by_id = {pm.provider_id: pm for pm in eligible_provider_mappings}
 
         token_counter = get_token_counter(request_protocol)
-        messages = body.get("messages", [])
-        input_tokens = token_counter.count_messages(messages, requested_model)
+        if "input" in body:
+            input_tokens = token_counter.count_input(body["input"], requested_model)
+        else:
+            messages = body.get("messages", [])
+            input_tokens = token_counter.count_messages(messages, requested_model)
 
         context = RuleContext(
             current_model=requested_model,
