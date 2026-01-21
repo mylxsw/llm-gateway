@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import ModelServiceDep, require_admin_auth
+from app.api.deps import LogServiceDep, ModelServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.model import (
     ModelMappingCreate,
@@ -21,6 +21,7 @@ from app.domain.model import (
     ModelMappingProviderResponse,
     ModelExport,
 )
+from app.domain.log import ModelStats, ModelProviderStats
 
 router = APIRouter(
     prefix="/admin",
@@ -84,6 +85,9 @@ async def import_models(
 async def list_models(
     service: ModelServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    requested_model: Optional[str] = Query(None, description="Filter by model name"),
+    model_type: Optional[str] = Query(None, description="Filter by model type"),
+    strategy: Optional[str] = Query(None, description="Filter by strategy"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
 ):
@@ -91,7 +95,14 @@ async def list_models(
     Get Model Mapping List
     """
     try:
-        items, total = await service.get_all_mappings(is_active, page, page_size)
+        items, total = await service.get_all_mappings(
+            is_active=is_active, 
+            page=page, 
+            page_size=page_size,
+            requested_model=requested_model,
+            model_type=model_type,
+            strategy=strategy
+        )
         return PaginatedModelResponse(
             items=items,
             total=total,
@@ -102,7 +113,35 @@ async def list_models(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.get("/models/{requested_model}", response_model=ModelMappingResponse)
+@router.get("/models/stats", response_model=list[ModelStats])
+async def list_model_stats(
+    service: LogServiceDep,
+    requested_model: Optional[str] = Query(None, description="Filter by model name"),
+):
+    """
+    Get model stats based on logs for the last 7 days
+    """
+    try:
+        return await service.get_model_stats(requested_model=requested_model)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get("/models/provider-stats", response_model=list[ModelProviderStats])
+async def list_model_provider_stats(
+    service: LogServiceDep,
+    requested_model: Optional[str] = Query(None, description="Filter by model name"),
+):
+    """
+    Get model-provider stats based on logs for the last 7 days
+    """
+    try:
+        return await service.get_model_provider_stats(requested_model=requested_model)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get("/models/{requested_model:path}", response_model=ModelMappingResponse)
 async def get_model(
     requested_model: str,
     service: ModelServiceDep,
@@ -130,7 +169,7 @@ async def create_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.put("/models/{requested_model}", response_model=ModelMappingResponse)
+@router.put("/models/{requested_model:path}", response_model=ModelMappingResponse)
 async def update_model(
     requested_model: str,
     data: ModelMappingUpdate,
@@ -145,7 +184,7 @@ async def update_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.delete("/models/{requested_model}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/models/{requested_model:path}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_model(
     requested_model: str,
     service: ModelServiceDep,

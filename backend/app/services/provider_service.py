@@ -7,7 +7,7 @@ Provides business logic processing for Providers.
 from typing import Optional
 
 from app.common.errors import ConflictError, NotFoundError
-from app.common.sanitizer import sanitize_api_key_display
+from app.common.sanitizer import sanitize_api_key_display, sanitize_proxy_url
 from app.domain.provider import Provider, ProviderCreate, ProviderUpdate, ProviderResponse
 from app.repositories.provider_repo import ProviderRepository
 
@@ -78,6 +78,8 @@ class ProviderService:
         is_active: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20,
+        name: Optional[str] = None,
+        protocol: Optional[str] = None,
     ) -> tuple[list[ProviderResponse], int]:
         """
         Get Provider List
@@ -86,11 +88,19 @@ class ProviderService:
             is_active: Filter by active status
             page: Page number
             page_size: Items per page
+            name: Filter by name (fuzzy)
+            protocol: Filter by protocol
         
         Returns:
             tuple[list[ProviderResponse], int]: (Provider list, Total count)
         """
-        providers, total = await self.repo.get_all(is_active, page, page_size)
+        providers, total = await self.repo.get_all(
+            is_active=is_active, 
+            page=page, 
+            page_size=page_size,
+            name=name,
+            protocol=protocol
+        )
         return [self._to_response(p) for p in providers], total
     
     async def update(self, id: int, data: ProviderUpdate) -> ProviderResponse:
@@ -176,7 +186,9 @@ class ProviderService:
                     api_type=p.api_type,
                     extra_headers=p.extra_headers,
                     api_key=p.api_key,
-                    is_active=p.is_active
+                    is_active=p.is_active,
+                    proxy_enabled=p.proxy_enabled,
+                    proxy_url=p.proxy_url,
                 )
             )
         return export_list
@@ -223,6 +235,9 @@ class ProviderService:
             protocol=provider.protocol,
             api_type=provider.api_type,
             api_key=sanitize_api_key_display(provider.api_key) if provider.api_key else None,
+            extra_headers=provider.extra_headers,
+            proxy_enabled=provider.proxy_enabled,
+            proxy_url=sanitize_proxy_url(provider.proxy_url) if provider.proxy_url else None,
             is_active=provider.is_active,
             created_at=provider.created_at,
             updated_at=provider.updated_at,

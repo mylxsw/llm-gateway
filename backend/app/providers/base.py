@@ -60,6 +60,7 @@ class ProviderClient(ABC):
         target_model: str,
         response_mode: str = "parsed",
         extra_headers: Optional[dict[str, str]] = None,
+        proxy_config: Optional[dict[str, str]] = None,
     ) -> ProviderResponse:
         """
         Forward request to upstream provider
@@ -76,6 +77,7 @@ class ProviderClient(ABC):
             target_model: Target model name
             response_mode: Response mode, "parsed" (parse JSON) or "raw" (return raw bytes)
             extra_headers: Extra headers
+            proxy_config: httpx proxy configuration
         
         Returns:
             ProviderResponse: Provider response
@@ -93,6 +95,7 @@ class ProviderClient(ABC):
         body: dict[str, Any],
         target_model: str,
         extra_headers: Optional[dict[str, str]] = None,
+        proxy_config: Optional[dict[str, str]] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
         Forward streaming request to upstream provider
@@ -106,6 +109,7 @@ class ProviderClient(ABC):
             body: Request body
             target_model: Target model name
             extra_headers: Extra headers
+            proxy_config: httpx proxy configuration
         
         Yields:
             tuple[bytes, ProviderResponse]: (Data chunk, Response info)

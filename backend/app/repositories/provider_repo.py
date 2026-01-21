@@ -33,7 +33,9 @@ class ProviderRepository(ABC):
         self, 
         page: int = 1, 
         page_size: int = 20, 
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        name: Optional[str] = None,
+        protocol: Optional[str] = None
     ) -> Tuple[List[Provider], int]:
         """Get Provider List (Pagination)"""
         pass

@@ -84,9 +84,9 @@ export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '-';
   
   if (ms < 1000) {
-    return `${ms}ms`;
+    return `${Number(ms.toFixed(2))}ms`;
   } else if (ms < 60000) {
-    return `${(ms / 1000).toFixed(2)}s`;
+    return `${Number((ms / 1000).toFixed(2))}s`;
   } else {
     const minutes = Math.floor(ms / 60000);
     const seconds = ((ms % 60000) / 1000).toFixed(0);
@@ -110,6 +110,16 @@ export function formatUsd(cost: number | null | undefined): string {
   const num = Number(cost);
   if (Number.isNaN(num)) return '$0.0000';
   return `$${num.toFixed(4)}`;
+}
+
+/**
+ * Format USD cost with 2 decimals
+ */
+export function formatUsdCompact(cost: number | null | undefined): string {
+  if (cost === null || cost === undefined) return '$0.00';
+  const num = Number(cost);
+  if (Number.isNaN(num)) return '$0.00';
+  return `$${num.toFixed(2)}`;
 }
 
 /**

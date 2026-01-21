@@ -44,7 +44,7 @@ async def test_process_request_same_protocol_response_body_passthrough_bytes():
         return ProviderResponse(
             status_code=200,
             headers={"content-type": "application/json"},
-            body=b'{"id":"raw"}',
+            body=b'{"id":"raw","usage":{"completion_tokens":12}}',
         )
 
     fake_client = AsyncMock()
@@ -70,5 +70,8 @@ async def test_process_request_same_protocol_response_body_passthrough_bytes():
                 )
 
     assert response.status_code == 200
-    assert response.body == b'{"id":"raw"}'
+    assert response.body == b'{"id":"raw","usage":{"completion_tokens":12}}'
     service.log_repo.create.assert_awaited()
+
+    log_data = service.log_repo.create.await_args.args[0]
+    assert log_data.output_tokens == 12

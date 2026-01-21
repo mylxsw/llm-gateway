@@ -45,7 +45,6 @@ export function ProviderList({
           <TableHead>Name</TableHead>
           <TableHead>Base URL</TableHead>
           <TableHead>Protocol</TableHead>
-          <TableHead>API Type</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Updated At</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -68,7 +67,6 @@ export function ProviderList({
               <TableCell>
                 <Badge variant="outline">{provider.protocol}</Badge>
               </TableCell>
-              <TableCell>{provider.api_type}</TableCell>
               <TableCell>
                 <Badge className={status.className}>{status.text}</Badge>
               </TableCell>

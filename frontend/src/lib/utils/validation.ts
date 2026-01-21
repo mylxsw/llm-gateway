@@ -22,10 +22,10 @@ export function isNotEmpty(value: string | null | undefined): boolean {
 }
 
 /**
- * Validate model name format (letters, numbers, underscores, hyphens, dots)
+ * Validate model name format (letters, numbers, underscores, hyphens, dots, slashes)
  */
 export function isValidModelName(name: string): boolean {
-  return /^[a-zA-Z0-9_\-\.]+$/.test(name);
+  return /^[a-zA-Z0-9_\-\.\/]+$/.test(name);
 }
 
 /**

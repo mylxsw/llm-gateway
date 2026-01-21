@@ -3,5 +3,6 @@
  */
 
 export * from './ModelForm';
-export * from './ModelProviderForm';
 export * from './ModelList';
+export * from './ModelProviderForm';
+export * from './ModelFilters';

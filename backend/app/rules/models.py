@@ -85,9 +85,9 @@ class RuleSet:
 class CandidateProvider:
     """
     Candidate Provider
-    
+
     Candidate provider information output after rule engine matching.
-    
+
     Attributes:
         provider_id: Provider ID
         provider_name: Provider Name
@@ -97,8 +97,15 @@ class CandidateProvider:
         target_model: Target Model Name (Actual model corresponding to this provider)
         priority: Priority (Lower value means higher priority)
         weight: Weight (Used for weighted selection)
+        billing_mode: Billing mode (token_flat/token_tiered/per_request)
+        input_price: Provider input token price override (USD per 1M tokens)
+        output_price: Provider output token price override (USD per 1M tokens)
+        per_request_price: Per-request price (USD)
+        tiered_pricing: Tiered pricing configuration
+        model_input_price: Model fallback input price (USD per 1M tokens)
+        model_output_price: Model fallback output price (USD per 1M tokens)
     """
-    
+
     provider_id: int
     provider_name: str
     base_url: str
@@ -106,5 +113,14 @@ class CandidateProvider:
     api_key: Optional[str]
     target_model: str
     extra_headers: Optional[dict[str, str]] = None
+    proxy_enabled: bool = False
+    proxy_url: Optional[str] = None
     priority: int = 0
     weight: int = 1
+    billing_mode: Optional[str] = None
+    input_price: Optional[float] = None
+    output_price: Optional[float] = None
+    per_request_price: Optional[float] = None
+    tiered_pricing: Optional[list[Any]] = None
+    model_input_price: Optional[float] = None
+    model_output_price: Optional[float] = None

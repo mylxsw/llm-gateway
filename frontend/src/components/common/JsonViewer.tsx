@@ -5,9 +5,9 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronRight, WrapText } from 'lucide-react';
 import { copyToClipboard, cn } from '@/lib/utils';
 
 interface JsonViewerProps {
@@ -33,8 +33,9 @@ export function JsonViewer({
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [wrapLines, setWrapLines] = useState(false);
 
-  const normalizedData = React.useMemo(() => {
+  const normalizedData = useMemo(() => {
     if (typeof data !== 'string') return data;
     const trimmed = data.trim();
     if (
@@ -58,6 +59,68 @@ export function JsonViewer({
       return String(normalizedData);
     }
   })();
+
+  type TokenType = 'key' | 'string' | 'number' | 'boolean' | 'null' | 'plain';
+
+  const tokens = useMemo(() => {
+    const tokenRegex = /"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+    const parsedTokens: Array<{ text: string; type: TokenType }> = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = tokenRegex.exec(jsonString)) !== null) {
+      if (match.index > lastIndex) {
+        parsedTokens.push({
+          text: jsonString.slice(lastIndex, match.index),
+          type: 'plain',
+        });
+      }
+
+      const value = match[0];
+      let type: TokenType = 'plain';
+
+      if (value.startsWith('"')) {
+        const after = jsonString.slice(match.index + value.length);
+        const isKey = /^\s*:/.test(after);
+        type = isKey ? 'key' : 'string';
+      } else if (value === 'true' || value === 'false') {
+        type = 'boolean';
+      } else if (value === 'null') {
+        type = 'null';
+      } else {
+        type = 'number';
+      }
+
+      parsedTokens.push({ text: value, type });
+      lastIndex = match.index + value.length;
+    }
+
+    if (lastIndex < jsonString.length) {
+      parsedTokens.push({
+        text: jsonString.slice(lastIndex),
+        type: 'plain',
+      });
+    }
+
+    return parsedTokens;
+  }, [jsonString]);
+
+  const tokenClassName = (type: TokenType) => {
+    switch (type) {
+      case 'key':
+        return 'text-sky-600';
+      case 'string':
+        return 'text-emerald-600';
+      case 'number':
+        return 'text-amber-600';
+      case 'boolean':
+        return 'text-rose-600';
+      case 'null':
+        return 'text-teal-600';
+      default:
+        return 'text-foreground';
+    }
+  };
 
   // Copy to clipboard
   const handleCopy = async () => {
@@ -83,33 +146,53 @@ export function JsonViewer({
           )}
           <span>{expanded ? 'Collapse' : 'Expand'}</span>
         </button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCopy}
-          className="h-7 gap-1 px-2"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
-              <span className="text-green-500">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
-              <span>Copy</span>
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setWrapLines((value) => !value)}
+            className="h-7 gap-1 px-2"
+          >
+            <WrapText className="h-3.5 w-3.5" suppressHydrationWarning />
+            <span>{wrapLines ? 'No wrap' : 'Wrap'}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            className="h-7 gap-1 px-2"
+          >
+            {copied ? (
+              <>
+                <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
+                <span className="text-green-500">Copied</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5" suppressHydrationWarning />
+                <span>Copy</span>
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* JSON Content */}
       {expanded && (
         <pre
-          className="overflow-auto p-3 text-sm"
+          className={cn(
+            'overflow-auto p-3 text-sm font-mono',
+            wrapLines ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+          )}
           style={{ maxHeight }}
         >
-          <code className="text-foreground">{jsonString}</code>
+          <code>
+            {tokens.map((token, index) => (
+              <span key={`${token.type}-${index}`} className={tokenClassName(token.type)}>
+                {token.text}
+              </span>
+            ))}
+          </code>
         </pre>
       )}
     </div>

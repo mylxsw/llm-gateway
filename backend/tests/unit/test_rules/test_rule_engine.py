@@ -223,7 +223,6 @@ class TestRuleEngine:
         self.model_mapping = ModelMapping(
             requested_model="gpt-4",
             strategy="round_robin",
-            matching_rules=None,  # No model-level rules
             capabilities=None,
             is_active=True,
             created_at=now,
@@ -276,30 +275,6 @@ class TestRuleEngine:
         assert candidates[0].target_model == "gpt-4-0613"
         assert candidates[1].provider_name == "Azure"
         assert candidates[1].target_model == "gpt-4-azure"
-    
-    def test_evaluate_with_model_rules(self):
-        """Test model-level rule filtering"""
-        context = RuleContext(
-            current_model="gpt-4",
-            headers={"x-priority": "low"},
-        )
-        
-        # Set model-level rule: only high priority passes
-        self.model_mapping.matching_rules = {
-            "rules": [
-                {"field": "headers.x-priority", "operator": "eq", "value": "high"}
-            ]
-        }
-        
-        candidates = self.engine.evaluate_sync(
-            context=context,
-            model_mapping=self.model_mapping,
-            provider_mappings=self.provider_mappings,
-            providers=self.providers,
-        )
-        
-        # Model-level rules failed, return empty list
-        assert len(candidates) == 0
     
     def test_evaluate_with_provider_rules(self):
         """Test provider-level rule filtering"""
@@ -361,3 +336,318 @@ class TestRuleEngine:
         # Azure (priority 1) should be first
         assert candidates[0].provider_name == "Azure"
         assert candidates[1].provider_name == "OpenAI"
+
+    def test_evaluate_provider_rules_empty_matches_all(self):
+        """Test that empty provider_rules matches all requests (default behavior)"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "any-value"},
+            request_body={"temperature": 0.9, "max_tokens": 5000},
+        )
+
+        # Both providers have no rules - should both match
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        assert len(candidates) == 2
+
+    def test_evaluate_provider_rules_and_logic(self):
+        """Test provider rules with AND logic"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "high"},
+            request_body={"temperature": 0.3},
+        )
+
+        # Set OpenAI provider rule with AND logic: high priority AND low temperature
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"},
+                {"field": "body.temperature", "operator": "lt", "value": 0.5},
+            ],
+            "logic": "AND"
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Both should match (OpenAI with AND rules, Azure with no rules)
+        assert len(candidates) == 2
+        assert any(c.provider_name == "OpenAI" for c in candidates)
+        assert any(c.provider_name == "Azure" for c in candidates)
+
+    def test_evaluate_provider_rules_and_logic_fails(self):
+        """Test provider rules with AND logic when one condition fails"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "high"},
+            request_body={"temperature": 0.8},  # High temperature
+        )
+
+        # Set OpenAI provider rule: high priority AND low temperature (AND logic)
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"},
+                {"field": "body.temperature", "operator": "lt", "value": 0.5},
+            ],
+            "logic": "AND"
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only Azure should match (OpenAI AND condition fails due to temperature)
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "Azure"
+
+    def test_evaluate_provider_rules_or_logic(self):
+        """Test provider rules with OR logic"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "low"},  # Not high
+            request_body={"temperature": 0.3},  # But low temperature
+        )
+
+        # Set OpenAI provider rule with OR logic
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"},
+                {"field": "body.temperature", "operator": "lt", "value": 0.5},
+            ],
+            "logic": "OR"
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Both should match (OpenAI OR passes due to temperature, Azure has no rules)
+        assert len(candidates) == 2
+
+    def test_evaluate_provider_rules_or_logic_all_fail(self):
+        """Test provider rules with OR logic when all conditions fail"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "low"},  # Not high
+            request_body={"temperature": 0.8},  # Not low
+        )
+
+        # Set OpenAI provider rule with OR logic
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"},
+                {"field": "body.temperature", "operator": "lt", "value": 0.5},
+            ],
+            "logic": "OR"
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only Azure should match (OpenAI OR condition fails)
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "Azure"
+
+    def test_evaluate_all_providers_fail_rules(self):
+        """Test when all providers fail their rules"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-priority": "low"},
+        )
+
+        # Set both providers to require high priority
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"}
+            ]
+        }
+        self.provider_mappings[1].provider_rules = {
+            "rules": [
+                {"field": "headers.x-priority", "operator": "eq", "value": "high"}
+            ]
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # No providers should match
+        assert len(candidates) == 0
+
+    def test_evaluate_provider_rules_with_model_field(self):
+        """Test provider rules matching on model name"""
+        context = RuleContext(current_model="gpt-4")
+
+        # OpenAI only accepts gpt-4, Azure only accepts claude
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "eq", "value": "gpt-4"}
+            ]
+        }
+        self.provider_mappings[1].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "eq", "value": "claude-3"}
+            ]
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only OpenAI should match
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "OpenAI"
+
+    def test_evaluate_inactive_mapping(self):
+        """Test that inactive provider mappings are skipped"""
+        context = RuleContext(current_model="gpt-4")
+
+        # Disable OpenAI mapping
+        self.provider_mappings[0].is_active = False
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only Azure should be returned
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "Azure"
+
+    def test_evaluate_provider_rules_contains_operator(self):
+        """Test provider rules with contains operator"""
+        context = RuleContext(
+            current_model="gpt-4-turbo-preview",
+            headers={},
+        )
+
+        # OpenAI accepts models containing "gpt"
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "contains", "value": "gpt"}
+            ]
+        }
+        # Azure accepts models containing "claude"
+        self.provider_mappings[1].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "contains", "value": "claude"}
+            ]
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only OpenAI should match
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "OpenAI"
+
+    def test_evaluate_provider_rules_in_operator(self):
+        """Test provider rules with in operator"""
+        context = RuleContext(
+            current_model="gpt-4",
+            headers={"x-region": "us-east"},
+        )
+
+        # OpenAI only serves certain regions
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "headers.x-region", "operator": "in", "value": ["us-east", "us-west"]}
+            ]
+        }
+        # Azure only serves EU regions
+        self.provider_mappings[1].provider_rules = {
+            "rules": [
+                {"field": "headers.x-region", "operator": "in", "value": ["eu-west", "eu-central"]}
+            ]
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only OpenAI should match
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "OpenAI"
+
+    def test_evaluate_provider_rules_regex_operator(self):
+        """Test provider rules with regex operator"""
+        context = RuleContext(
+            current_model="gpt-4-0125-preview",
+            headers={},
+        )
+
+        # OpenAI accepts models matching gpt-4-* pattern
+        self.provider_mappings[0].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "regex", "value": r"gpt-4-\d+"}
+            ]
+        }
+        # Azure only accepts specific model
+        self.provider_mappings[1].provider_rules = {
+            "rules": [
+                {"field": "model", "operator": "eq", "value": "gpt-4"}
+            ]
+        }
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only OpenAI should match (regex matches)
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "OpenAI"
+
+    def test_evaluate_provider_missing_from_dict(self):
+        """Test that missing provider in providers dict is handled gracefully"""
+        context = RuleContext(current_model="gpt-4")
+
+        # Remove Azure from providers dict
+        del self.providers[2]
+
+        candidates = self.engine.evaluate_sync(
+            context=context,
+            model_mapping=self.model_mapping,
+            provider_mappings=self.provider_mappings,
+            providers=self.providers,
+        )
+
+        # Only OpenAI should be returned
+        assert len(candidates) == 1
+        assert candidates[0].provider_name == "OpenAI"

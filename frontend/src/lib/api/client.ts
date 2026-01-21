@@ -5,6 +5,7 @@
 
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { ApiError } from '@/types';
+import { getApiErrorMessage } from './error';
 
 /** API base URL, configurable via environment variables */
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
@@ -52,23 +53,19 @@ apiClient.interceptors.response.use(
   (error: AxiosError<ApiError>) => {
     const statusCode = error.response?.status;
     const url = error.config?.url || '';
+    const statusText = error.response?.statusText;
 
     if (typeof window !== 'undefined' && statusCode === 401 && !url.includes('/api/auth/')) {
       window.dispatchEvent(new CustomEvent('auth:required'));
     }
 
-    // FastAPI default error structure (HTTPException)
-    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
-    if (typeof detail === 'string' && detail) {
-      return Promise.reject(new Error(detail));
-    }
+    const httpFallback =
+      typeof statusCode === 'number'
+        ? `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`
+        : error.message || 'Network error';
 
-    // Extract error message
-    if (error.response?.data?.error) {
-      const apiError = error.response.data.error;
-      return Promise.reject(new Error(apiError.message || 'Request failed'));
-    }
-    return Promise.reject(new Error(error.message || 'Network error'));
+    const message = getApiErrorMessage(error, httpFallback);
+    return Promise.reject(new Error(message));
   }
 );
 

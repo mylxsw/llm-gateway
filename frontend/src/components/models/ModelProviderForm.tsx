@@ -7,7 +7,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,7 @@ import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
   ModelMappingProviderUpdate,
+  ModelType,
   Provider,
   RuleSet,
 } from '@/types';
@@ -48,6 +49,8 @@ interface ModelProviderFormProps {
   defaultPrices?: { input_price?: number | null; output_price?: number | null };
   /** Mapping data for edit mode */
   mapping?: ModelMappingProvider | null;
+  /** Parent model type */
+  modelType: ModelType;
   /** Submit callback */
   onSubmit: (data: ModelMappingProviderCreate | ModelMappingProviderUpdate) => void;
   /** Loading state */
@@ -59,8 +62,14 @@ interface FormData {
   provider_id: string;
   target_model_name: string;
   provider_rules: RuleSet | null;
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request';
+  // token_flat
   input_price: string;
   output_price: string;
+  // per_request
+  per_request_price: string;
+  // token_tiered
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
   priority: number;
   weight: number;
   is_active: boolean;
@@ -76,6 +85,7 @@ export function ModelProviderForm({
   providers,
   defaultPrices,
   mapping,
+  modelType,
   onSubmit,
   loading = false,
 }: ModelProviderFormProps) {
@@ -96,24 +106,40 @@ export function ModelProviderForm({
       provider_id: '',
       target_model_name: '',
       provider_rules: null,
+      billing_mode: 'token_flat',
       input_price: '',
       output_price: '',
+      per_request_price: '',
+      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
       priority: 0,
       weight: 1,
       is_active: true,
     },
   });
 
+  const { fields: tierFields, append: appendTier, remove: removeTier } = useFieldArray({
+    control,
+    name: 'tiers',
+  });
+
   const providerId = watch('provider_id');
   const isActive = watch('is_active');
+  const billingMode = watch('billing_mode');
+  const supportsBilling = modelType === 'chat' || modelType === 'embedding';
 
   // Fill form data in edit mode
   useEffect(() => {
     if (mapping) {
+      const mode = (mapping.billing_mode || 'token_flat') as
+        | 'token_flat'
+        | 'token_tiered'
+        | 'per_request';
+
       reset({
         provider_id: String(mapping.provider_id),
         target_model_name: mapping.target_model_name,
         provider_rules: mapping.provider_rules || null,
+        billing_mode: mode,
         input_price:
           mapping.input_price === null || mapping.input_price === undefined
             ? defaultPrices?.input_price === null || defaultPrices?.input_price === undefined
@@ -126,23 +152,61 @@ export function ModelProviderForm({
               ? '0'
               : String(defaultPrices.output_price)
             : String(mapping.output_price),
+        per_request_price:
+          mapping.per_request_price === null || mapping.per_request_price === undefined
+            ? '0'
+            : String(mapping.per_request_price),
+        tiers:
+          mapping.tiered_pricing && mapping.tiered_pricing.length > 0
+            ? mapping.tiered_pricing.map((t) => ({
+                max_input_tokens:
+                  t.max_input_tokens === null || t.max_input_tokens === undefined
+                    ? ''
+                    : String(t.max_input_tokens),
+                input_price: String(t.input_price),
+                output_price: String(t.output_price),
+              }))
+            : [
+                {
+                  max_input_tokens: '32768',
+                  input_price:
+                    mapping.input_price === null || mapping.input_price === undefined
+                      ? '0'
+                      : String(mapping.input_price),
+                  output_price:
+                    mapping.output_price === null || mapping.output_price === undefined
+                      ? '0'
+                      : String(mapping.output_price),
+                },
+              ],
         priority: mapping.priority,
         weight: mapping.weight,
         is_active: mapping.is_active,
       });
     } else {
+      const fallbackInputPrice =
+        defaultPrices?.input_price === null || defaultPrices?.input_price === undefined
+          ? '0'
+          : String(defaultPrices.input_price);
+      const fallbackOutputPrice =
+        defaultPrices?.output_price === null || defaultPrices?.output_price === undefined
+          ? '0'
+          : String(defaultPrices.output_price);
       reset({
         provider_id: '',
         target_model_name: '',
         provider_rules: null,
-        input_price:
-          defaultPrices?.input_price === null || defaultPrices?.input_price === undefined
-            ? '0'
-            : String(defaultPrices.input_price),
-        output_price:
-          defaultPrices?.output_price === null || defaultPrices?.output_price === undefined
-            ? '0'
-            : String(defaultPrices.output_price),
+        billing_mode: 'token_flat',
+        input_price: fallbackInputPrice,
+        output_price: fallbackOutputPrice,
+        per_request_price: '0',
+        tiers: [
+          {
+            max_input_tokens: '32768',
+            input_price: fallbackInputPrice,
+            output_price: fallbackOutputPrice,
+          },
+        ],
         priority: 0,
         weight: 1,
         is_active: true,
@@ -152,18 +216,74 @@ export function ModelProviderForm({
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
-    const inputPrice = data.input_price.trim();
-    const outputPrice = data.output_price.trim();
+    const billingMode = data.billing_mode;
+    const nonBillingOverride = {
+      billing_mode: 'token_flat' as const,
+      input_price: 0,
+      output_price: 0,
+      per_request_price: null,
+      tiered_pricing: null,
+    };
+
+    const buildFlatPricing = () => {
+      const inputPrice = data.input_price.trim();
+      const outputPrice = data.output_price.trim();
+      return {
+        input_price: Number(inputPrice || '0'),
+        output_price: Number(outputPrice || '0'),
+      };
+    };
+
+    const buildTieredPricing = () => {
+      return (data.tiers || []).map((t) => {
+        const inputPrice = Number((t.input_price || '0').trim() || '0');
+        const outputPrice = Number((t.output_price || '0').trim() || '0');
+        const maxStr = t.max_input_tokens.trim();
+        const maxInputTokens = maxStr === '' ? null : Number(maxStr);
+        return {
+          max_input_tokens: maxInputTokens,
+          input_price: inputPrice,
+          output_price: outputPrice,
+        };
+      });
+    };
+
     if (isEdit) {
       // Update mode
       const submitData: ModelMappingProviderUpdate = {
         target_model_name: data.target_model_name,
-        input_price: inputPrice ? Number(inputPrice) : null,
-        output_price: outputPrice ? Number(outputPrice) : null,
         priority: data.priority,
         weight: data.weight,
         is_active: data.is_active,
       };
+
+      if (supportsBilling) {
+        submitData.billing_mode = billingMode;
+        if (billingMode === 'per_request') {
+          const perReq = data.per_request_price.trim();
+          submitData.per_request_price = perReq ? Number(perReq) : 0;
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.tiered_pricing = null;
+        } else if (billingMode === 'token_tiered') {
+          submitData.tiered_pricing = buildTieredPricing();
+          submitData.per_request_price = null;
+          submitData.input_price = null;
+          submitData.output_price = null;
+        } else {
+          const flat = buildFlatPricing();
+          submitData.input_price = flat.input_price;
+          submitData.output_price = flat.output_price;
+          submitData.per_request_price = null;
+          submitData.tiered_pricing = null;
+        }
+      } else {
+        submitData.billing_mode = nonBillingOverride.billing_mode;
+        submitData.input_price = nonBillingOverride.input_price;
+        submitData.output_price = nonBillingOverride.output_price;
+        submitData.per_request_price = nonBillingOverride.per_request_price;
+        submitData.tiered_pricing = nonBillingOverride.tiered_pricing;
+      }
       
       submitData.provider_rules = data.provider_rules || undefined;
       
@@ -174,12 +294,38 @@ export function ModelProviderForm({
         requested_model: requestedModel,
         provider_id: Number(data.provider_id),
         target_model_name: data.target_model_name,
-        input_price: inputPrice ? Number(inputPrice) : null,
-        output_price: outputPrice ? Number(outputPrice) : null,
         priority: data.priority,
         weight: data.weight,
         is_active: data.is_active,
       };
+
+      if (supportsBilling) {
+        submitData.billing_mode = billingMode;
+        if (billingMode === 'per_request') {
+          const perReq = data.per_request_price.trim();
+          submitData.per_request_price = perReq ? Number(perReq) : 0;
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.tiered_pricing = null;
+        } else if (billingMode === 'token_tiered') {
+          submitData.tiered_pricing = buildTieredPricing();
+          submitData.per_request_price = null;
+          submitData.input_price = null;
+          submitData.output_price = null;
+        } else {
+          const flat = buildFlatPricing();
+          submitData.input_price = flat.input_price;
+          submitData.output_price = flat.output_price;
+          submitData.per_request_price = null;
+          submitData.tiered_pricing = null;
+        }
+      } else {
+        submitData.billing_mode = nonBillingOverride.billing_mode;
+        submitData.input_price = nonBillingOverride.input_price;
+        submitData.output_price = nonBillingOverride.output_price;
+        submitData.per_request_price = nonBillingOverride.per_request_price;
+        submitData.tiered_pricing = nonBillingOverride.tiered_pricing;
+      }
       
       submitData.provider_rules = data.provider_rules || undefined;
       
@@ -258,35 +404,135 @@ export function ModelProviderForm({
             )}
           </div>
 
-          {/* Pricing Override */}
-          <div className="rounded-lg border bg-muted/30 p-3">
-            <div className="mb-2 text-sm font-medium">Price Override (USD / 1M tokens)</div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="input_price">Input Price</Label>
-                <Input
-                  id="input_price"
-                  type="number"
-                  min={0}
-                  step="0.0001"
-                  {...register('input_price')}
-                />
+          {/* Billing / Pricing */}
+          {supportsBilling && (
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+              <div className="text-sm font-medium">Billing</div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Billing Mode</Label>
+                  <Select
+                    value={billingMode}
+                    onValueChange={(value) =>
+                      setValue('billing_mode', value as FormData['billing_mode'])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select billing mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="per_request">Per request</SelectItem>
+                      <SelectItem value="token_flat">Per token (flat)</SelectItem>
+                      <SelectItem value="token_tiered">Per token (tiered by input tokens)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="output_price">Output Price</Label>
-                <Input
-                  id="output_price"
-                  type="number"
-                  min={0}
-                  step="0.0001"
-                  {...register('output_price')}
-                />
-              </div>
+
+              {billingMode === 'per_request' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="per_request_price">Price (USD / request)</Label>
+                  <Input
+                    id="per_request_price"
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    {...register('per_request_price')}
+                  />
+                </div>
+              ) : billingMode === 'token_tiered' ? (
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Choose the tier by input tokens, then bill input/output tokens separately by that tier’s prices.
+                  </div>
+                  <div className="space-y-2">
+                    {tierFields.map((field, idx) => (
+                      <div key={field.id} className="grid grid-cols-7 gap-2 items-end">
+                        <div className="col-span-2 space-y-1">
+                          <Label>Max Input Tokens</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            placeholder="e.g. 32768 (empty = no limit)"
+                            {...register(`tiers.${idx}.max_input_tokens` as const)}
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label>Input (USD / 1M)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.0001"
+                            placeholder="e.g. 1.2"
+                            {...register(`tiers.${idx}.input_price` as const)}
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label>Output (USD / 1M)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.0001"
+                            placeholder="e.g. 3.6"
+                            {...register(`tiers.${idx}.output_price` as const)}
+                          />
+                        </div>
+                        <div className="col-span-1 flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => removeTier(idx)}
+                            disabled={tierFields.length <= 1}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        appendTier({ max_input_tokens: '', input_price: '', output_price: '' })
+                      }
+                    >
+                      Add Tier
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="input_price">Input Price (USD / 1M tokens)</Label>
+                      <Input
+                        id="input_price"
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        {...register('input_price')}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="output_price">Output Price (USD / 1M tokens)</Label>
+                      <Input
+                        id="output_price"
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        {...register('output_price')}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Billing is applied when this request routes to the selected provider.
+              </p>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Used when this request routes to the selected provider; empty means unconfigured.
-            </p>
-          </div>
+          )}
 
           {/* Priority and Weight */}
           <div className="grid grid-cols-2 gap-4">

@@ -9,7 +9,7 @@ import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Download, Upload } from 'lucide-react';
-import { ProviderForm, ProviderList } from '@/components/providers';
+import { ProviderFilters, ProviderFiltersState, ProviderForm, ProviderList } from '@/components/providers';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useProviders,
@@ -18,7 +18,7 @@ import {
   useDeleteProvider,
 } from '@/lib/hooks';
 import { exportProviders, importProviders } from '@/lib/api';
-import { Provider, ProviderCreate, ProviderUpdate } from '@/types';
+import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
 
 /**
  * Provider Management Page Component
@@ -36,10 +36,20 @@ export default function ProvidersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
 
+  // Filter state
+  const [filters, setFilters] = useState<ProviderFiltersState>({
+    name: '',
+    protocol: 'all',
+    is_active: 'all',
+  });
+
   // Data query
   const { data, isLoading, isError, refetch } = useProviders({
     page,
     page_size: pageSize,
+    name: filters.name || undefined,
+    protocol: filters.protocol === 'all' ? undefined : (filters.protocol as ProtocolType),
+    is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
   });
 
   // Mutations
@@ -83,8 +93,8 @@ export default function ProvidersPage() {
       }
       setFormOpen(false);
       setEditingProvider(null);
-    } catch (error) {
-      console.error('Save failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 
@@ -95,8 +105,8 @@ export default function ProvidersPage() {
       await deleteMutation.mutateAsync(deletingProvider.id);
       setDeleteDialogOpen(false);
       setDeletingProvider(null);
-    } catch (error) {
-      console.error('Delete failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 
@@ -179,7 +189,8 @@ export default function ProvidersPage() {
           </Button>
         </div>
       </div>
-
+      {/* Filters */}
+      <ProviderFilters filters={filters} onFilterChange={setFilters} />
       {/* Data List */}
       <Card>
         <CardHeader>

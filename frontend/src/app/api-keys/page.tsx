@@ -83,8 +83,8 @@ export default function ApiKeysPage() {
         const newKey = await createMutation.mutateAsync(formData as ApiKeyCreate);
         setCreatedKey(newKey);
       }
-    } catch (error) {
-      console.error('Save failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 
@@ -104,8 +104,8 @@ export default function ApiKeysPage() {
       await deleteMutation.mutateAsync(deletingKey.id);
       setDeleteDialogOpen(false);
       setDeletingKey(null);
-    } catch (error) {
-      console.error('Delete failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 

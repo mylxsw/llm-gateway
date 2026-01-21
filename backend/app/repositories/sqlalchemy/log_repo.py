@@ -21,8 +21,14 @@ from app.domain.log import (
     LogCostSummary,
     LogCostTrendPoint,
     LogCostByModel,
+    ModelStats,
+    ModelProviderStats,
 )
 from app.repositories.log_repo import LogRepository
+
+
+def _pg_make_interval_minutes(minutes: int):
+    return func.make_interval(0, 0, 0, 0, 0, minutes, 0)
 
 
 class SQLAlchemyLogRepository(LogRepository):
@@ -301,8 +307,8 @@ class SQLAlchemyLogRepository(LogRepository):
                     RequestLogORM.request_time, f"{tz_offset_minutes:+d} minutes"
                 )
             else:
-                shifted_time_expr = RequestLogORM.request_time + func.make_interval(
-                    mins=tz_offset_minutes
+                shifted_time_expr = (
+                    RequestLogORM.request_time + _pg_make_interval_minutes(tz_offset_minutes)
                 )
         else:
             shifted_time_expr = RequestLogORM.request_time
@@ -333,8 +339,8 @@ class SQLAlchemyLogRepository(LogRepository):
                     bucket_local_start_expr, f"{-tz_offset_minutes:+d} minutes"
                 )
             else:
-                bucket_start_utc_expr = bucket_local_start_expr - func.make_interval(
-                    mins=tz_offset_minutes
+                bucket_start_utc_expr = bucket_local_start_expr - _pg_make_interval_minutes(
+                    tz_offset_minutes
                 )
         else:
             bucket_start_utc_expr = bucket_local_start_expr
@@ -397,3 +403,137 @@ class SQLAlchemyLogRepository(LogRepository):
         ]
 
         return LogCostStatsResponse(summary=summary, trend=trend, by_model=by_model)
+
+    async def get_model_stats(self, requested_model: str | None = None) -> list[ModelStats]:
+        cutoff_time = to_utc_naive(utc_now() - timedelta(days=7))
+        conditions = []
+        if cutoff_time:
+            conditions.append(RequestLogORM.request_time >= cutoff_time)
+        if requested_model:
+            conditions.append(RequestLogORM.requested_model == requested_model)
+        else:
+            conditions.append(RequestLogORM.requested_model.isnot(None))
+
+        where_clause = and_(*conditions) if conditions else None
+
+        error_condition = or_(
+            RequestLogORM.error_info.isnot(None),
+            RequestLogORM.response_status >= 400,
+        )
+
+        avg_total_time = func.avg(RequestLogORM.total_time_ms)
+        avg_first_byte = func.avg(
+            case((RequestLogORM.is_stream.is_(True), RequestLogORM.first_byte_delay_ms))
+        )
+        failure_count = func.coalesce(func.sum(case((error_condition, 1), else_=0)), 0)
+
+        stmt = select(
+            RequestLogORM.requested_model.label("requested_model"),
+            func.count().label("request_count"),
+            avg_total_time.label("avg_total_time_ms"),
+            avg_first_byte.label("avg_first_byte_time_ms"),
+            failure_count.label("failure_count"),
+        ).group_by(RequestLogORM.requested_model)
+
+        if where_clause is not None:
+            stmt = stmt.where(where_clause)
+
+        rows = (await self.session.execute(stmt)).mappings().all()
+        results: list[ModelStats] = []
+        for row in rows:
+            total = int(row["request_count"] or 0)
+            failures = int(row["failure_count"] or 0)
+            successes = max(total - failures, 0)
+            success_rate = successes / total if total > 0 else 0.0
+            failure_rate = failures / total if total > 0 else 0.0
+            results.append(
+                ModelStats(
+                    requested_model=row["requested_model"] or "-",
+                    avg_response_time_ms=(
+                        float(row["avg_total_time_ms"])
+                        if row["avg_total_time_ms"] is not None
+                        else None
+                    ),
+                    avg_first_byte_time_ms=(
+                        float(row["avg_first_byte_time_ms"])
+                        if row["avg_first_byte_time_ms"] is not None
+                        else None
+                    ),
+                    success_rate=success_rate,
+                    failure_rate=failure_rate,
+                )
+            )
+        return results
+
+    async def get_model_provider_stats(
+        self, requested_model: str | None = None
+    ) -> list[ModelProviderStats]:
+        cutoff_time = to_utc_naive(utc_now() - timedelta(days=7))
+        conditions = []
+        if cutoff_time:
+            conditions.append(RequestLogORM.request_time >= cutoff_time)
+        if requested_model:
+            conditions.append(RequestLogORM.requested_model == requested_model)
+        else:
+            conditions.append(RequestLogORM.requested_model.isnot(None))
+        conditions.append(RequestLogORM.provider_name.isnot(None))
+        conditions.append(RequestLogORM.target_model.isnot(None))
+
+        where_clause = and_(*conditions) if conditions else None
+
+        error_condition = or_(
+            RequestLogORM.error_info.isnot(None),
+            RequestLogORM.response_status >= 400,
+        )
+
+        avg_total_time = func.avg(RequestLogORM.total_time_ms)
+        avg_first_byte = func.avg(
+            case((RequestLogORM.is_stream.is_(True), RequestLogORM.first_byte_delay_ms))
+        )
+        failure_count = func.coalesce(func.sum(case((error_condition, 1), else_=0)), 0)
+
+        stmt = select(
+            RequestLogORM.requested_model.label("requested_model"),
+            RequestLogORM.target_model.label("target_model"),
+            RequestLogORM.provider_name.label("provider_name"),
+            func.count().label("request_count"),
+            avg_total_time.label("avg_total_time_ms"),
+            avg_first_byte.label("avg_first_byte_time_ms"),
+            failure_count.label("failure_count"),
+        ).group_by(
+            RequestLogORM.requested_model,
+            RequestLogORM.target_model,
+            RequestLogORM.provider_name,
+        )
+
+        if where_clause is not None:
+            stmt = stmt.where(where_clause)
+
+        rows = (await self.session.execute(stmt)).mappings().all()
+        results: list[ModelProviderStats] = []
+        for row in rows:
+            total = int(row["request_count"] or 0)
+            failures = int(row["failure_count"] or 0)
+            successes = max(total - failures, 0)
+            success_rate = successes / total if total > 0 else 0.0
+            failure_rate = failures / total if total > 0 else 0.0
+            results.append(
+                ModelProviderStats(
+                    requested_model=row["requested_model"] or "-",
+                    target_model=row["target_model"] or "-",
+                    provider_name=row["provider_name"] or "-",
+                    avg_first_byte_time_ms=(
+                        float(row["avg_first_byte_time_ms"])
+                        if row["avg_first_byte_time_ms"] is not None
+                        else None
+                    ),
+                    avg_response_time_ms=(
+                        float(row["avg_total_time_ms"])
+                        if row["avg_total_time_ms"] is not None
+                        else None
+                    ),
+                    success_rate=success_rate,
+                    failure_rate=failure_rate,
+                )
+            )
+        return results

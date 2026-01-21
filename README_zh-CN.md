@@ -1,8 +1,8 @@
-# LLM Gateway
+# Squirrel
 
 [ [**English**](README.md) | [**中文**](README_zh-CN.md) ]
 
-**LLM Gateway** 是一个高性能的企业级代理服务，旨在统一管理和路由对大语言模型（LLM）供应商（如 OpenAI 和 Anthropic）的访问。它提供了智能路由、强大的故障转移策略、全面的日志记录以及现代化的管理仪表板。
+**Squirrel** 是一个高性能的企业级代理服务，旨在统一管理和路由对大语言模型（LLM）供应商（如 OpenAI 和 Anthropic）的访问。它提供了智能路由、强大的故障转移策略、全面的日志记录以及现代化的管理仪表板。
 
 ## ✨ 核心特性
 

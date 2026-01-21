@@ -2,10 +2,10 @@ name: Docker Build and Push
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 env:
   REGISTRY: ghcr.io
@@ -47,9 +47,22 @@ jobs:
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: ${{ github.ref_name == 'main' || startsWith(github.ref_name, 'v') }}
+        push: ${{ github.ref_name == 'main' || github.ref_name == 'dev' || startsWith(github.ref_name, 'v') }}
         tags: |
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name == 'dev' && 'dev' || 'latest' }}
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.result }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+    - name: Notify remote endpoint
+      env:
+        NOTIFICATION_REMOTE_URL: ${{ secrets.NOTIFICATION_REMOTE_URL }}
+      if: ${{ env.NOTIFICATION_REMOTE_URL != '' }}
+      run: |
+        curl -X POST "${{ env.NOTIFICATION_REMOTE_URL }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+                "branch": "${{ github.ref_name }}",
+                "action": "${{ github.event_name }}",
+                "repo": "${{ github.repository }}"
+              }'

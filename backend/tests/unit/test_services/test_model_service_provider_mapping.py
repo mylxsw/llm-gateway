@@ -33,6 +33,8 @@ async def test_create_provider_mapping_rejects_duplicates(db_session):
             requested_model="gpt-4o-mini",
             provider_id=provider.id,
             target_model_name="gpt-4o-mini",
+            input_price=0.0,
+            output_price=0.0,
         )
     )
     assert created.requested_model == "gpt-4o-mini"
@@ -45,7 +47,8 @@ async def test_create_provider_mapping_rejects_duplicates(db_session):
                 requested_model="gpt-4o-mini",
                 provider_id=provider.id,
                 target_model_name="gpt-4o-mini",
+                input_price=0.0,
+                output_price=0.0,
             )
         )
     assert exc.value.code == "duplicate_mapping"
-

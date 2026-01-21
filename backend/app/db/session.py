@@ -99,6 +99,7 @@ def _run_migrations(sync_conn) -> None:
     ensure_columns(
         "model_mappings",
         {
+            "model_type": "model_type VARCHAR(50)",
             "input_price": "input_price NUMERIC(12,4)",
             "output_price": "output_price NUMERIC(12,4)",
         },
@@ -108,6 +109,9 @@ def _run_migrations(sync_conn) -> None:
         {
             "input_price": "input_price NUMERIC(12,4)",
             "output_price": "output_price NUMERIC(12,4)",
+            "billing_mode": "billing_mode VARCHAR(50)",
+            "per_request_price": "per_request_price NUMERIC(12,4)",
+            "tiered_pricing": "tiered_pricing JSON",
         },
     )
     ensure_columns(
@@ -117,5 +121,12 @@ def _run_migrations(sync_conn) -> None:
             "input_cost": "input_cost NUMERIC(12,4)",
             "output_cost": "output_cost NUMERIC(12,4)",
             "price_source": "price_source VARCHAR(50)",
+        },
+    )
+    ensure_columns(
+        "service_providers",
+        {
+            "proxy_enabled": "proxy_enabled BOOLEAN DEFAULT FALSE",
+            "proxy_url": "proxy_url TEXT",
         },
     )

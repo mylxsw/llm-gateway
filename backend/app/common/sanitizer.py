@@ -5,7 +5,7 @@ Sanitizes sensitive information (such as authorization headers)
 to ensure logs do not contain plain text sensitive data.
 """
 
-import re
+from urllib.parse import urlparse
 from typing import Any
 
 
@@ -99,3 +99,21 @@ def sanitize_api_key_display(key_value: str) -> str:
         'lgw-abcd***...***yz'
     """
     return sanitize_authorization(key_value)
+
+
+def sanitize_proxy_url(proxy_url: str) -> str:
+    """
+    Sanitize proxy URL display.
+
+    Masks credentials in URLs like scheme://user:pass@host:port
+    """
+    if not proxy_url:
+        return proxy_url
+    parsed = urlparse(proxy_url)
+    if not parsed.username and not parsed.password:
+        return proxy_url
+    auth = "****:****"
+    netloc = parsed.hostname or ""
+    if parsed.port:
+        netloc = f"{netloc}:{parsed.port}"
+    return f"{parsed.scheme}://{auth}@{netloc}"

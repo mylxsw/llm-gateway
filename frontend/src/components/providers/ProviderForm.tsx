@@ -47,22 +47,16 @@ interface FormData {
   name: string;
   base_url: string;
   protocol: ProtocolType;
-  api_type: string;
   api_key: string;
   is_active: boolean;
+  proxy_enabled: boolean;
+  proxy_url: string;
 }
 
 /** Protocol Options */
 const PROTOCOL_OPTIONS: { value: ProtocolType; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
-];
-
-/** API Type Options */
-const API_TYPE_OPTIONS = [
-  { value: 'chat', label: 'Chat Completions' },
-  { value: 'completion', label: 'Text Completions' },
-  { value: 'embedding', label: 'Embeddings' },
 ];
 
 /**
@@ -91,15 +85,17 @@ export function ProviderForm({
       name: '',
       base_url: '',
       protocol: 'openai',
-      api_type: 'chat',
       api_key: '',
       is_active: true,
+      proxy_enabled: false,
+      proxy_url: '',
     },
   });
 
   // Watch form values
   const protocol = watch('protocol');
   const isActive = watch('is_active');
+  const proxyEnabled = watch('proxy_enabled');
   
   // Extra headers state
   const [extraHeaders, setExtraHeaders] = useState<{ key: string; value: string }[]>([]);
@@ -130,9 +126,10 @@ export function ProviderForm({
         name: provider.name,
         base_url: provider.base_url,
         protocol: provider.protocol,
-        api_type: provider.api_type,
         api_key: '', // API Key not echoed
         is_active: provider.is_active,
+        proxy_enabled: provider.proxy_enabled ?? false,
+        proxy_url: '',
       });
       
       // Fill extra headers
@@ -151,9 +148,10 @@ export function ProviderForm({
         name: '',
         base_url: '',
         protocol: 'openai',
-        api_type: 'chat',
         api_key: '',
         is_active: true,
+        proxy_enabled: false,
+        proxy_url: '',
       });
       setExtraHeaders([]);
     }
@@ -174,14 +172,17 @@ export function ProviderForm({
       name: data.name,
       base_url: data.base_url,
       protocol: data.protocol,
-      api_type: data.api_type,
       is_active: data.is_active,
       extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
+      proxy_enabled: data.proxy_enabled,
     };
     
     // Only submit API Key if filled
     if (data.api_key) {
       submitData.api_key = data.api_key;
+    }
+    if (data.proxy_url) {
+      submitData.proxy_url = data.proxy_url;
     }
     
     onSubmit(submitData);
@@ -253,28 +254,6 @@ export function ProviderForm({
             </Select>
           </div>
 
-          {/* API Type */}
-          <div className="space-y-2">
-            <Label htmlFor="api_type">
-              API Type <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={watch('api_type')}
-              onValueChange={(value) => setValue('api_type', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select API Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {API_TYPE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* API Key */}
           <div className="space-y-2">
             <Label htmlFor="api_key">
@@ -337,6 +316,34 @@ export function ProviderForm({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Proxy Configuration */}
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="proxy_enabled">Proxy Configuration</Label>
+              <Switch
+                id="proxy_enabled"
+                checked={proxyEnabled}
+                onCheckedChange={(checked) => setValue('proxy_enabled', checked)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Use schema://auth@host:port (schema is socks5 or http).
+            </p>
+
+            {proxyEnabled && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="proxy_url">Proxy URL</Label>
+                  <Input
+                    id="proxy_url"
+                    placeholder={isEdit ? 'Leave blank to keep unchanged' : 'socks5://user:pass@host:port'}
+                    {...register('proxy_url')}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Status */}

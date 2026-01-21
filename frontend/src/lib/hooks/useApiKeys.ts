@@ -12,6 +12,7 @@ import {
   updateApiKey,
   deleteApiKey,
 } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/api/error';
 import {
   ApiKey,
   ApiKeyCreate,
@@ -60,6 +61,9 @@ export function useCreateApiKey() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       toast.success('Created successfully');
     },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Create failed'));
+    },
   });
 }
 
@@ -77,6 +81,9 @@ export function useUpdateApiKey() {
       queryClient.setQueryData(QUERY_KEYS.detail(updatedKey.id), updatedKey);
       toast.success('Saved successfully');
     },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Save failed'));
+    },
   });
 }
 
@@ -91,6 +98,9 @@ export function useDeleteApiKey() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       toast.success('Deleted successfully');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Delete failed'));
     },
   });
 }

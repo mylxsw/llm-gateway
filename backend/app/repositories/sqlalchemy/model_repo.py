@@ -6,7 +6,7 @@ Provides concrete database operation implementation for Model Mappings and Model
 
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,6 +49,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         return ModelMapping(
             requested_model=entity.requested_model,
             strategy=entity.strategy,
+            model_type=entity.model_type or "chat",
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
@@ -75,6 +76,11 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_rules=entity.provider_rules,
             input_price=float(entity.input_price) if entity.input_price is not None else None,
             output_price=float(entity.output_price) if entity.output_price is not None else None,
+            billing_mode=entity.billing_mode,
+            per_request_price=float(entity.per_request_price)
+            if entity.per_request_price is not None
+            else None,
+            tiered_pricing=entity.tiered_pricing,
             priority=entity.priority,
             weight=entity.weight,
             is_active=entity.is_active,
@@ -89,6 +95,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         entity = ModelMappingORM(
             requested_model=data.requested_model,
             strategy=data.strategy,
+            model_type=data.model_type,
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
@@ -115,6 +122,9 @@ class SQLAlchemyModelRepository(ModelRepository):
         is_active: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20,
+        requested_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        strategy: Optional[str] = None,
     ) -> tuple[list[ModelMapping], int]:
         """Get Model Mapping list"""
         query = select(ModelMappingORM)
@@ -123,6 +133,22 @@ class SQLAlchemyModelRepository(ModelRepository):
         if is_active is not None:
             query = query.where(ModelMappingORM.is_active == is_active)
             count_query = count_query.where(ModelMappingORM.is_active == is_active)
+            
+        if requested_model:
+            query = query.where(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))
+            count_query = count_query.where(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))
+            
+        if model_type:
+            if model_type == 'chat':
+                query = query.where(or_(ModelMappingORM.model_type == model_type, ModelMappingORM.model_type.is_(None)))
+                count_query = count_query.where(or_(ModelMappingORM.model_type == model_type, ModelMappingORM.model_type.is_(None)))
+            else:
+                query = query.where(ModelMappingORM.model_type == model_type)
+                count_query = count_query.where(ModelMappingORM.model_type == model_type)
+            
+        if strategy:
+            query = query.where(ModelMappingORM.strategy == strategy)
+            count_query = count_query.where(ModelMappingORM.strategy == strategy)
         
         # Get total count
         total_result = await self.session.execute(count_query)
@@ -190,6 +216,13 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_rules=data.provider_rules,
             input_price=data.input_price,
             output_price=data.output_price,
+            billing_mode=data.billing_mode,
+            per_request_price=data.per_request_price,
+            tiered_pricing=[
+                t.model_dump() for t in (data.tiered_pricing or [])
+            ]
+            if data.tiered_pricing is not None
+            else None,
             priority=data.priority,
             weight=data.weight,
             is_active=data.is_active,

@@ -6,11 +6,15 @@
 import { RuleSet } from './common';
 import { ProtocolType } from './provider';
 
+/** Selection Strategy Type */
+export type SelectionStrategy = 'round_robin' | 'cost_first';
+export type ModelType = 'chat' | 'speech' | 'transcription' | 'embedding' | 'images';
+
 /** Model Mapping Entity */
 export interface ModelMapping {
   requested_model: string;            // Primary Key
-  strategy: string;                   // Strategy, default round_robin
-  matching_rules?: RuleSet | null;    // Model level rules
+  strategy: SelectionStrategy;        // Selection strategy
+  model_type: ModelType;              // Model type
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
   // Pricing (USD per 1,000,000 tokens)
@@ -34,6 +38,16 @@ export interface ModelMappingProvider {
   // Provider override pricing (USD per 1,000,000 tokens)
   input_price?: number | null;
   output_price?: number | null;
+  // Billing mode: token_flat / token_tiered / per_request
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | null;
+  // Per-request fixed price (USD), used when billing_mode == per_request
+  per_request_price?: number | null;
+  // Tiered pricing config, used when billing_mode == token_tiered
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
   priority: number;
   weight: number;
   is_active: boolean;
@@ -44,8 +58,8 @@ export interface ModelMappingProvider {
 /** Create Model Mapping Request */
 export interface ModelMappingCreate {
   requested_model: string;
-  strategy?: string;
-  matching_rules?: RuleSet;
+  strategy?: SelectionStrategy;
+  model_type?: ModelType;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;
@@ -54,8 +68,8 @@ export interface ModelMappingCreate {
 
 /** Update Model Mapping Request */
 export interface ModelMappingUpdate {
-  strategy?: string;
-  matching_rules?: RuleSet | null;
+  strategy?: SelectionStrategy;
+  model_type?: ModelType;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;
@@ -70,6 +84,13 @@ export interface ModelMappingProviderCreate {
   provider_rules?: RuleSet;
   input_price?: number | null;
   output_price?: number | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request';
+  per_request_price?: number | null;
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -81,6 +102,13 @@ export interface ModelMappingProviderUpdate {
   provider_rules?: RuleSet | null;
   input_price?: number | null;
   output_price?: number | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | null;
+  per_request_price?: number | null;
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -91,6 +119,9 @@ export interface ModelListParams {
   is_active?: boolean;
   page?: number;
   page_size?: number;
+  requested_model?: string;
+  model_type?: ModelType;
+  strategy?: SelectionStrategy;
 }
 
 /** Model-Provider Mapping List Query Params */
@@ -107,6 +138,13 @@ export interface ModelProviderExport {
   provider_rules?: RuleSet | null;
   input_price?: number | null;
   output_price?: number | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | null;
+  per_request_price?: number | null;
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -115,4 +153,22 @@ export interface ModelProviderExport {
 /** Model Export Entity */
 export interface ModelExport extends ModelMappingCreate {
   providers?: ModelProviderExport[];
+}
+
+export interface ModelStats {
+  requested_model: string;
+  avg_response_time_ms: number | null;
+  avg_first_byte_time_ms: number | null;
+  success_rate: number;
+  failure_rate: number;
+}
+
+export interface ModelProviderStats {
+  requested_model: string;
+  target_model: string;
+  provider_name: string;
+  avg_first_byte_time_ms: number | null;
+  avg_response_time_ms: number | null;
+  success_rate: number;
+  failure_rate: number;
 }

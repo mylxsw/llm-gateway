@@ -13,6 +13,8 @@ from app.domain.log import (
     RequestLogQuery,
     LogCostStatsQuery,
     LogCostStatsResponse,
+    ModelStats,
+    ModelProviderStats,
 )
 
 
@@ -74,4 +76,16 @@ class LogRepository(ABC):
     @abstractmethod
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
         """Get aggregated cost stats for logs"""
+        pass
+
+    @abstractmethod
+    async def get_model_stats(self, requested_model: str | None = None) -> list[ModelStats]:
+        """Get aggregated model stats for logs"""
+        pass
+
+    @abstractmethod
+    async def get_model_provider_stats(
+        self, requested_model: str | None = None
+    ) -> list[ModelProviderStats]:
+        """Get aggregated model-provider stats for logs"""
         pass

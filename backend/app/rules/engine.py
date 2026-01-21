@@ -16,19 +16,22 @@ from app.domain.provider import Provider
 class RuleEngine:
     """
     Rule Engine
-    
-    Responsible for evaluating all rules based on context and outputting a list of matching candidate providers.
-    
+
+    Responsible for evaluating provider-level rules based on context and outputting
+    a list of matching candidate providers.
+
     Workflow:
-    1. Check model-level rules (model_mapping.matching_rules)
-    2. Check provider-level rules for each provider (provider_mapping.provider_rules)
-    3. Return all matching providers and their target_model
+    1. Check provider-level rules for each provider (provider_mapping.provider_rules)
+       - If rules match, the provider is available
+       - If rules don't match, skip the provider
+       - If no rules configured, the provider matches by default
+    2. Return all matching providers and their target_model (sorted by priority)
     """
-    
+
     def __init__(self):
         """Initialize Rule Engine"""
         self.evaluator = RuleEvaluator()
-    
+
     async def evaluate(
         self,
         context: RuleContext,
@@ -38,25 +41,19 @@ class RuleEngine:
     ) -> list[CandidateProvider]:
         """
         Evaluate all rules, return list of candidate providers
-        
+
         Args:
             context: Rule context
             model_mapping: Model mapping configuration
             provider_mappings: List of model-provider mappings
             providers: Provider dictionary (provider_id -> Provider)
-        
+
         Returns:
             list[CandidateProvider]: List of candidate providers (sorted by priority)
         """
         candidates: list[CandidateProvider] = []
-        
-        # 1. Check model-level rules
-        model_rules = RuleSet.from_dict(model_mapping.matching_rules)
-        if not self.evaluator.evaluate_ruleset(model_rules, context):
-            # Model-level rules failed, return empty list immediately
-            return candidates
-        
-        # 2. Check provider-level rules for each provider
+
+        # Check provider-level rules for each provider
         for pm in provider_mappings:
             # Skip inactive mappings
             if not pm.is_active:
@@ -79,9 +76,18 @@ class RuleEngine:
                         protocol=provider.protocol,
                         api_key=provider.api_key,
                         extra_headers=provider.extra_headers,
+                        proxy_enabled=provider.proxy_enabled,
+                        proxy_url=provider.proxy_url,
                         target_model=pm.target_model_name,
                         priority=pm.priority,
                         weight=pm.weight,
+                        billing_mode=pm.billing_mode,
+                        input_price=pm.input_price,
+                        output_price=pm.output_price,
+                        per_request_price=pm.per_request_price,
+                        tiered_pricing=pm.tiered_pricing,
+                        model_input_price=model_mapping.input_price,
+                        model_output_price=model_mapping.output_price,
                     )
                 )
         
@@ -99,17 +105,12 @@ class RuleEngine:
     ) -> list[CandidateProvider]:
         """
         Synchronous version of rule evaluation (for testing or synchronous scenarios)
-        
+
         Arguments and return values are same as evaluate.
         """
         candidates: list[CandidateProvider] = []
-        
-        # 1. Check model-level rules
-        model_rules = RuleSet.from_dict(model_mapping.matching_rules)
-        if not self.evaluator.evaluate_ruleset(model_rules, context):
-            return candidates
-        
-        # 2. Check provider-level rules for each provider
+
+        # Check provider-level rules for each provider
         for pm in provider_mappings:
             if not pm.is_active:
                 continue
@@ -128,13 +129,22 @@ class RuleEngine:
                         protocol=provider.protocol,
                         api_key=provider.api_key,
                         extra_headers=provider.extra_headers,
+                        proxy_enabled=provider.proxy_enabled,
+                        proxy_url=provider.proxy_url,
                         target_model=pm.target_model_name,
                         priority=pm.priority,
                         weight=pm.weight,
+                        billing_mode=pm.billing_mode,
+                        input_price=pm.input_price,
+                        output_price=pm.output_price,
+                        per_request_price=pm.per_request_price,
+                        tiered_pricing=pm.tiered_pricing,
+                        model_input_price=model_mapping.input_price,
+                        model_output_price=model_mapping.output_price,
                     )
                 )
         
-        # 3. Sort by priority
+        # Sort by priority (lower value means higher priority)
         candidates.sort(key=lambda c: (c.priority, c.provider_id))
-        
+
         return candidates

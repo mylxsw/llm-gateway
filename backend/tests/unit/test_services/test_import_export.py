@@ -71,9 +71,9 @@ async def test_model_import_success(model_service, model_repo, provider_repo):
     
     # Check calls
     assert model_repo.create_mapping.call_count == 1
-    assert model_repo.create_provider_mapping.call_count == 1
+    assert model_repo.add_provider_mapping.call_count == 1
     # Verify provider mapping creation uses correct provider_id
-    call_args = model_repo.create_provider_mapping.call_args[0][0]
+    call_args = model_repo.add_provider_mapping.call_args[0][0]
     assert call_args.provider_id == 1
     assert call_args.target_model_name == "gpt-4"
 
@@ -103,4 +103,4 @@ async def test_model_import_missing_provider(model_service, model_repo, provider
     assert "Provider 'missing_provider' not found" in result["errors"][0]
     
     assert model_repo.create_mapping.call_count == 1
-    assert model_repo.create_provider_mapping.call_count == 0
+    assert model_repo.add_provider_mapping.call_count == 0

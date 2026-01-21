@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from app.api.deps import CurrentApiKey, ProxyServiceDep
 from app.common.errors import AppError
+from app.common.proxy_headers import sanitize_upstream_response_headers
 
 router = APIRouter(tags=["Proxy - Anthropic"])
 
@@ -53,18 +54,18 @@ async def create_message(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=initial_response.headers,
+                        headers=sanitize_upstream_response_headers(initial_response.headers),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=initial_response.headers,
+                    headers=sanitize_upstream_response_headers(initial_response.headers),
                 )
             
             return StreamingResponse(
                 stream_gen,
                 status_code=initial_response.status_code,
-                headers=initial_response.headers,
+                headers=sanitize_upstream_response_headers(initial_response.headers),
                 media_type="text/event-stream",
             )
         else:
@@ -83,12 +84,12 @@ async def create_message(
                 return JSONResponse(
                     content=content,
                     status_code=response.status_code,
-                    headers=response.headers,
+                    headers=sanitize_upstream_response_headers(response.headers),
                 )
             return Response(
                 content=content,
                 status_code=response.status_code,
-                headers=response.headers,
+                headers=sanitize_upstream_response_headers(response.headers),
             )
             
     except AppError as e:

@@ -318,6 +318,7 @@ Develop a proxy service to handle client requests from OpenAI or Anthropic. The 
 6.  Unit test coverage meets requirements, and all unit tests pass during project execution.
 
 ## 14. Next Steps (Implementation Suggestions)
+
 1.  Clarify the specific endpoint list and field difference handling strategies for OpenAI/Anthropic compatibility in the first phase (Maintain "Only Change Model" principle).
 2.  Define rule format (JSON/DSL) and validation mechanism, and synchronize frontend rule editor selection (Structured preferred + JSON editor fallback).
 3.  Determine Multi-DB technical scheme (e.g., Unified ORM/Migration Tool), implement Repository interface and implementation separation.

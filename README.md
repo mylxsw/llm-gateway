@@ -1,8 +1,8 @@
-# LLM Gateway
+# Squirrel
 
 [ [**English**](README.md) | [**中文**](README_zh-CN.md) ]
 
-**LLM Gateway** is a high-performance, enterprise-grade proxy service designed to unify and manage access to Large Language Model (LLM) providers like OpenAI and Anthropic. It provides intelligent routing, robust failover strategies, comprehensive logging, and a modern management dashboard.
+**Squirrel** is a high-performance, enterprise-grade proxy service designed to unify and manage access to Large Language Model (LLM) providers like OpenAI and Anthropic. It provides intelligent routing, robust failover strategies, comprehensive logging, and a modern management dashboard.
 
 ## ✨ Key Features
 

@@ -24,3 +24,11 @@ curl $SERVER_HOST/v1/messages \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -d '{"model":"claude-haiku-4-5","messages":[{"role":"user","content":"hello？"}],"stream":true}'
 
+curl $SERVER_HOST/v1/embeddings \
+  -H "Authorization: Bearer $AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "The food was delicious and the waiter...",
+    "model": "text-embedding-3-small",
+    "encoding_format": "float"
+   }'

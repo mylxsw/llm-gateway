@@ -96,6 +96,9 @@ class ModelService:
         is_active: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20,
+        requested_model: Optional[str] = None,
+        model_type: Optional[str] = None,
+        strategy: Optional[str] = None,
     ) -> tuple[list[ModelMappingResponse], int]:
         """
         Get Model Mapping List
@@ -104,12 +107,20 @@ class ModelService:
             is_active: Filter by active status
             page: Page number
             page_size: Items per page
+            requested_model: Filter by model name (fuzzy)
+            model_type: Filter by model type
+            strategy: Filter by strategy
         
         Returns:
             tuple[list[ModelMappingResponse], int]: (Model mapping list, Total count)
         """
         mappings, total = await self.model_repo.get_all_mappings(
-            is_active, page, page_size
+            is_active=is_active, 
+            page=page, 
+            page_size=page_size,
+            requested_model=requested_model,
+            model_type=model_type,
+            strategy=strategy
         )
         
         responses = []
@@ -255,6 +266,27 @@ class ModelService:
                 message=f"Model-provider mapping with id {id} not found",
                 code="mapping_not_found",
             )
+
+        # Validate merged billing config to avoid persisting invalid combinations.
+        from app.domain.model import ModelMappingProviderCreate
+
+        update_data = data.model_dump(exclude_unset=True)
+        merged = {
+            "requested_model": existing.requested_model,
+            "provider_id": existing.provider_id,
+            "target_model_name": existing.target_model_name,
+            "provider_rules": existing.provider_rules,
+            "priority": existing.priority,
+            "weight": existing.weight,
+            "is_active": existing.is_active,
+            "input_price": existing.input_price,
+            "output_price": existing.output_price,
+            "billing_mode": existing.billing_mode or "token_flat",
+            "per_request_price": existing.per_request_price,
+            "tiered_pricing": existing.tiered_pricing,
+        }
+        merged.update(update_data)
+        ModelMappingProviderCreate(**merged)
         
         result = await self.model_repo.update_provider_mapping(id, data)
         return result  # type: ignore
@@ -306,6 +338,9 @@ class ModelService:
                         provider_rules=pm.provider_rules,
                         input_price=pm.input_price,
                         output_price=pm.output_price,
+                        billing_mode=pm.billing_mode,
+                        per_request_price=pm.per_request_price,
+                        tiered_pricing=pm.tiered_pricing,
                         priority=pm.priority,
                         weight=pm.weight,
                         is_active=pm.is_active
@@ -316,7 +351,7 @@ class ModelService:
                 ModelExport(
                     requested_model=m.requested_model,
                     strategy=m.strategy,
-                    matching_rules=m.matching_rules,
+                    model_type=m.model_type,
                     capabilities=m.capabilities,
                     is_active=m.is_active,
                     input_price=m.input_price,
@@ -362,14 +397,27 @@ class ModelService:
                         continue
                     
                     from app.domain.model import ModelMappingProviderCreate
-                    await self.model_repo.create_provider_mapping(
+                    billing_mode = p_item.billing_mode or "token_flat"
+                    input_price = p_item.input_price
+                    output_price = p_item.output_price
+                    if billing_mode == "token_flat":
+                        # Backward-compatible import: old exports may omit token prices.
+                        if input_price is None:
+                            input_price = item.input_price if item.input_price is not None else 0.0
+                        if output_price is None:
+                            output_price = item.output_price if item.output_price is not None else 0.0
+
+                    await self.model_repo.add_provider_mapping(
                         ModelMappingProviderCreate(
                             requested_model=item.requested_model,
                             provider_id=provider.id,
                             target_model_name=p_item.target_model_name,
                             provider_rules=p_item.provider_rules,
-                            input_price=p_item.input_price,
-                            output_price=p_item.output_price,
+                            input_price=input_price,
+                            output_price=output_price,
+                            billing_mode=billing_mode,
+                            per_request_price=p_item.per_request_price,
+                            tiered_pricing=p_item.tiered_pricing,
                             priority=p_item.priority,
                             weight=p_item.weight,
                             is_active=p_item.is_active
@@ -408,7 +456,7 @@ class ModelService:
         return ModelMappingResponse(
             requested_model=mapping.requested_model,
             strategy=mapping.strategy,
-            matching_rules=mapping.matching_rules,
+            model_type=mapping.model_type,
             capabilities=mapping.capabilities,
             is_active=mapping.is_active,
             input_price=mapping.input_price,

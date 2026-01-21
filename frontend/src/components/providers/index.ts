@@ -4,3 +4,4 @@
 
 export * from './ProviderForm';
 export * from './ProviderList';
+export * from './ProviderFilters';

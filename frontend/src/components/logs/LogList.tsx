@@ -103,7 +103,7 @@ export function LogList({ logs, onView }: LogListProps) {
               <TableCell>
                 <div className="flex flex-col text-xs">
                   <span title="Time to First Byte">
-                    TTFB: {log.first_byte_delay_ms ? `${log.first_byte_delay_ms}ms` : '-'}
+                    TTFB: {formatDuration(log.first_byte_delay_ms)}
                   </span>
                   <span className="text-muted-foreground" title="Total Time">
                     Total: {formatDuration(log.total_time_ms || 0)}

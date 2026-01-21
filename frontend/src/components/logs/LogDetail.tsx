@@ -177,7 +177,7 @@ export function LogDetail({ log }: LogDetailProps) {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground">TTFB</span>
                 <span className="font-medium">
-                  {log.first_byte_delay_ms ? `${log.first_byte_delay_ms}ms` : '-'}
+                  {formatDuration(log.first_byte_delay_ms)}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">

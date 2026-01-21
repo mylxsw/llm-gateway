@@ -13,6 +13,7 @@ alembic>=1.13.0    # 数据库迁移
 
 # HTTP 客户端
 httpx>=0.26.0
+socksio>=1.0.0
 
 # 静态资源
 aiofiles>=23.2.1
@@ -33,3 +34,4 @@ pytest>=7.4.0
 pytest-asyncio>=0.23.0
 pytest-cov>=4.1.0
 httpx>=0.26.0  # 用于测试
+socksio>=1.0.0  # 用于测试

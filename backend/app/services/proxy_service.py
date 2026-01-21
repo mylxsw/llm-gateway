@@ -21,9 +21,11 @@ from app.common.protocol_conversion import (
     normalize_protocol,
 )
 from app.common.token_counter import get_token_counter
-from app.common.costs import calculate_cost, resolve_price
+from app.common.costs import calculate_cost_from_billing, resolve_billing
 from app.common.utils import generate_trace_id
 from app.common.time import utc_now
+from app.common.usage_extractor import extract_output_tokens
+from app.common.proxy import build_proxy_config
 from app.domain.log import RequestLogCreate
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
@@ -32,10 +34,42 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.repositories.log_repo import LogRepository
 from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
-from app.services.retry_handler import RetryHandler
-from app.services.strategy import RoundRobinStrategy, SelectionStrategy
+from app.services.retry_handler import RetryHandler, AttemptRecord
+from app.services.strategy import RoundRobinStrategy, CostFirstStrategy, SelectionStrategy
 
 logger = logging.getLogger(__name__)
+
+MAX_LOG_TEXT_LENGTH = 10000
+
+
+def _truncate_log_text(text: str) -> str:
+    if len(text) <= MAX_LOG_TEXT_LENGTH:
+        return text
+    return f"{text[:MAX_LOG_TEXT_LENGTH]}...[truncated]"
+
+
+def _smart_truncate(data: Any, max_list: int = 20, max_str: int = 1000) -> Any:
+    """
+    Recursively truncate data structures for logging.
+    """
+    if isinstance(data, dict):
+        return {k: _smart_truncate(v, max_list, max_str) for k, v in data.items()}
+    
+    if isinstance(data, list):
+        if len(data) > max_list:
+            # Check if it's a list of numbers (likely embedding vector)
+            if data and isinstance(data[0], (int, float)):
+                 return data[:5] + [f"...({len(data)-5} items)..."]
+            
+            truncated = [_smart_truncate(x, max_list, max_str) for x in data[:max_list]]
+            truncated.append(f"...({len(data)-max_list} more items)...")
+            return truncated
+        return [_smart_truncate(x, max_list, max_str) for x in data]
+    
+    if isinstance(data, str) and len(data) > max_str:
+        return data[:max_str] + "...[truncated]"
+    
+    return data
 
 
 class ProxyService:
@@ -59,23 +93,90 @@ class ProxyService:
         model_repo: ModelRepository,
         provider_repo: ProviderRepository,
         log_repo: LogRepository,
-        strategy: Optional[SelectionStrategy] = None,
     ):
         """
         Initialize Service
-        
+
         Args:
             model_repo: Model Repository
             provider_repo: Provider Repository
             log_repo: Log Repository
-            strategy: Provider Selection Strategy (Optional, defaults to RoundRobinStrategy)
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
         self.log_repo = log_repo
         self.rule_engine = RuleEngine()
-        self.strategy = strategy or RoundRobinStrategy()
-        self.retry_handler = RetryHandler(self.strategy)
+        # Strategy selection instances (reused for performance)
+        self._round_robin_strategy = RoundRobinStrategy()
+        self._cost_first_strategy = CostFirstStrategy()
+
+    def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
+        """
+        Get strategy instance based on strategy name
+
+        Args:
+            strategy_name: Strategy name ("round_robin" or "cost_first")
+
+        Returns:
+            SelectionStrategy: Strategy instance
+        """
+        if strategy_name == "cost_first":
+            return self._cost_first_strategy
+        else:
+            # Default to round_robin for unknown strategies
+            return self._round_robin_strategy
+
+    @staticmethod
+    def _serialize_response_body(body: Any) -> str | None:
+        if body is None:
+            return None
+            
+        data = body
+        if isinstance(body, (bytes, bytearray)):
+            if b"\x00" in body:
+                return f"[binary data: {len(body)} bytes]"
+            try:
+                decoded = body.decode("utf-8")
+                # Try to parse as JSON first
+                try:
+                    data = json.loads(decoded)
+                except json.JSONDecodeError:
+                    return _truncate_log_text(decoded)
+            except UnicodeDecodeError:
+                return f"[binary data: {len(body)} bytes]"
+
+        # If it's already a dict/list or successfully parsed
+        if isinstance(data, (dict, list)):
+            try:
+                truncated_data = _smart_truncate(data)
+                return json.dumps(truncated_data, ensure_ascii=False)
+            except Exception:
+                # Fallback
+                return _truncate_log_text(str(data))
+        
+        return _truncate_log_text(str(data))
+
+    @staticmethod
+    def _sanitize_request_body_for_log(body: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(body, dict) or "_files" not in body:
+            return body
+
+        safe_files = []
+        for item in body.get("_files", []):
+            if not isinstance(item, dict):
+                continue
+            data = item.get("data")
+            safe_files.append(
+                {
+                    "field": item.get("field"),
+                    "filename": item.get("filename"),
+                    "content_type": item.get("content_type"),
+                    "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
+                }
+            )
+        sanitized = dict(body)
+        sanitized["_files"] = safe_files
+        return sanitized
 
     async def _resolve_candidates(
         self,
@@ -133,8 +234,11 @@ class ProxyService:
         provider_mapping_by_id = {pm.provider_id: pm for pm in eligible_provider_mappings}
 
         token_counter = get_token_counter(request_protocol)
-        messages = body.get("messages", [])
-        input_tokens = token_counter.count_messages(messages, requested_model)
+        if "input" in body:
+            input_tokens = token_counter.count_input(body["input"], requested_model)
+        else:
+            messages = body.get("messages", [])
+            input_tokens = token_counter.count_messages(messages, requested_model)
 
         context = RuleContext(
             current_model=requested_model,
@@ -167,6 +271,8 @@ class ProxyService:
         method: str,
         headers: dict[str, str],
         body: dict[str, Any],
+        *,
+        force_parse_response: bool = False,
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
         Process Proxy Request
@@ -188,6 +294,7 @@ class ProxyService:
         """
         trace_id = generate_trace_id()
         request_time = utc_now()
+        sanitized_body = self._sanitize_request_body_for_log(body)
         
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -216,7 +323,63 @@ class ProxyService:
             for c in candidates
         ]
         logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
-        
+
+        # Select strategy based on model configuration
+        strategy = self._get_strategy(model_mapping.strategy)
+        retry_handler = RetryHandler(strategy)
+
+        failed_attempt_logged = False
+
+        async def log_failed_attempt(attempt: AttemptRecord) -> None:
+            nonlocal failed_attempt_logged
+            provider_mapping = provider_mapping_by_id.get(attempt.provider.provider_id)
+            billing = resolve_billing(
+                input_tokens=input_tokens,
+                model_input_price=model_mapping.input_price,
+                model_output_price=model_mapping.output_price,
+                provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
+                provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
+                provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
+                provider_input_price=provider_mapping.input_price if provider_mapping else None,
+                provider_output_price=provider_mapping.output_price if provider_mapping else None,
+            )
+            attempt_log = RequestLogCreate(
+                request_time=attempt.request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                requested_model=requested_model,
+                target_model=attempt.provider.target_model,
+                provider_id=attempt.provider.provider_id,
+                provider_name=attempt.provider.provider_name,
+                retry_count=attempt.attempt_index + 1,
+                matched_provider_count=len(candidates),
+                first_byte_delay_ms=attempt.response.first_byte_delay_ms,
+                total_time_ms=attempt.response.total_time_ms,
+                input_tokens=input_tokens,
+                output_tokens=None,
+                total_cost=None,
+                input_cost=None,
+                output_cost=None,
+                price_source=billing.price_source,
+                request_headers=sanitize_headers(headers),
+                request_body=sanitized_body,
+                response_status=attempt.response.status_code,
+                response_body=self._serialize_response_body(attempt.response.body),
+                error_info=attempt.response.error,
+                trace_id=trace_id,
+                is_stream=False,
+            )
+            try:
+                await self.log_repo.create(attempt_log)
+                failed_attempt_logged = True
+            except Exception:
+                logger.exception(
+                    "Failed to write attempt log: trace_id=%s provider_id=%s attempt_index=%s",
+                    trace_id,
+                    attempt.provider.provider_id,
+                    attempt.attempt_index,
+                )
+
         # 8. Execute request (with retry)
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             try:
@@ -229,6 +392,10 @@ class ProxyService:
                     target_model=candidate.target_model,
                 )
                 same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                proxy_config = build_proxy_config(
+                    candidate.proxy_enabled,
+                    candidate.proxy_url,
+                )
                 return await client.forward(
                     base_url=candidate.base_url,
                     api_key=candidate.api_key,
@@ -237,8 +404,9 @@ class ProxyService:
                     headers=headers,
                     body=supplier_body,
                     target_model=candidate.target_model,
-                    response_mode="raw" if same_protocol else "parsed",
+                    response_mode="parsed" if force_parse_response else ("raw" if same_protocol else "parsed"),
                     extra_headers=candidate.extra_headers,
+                    proxy_config=proxy_config,
                 )
             except Exception as e:
                 error_msg = str(e)
@@ -253,10 +421,12 @@ class ProxyService:
                 )
                 return ProviderResponse(status_code=400, error=error_msg)
 
-        result = await self.retry_handler.execute_with_retry(
+        result = await retry_handler.execute_with_retry(
             candidates=candidates,
             requested_model=requested_model,
             forward_fn=forward_fn,
+            input_tokens=input_tokens,
+            on_failure_attempt=log_failed_attempt,
         )
 
         if result.response.body is not None and result.final_provider is not None:
@@ -292,13 +462,9 @@ class ProxyService:
         output_tokens = 0
         if result.success and result.response.body:
             try:
-                # OpenAI format
-                if isinstance(result.response.body, dict):
-                    usage = result.response.body.get("usage", {})
-                    output_tokens = usage.get("completion_tokens", 0)
-                    if not output_tokens:
-                        # Anthropic format
-                        output_tokens = usage.get("output_tokens", 0)
+                extracted = extract_output_tokens(result.response.body)
+                if extracted is not None:
+                    output_tokens = extracted
             except Exception:
                 pass
         
@@ -307,17 +473,20 @@ class ProxyService:
         provider_mapping = (
             provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
         )
-        resolved_price = resolve_price(
+        billing = resolve_billing(
+            input_tokens=input_tokens,
             model_input_price=model_mapping.input_price,
             model_output_price=model_mapping.output_price,
+            provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
+            provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
+            provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
             provider_input_price=provider_mapping.input_price if provider_mapping else None,
             provider_output_price=provider_mapping.output_price if provider_mapping else None,
         )
-        cost = calculate_cost(
+        cost = calculate_cost_from_billing(
+            billing=billing,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            input_price=resolved_price.input_price,
-            output_price=resolved_price.output_price,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -336,22 +505,12 @@ class ProxyService:
             total_cost=cost.total_cost,
             input_cost=cost.input_cost,
             output_cost=cost.output_cost,
-            price_source=resolved_price.price_source,
+            price_source=billing.price_source,
             request_headers=sanitize_headers(headers),
-            request_body=body,
+            request_body=sanitized_body,
 
             response_status=result.response.status_code,
-            response_body=(
-                json.dumps(result.response.body, ensure_ascii=False)
-                if isinstance(result.response.body, (dict, list))
-                else (
-                    result.response.body.decode("utf-8", errors="ignore")
-                    if isinstance(result.response.body, (bytes, bytearray))
-                    else result.response.body
-                )
-            )
-            if result.response.body is not None
-            else None,
+            response_body=self._serialize_response_body(result.response.body),
             error_info=result.response.error,
             trace_id=trace_id,
             is_stream=False,
@@ -364,7 +523,8 @@ class ProxyService:
             # Fallback for Pydantic v1
             logger.debug(f"Request Log: {log_data.json()}")
 
-        await self.log_repo.create(log_data)
+        if result.success or not failed_attempt_logged:
+            await self.log_repo.create(log_data)
         
         return result.response, {
             "trace_id": trace_id,
@@ -400,6 +560,7 @@ class ProxyService:
         trace_id = generate_trace_id()
         request_time = utc_now()
         start_monotonic = time.monotonic()
+        sanitized_body = self._sanitize_request_body_for_log(body)
         
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
@@ -424,7 +585,11 @@ class ProxyService:
             for c in candidates
         ]
         logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
-            
+
+        # Select strategy based on model configuration
+        strategy = self._get_strategy(model_mapping.strategy)
+        retry_handler = RetryHandler(strategy)
+
         # 8. Execute streaming request
         def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
@@ -452,6 +617,10 @@ class ProxyService:
                 )
                 return error_gen(error_msg)
 
+            proxy_config = build_proxy_config(
+                candidate.proxy_enabled,
+                candidate.proxy_url,
+            )
             upstream_gen = client.forward_stream(
                 base_url=candidate.base_url,
                 api_key=candidate.api_key,
@@ -461,6 +630,7 @@ class ProxyService:
                 body=supplier_body,
                 target_model=candidate.target_model,
                 extra_headers=candidate.extra_headers,
+                proxy_config=proxy_config,
             )
 
             async def wrapped() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
@@ -529,8 +699,56 @@ class ProxyService:
 
             return wrapped()
             
-        stream_gen = self.retry_handler.execute_with_retry_stream(
-            candidates, requested_model, forward_stream_fn
+        async def log_failed_attempt(attempt: AttemptRecord) -> None:
+            provider_mapping = provider_mapping_by_id.get(attempt.provider.provider_id)
+            billing = resolve_billing(
+                input_tokens=input_tokens,
+                model_input_price=model_mapping.input_price,
+                model_output_price=model_mapping.output_price,
+                provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
+                provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
+                provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
+                provider_input_price=provider_mapping.input_price if provider_mapping else None,
+                provider_output_price=provider_mapping.output_price if provider_mapping else None,
+            )
+            attempt_log = RequestLogCreate(
+                request_time=attempt.request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                requested_model=requested_model,
+                target_model=attempt.provider.target_model,
+                provider_id=attempt.provider.provider_id,
+                provider_name=attempt.provider.provider_name,
+                retry_count=attempt.attempt_index + 1,
+                matched_provider_count=len(candidates),
+                first_byte_delay_ms=attempt.response.first_byte_delay_ms,
+                total_time_ms=attempt.response.total_time_ms,
+                input_tokens=input_tokens,
+                output_tokens=None,
+                total_cost=None,
+                input_cost=None,
+                output_cost=None,
+                price_source=billing.price_source,
+                request_headers=sanitize_headers(headers),
+                request_body=sanitized_body,
+                response_status=attempt.response.status_code,
+                response_body=self._serialize_response_body(attempt.response.body),
+                error_info=attempt.response.error,
+                trace_id=trace_id,
+                is_stream=True,
+            )
+            try:
+                with anyio.CancelScope(shield=True):
+                    await self.log_repo.create(attempt_log)
+            except Exception:
+                pass
+
+        stream_gen = retry_handler.execute_with_retry_stream(
+            candidates,
+            requested_model,
+            forward_stream_fn,
+            input_tokens=input_tokens,
+            on_failure_attempt=log_failed_attempt,
         )
         
         # Get first chunk to determine status
@@ -547,12 +765,24 @@ class ProxyService:
                 protocol=protocol,
                 model=requested_model,
             )
+            raw_stream_chunks: list[bytes] = []
             stream_error: Optional[str] = None
+
+            def record_stream_chunk(chunk: Any) -> None:
+                if not chunk:
+                    return
+                if isinstance(chunk, (bytes, bytearray)):
+                    raw_stream_chunks.append(bytes(chunk))
+                    return
+                raw_stream_chunks.append(str(chunk).encode("utf-8"))
+
             try:
                 usage_acc.feed(first_chunk)
+                record_stream_chunk(first_chunk)
                 yield first_chunk
                 async for chunk, _, _, _ in stream_gen:
                     usage_acc.feed(chunk)
+                    record_stream_chunk(chunk)
                     yield chunk
             except asyncio.CancelledError:
                 stream_error = "client_disconnected"
@@ -568,22 +798,47 @@ class ProxyService:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
 
                 # 10. Record log (after stream ends)
-                # Note: Streaming requests cannot stably obtain the full response body, here only record output preview (truncated)
+                # Record the raw stream response (SSE) plus a reconstructed summary in one field.
                 final_provider_id = final_provider.provider_id if final_provider else None
                 provider_mapping = (
                     provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
                 )
-                resolved_price = resolve_price(
+                billing = resolve_billing(
+                    input_tokens=input_tokens,
                     model_input_price=model_mapping.input_price,
                     model_output_price=model_mapping.output_price,
+                    provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
+                    provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
+                    provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
                     provider_input_price=provider_mapping.input_price if provider_mapping else None,
                     provider_output_price=provider_mapping.output_price if provider_mapping else None,
                 )
-                cost = calculate_cost(
+                cost = calculate_cost_from_billing(
+                    billing=billing,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
-                    input_price=resolved_price.input_price,
-                    output_price=resolved_price.output_price,
+                )
+                raw_stream_text = (
+                    b"".join(raw_stream_chunks).decode("utf-8", errors="replace")
+                    if raw_stream_chunks
+                    else ""
+                )
+                reconstructed_body = json.dumps(
+                    {
+                        "type": "stream_reconstruction",
+                        "protocol": protocol,
+                        "output_text": usage_result.output_text,
+                        "upstream_reported_output_tokens": usage_result.upstream_reported_output_tokens,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                combined_body = (
+                    "Original:\n---\n"
+                    + raw_stream_text
+                    + "\n---\n\nFinal Response (After reconstruction):\n---\n"
+                    + reconstructed_body
+                    + "\n---"
                 )
                 log_data = RequestLogCreate(
                     request_time=request_time,
@@ -602,21 +857,11 @@ class ProxyService:
                     total_cost=cost.total_cost,
                     input_cost=cost.input_cost,
                     output_cost=cost.output_cost,
-                    price_source=resolved_price.price_source,
+                    price_source=billing.price_source,
                     request_headers=sanitize_headers(headers),
-                    request_body=body,
-
+                    request_body=sanitized_body,
+                    response_body=combined_body if raw_stream_text or reconstructed_body else None,
                     response_status=initial_response.status_code,
-                    response_body=json.dumps(
-                        {
-                            "type": "stream",
-                            "protocol": protocol,
-                            "output_preview": usage_result.output_preview,
-                            "output_preview_truncated": usage_result.output_preview_truncated,
-                            "upstream_reported_output_tokens": usage_result.upstream_reported_output_tokens,
-                        },
-                        ensure_ascii=False,
-                    ),
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                     is_stream=True,

@@ -12,6 +12,7 @@ import {
   updateProvider,
   deleteProvider,
 } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/api/error';
 import {
   Provider,
   ProviderCreate,
@@ -62,6 +63,9 @@ export function useCreateProvider() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       toast.success('Created successfully');
     },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Create failed'));
+    },
   });
 }
 
@@ -83,6 +87,9 @@ export function useUpdateProvider() {
       );
       toast.success('Saved successfully');
     },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Save failed'));
+    },
   });
 }
 
@@ -98,6 +105,9 @@ export function useDeleteProvider() {
       // Refresh list cache on success
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
       toast.success('Deleted successfully');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Delete failed'));
     },
   });
 }

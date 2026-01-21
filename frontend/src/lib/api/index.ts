@@ -8,3 +8,4 @@ export * from './providers';
 export * from './models';
 export * from './api-keys';
 export * from './logs';
+export * from './error';

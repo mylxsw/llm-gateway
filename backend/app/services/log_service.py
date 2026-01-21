@@ -15,6 +15,8 @@ from app.domain.log import (
     RequestLogQuery,
     LogCostStatsQuery,
     LogCostStatsResponse,
+    ModelStats,
+    ModelProviderStats,
 )
 from app.repositories.log_repo import LogRepository
 
@@ -134,3 +136,11 @@ class LogService:
 
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
         return await self.repo.get_cost_stats(query)
+
+    async def get_model_stats(self, requested_model: str | None = None) -> list[ModelStats]:
+        return await self.repo.get_model_stats(requested_model)
+
+    async def get_model_provider_stats(
+        self, requested_model: str | None = None
+    ) -> list[ModelProviderStats]:
+        return await self.repo.get_model_provider_stats(requested_model)

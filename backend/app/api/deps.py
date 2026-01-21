@@ -25,7 +25,6 @@ from app.services import (
     ApiKeyService,
     LogService,
     ProxyService,
-    RoundRobinStrategy,
 )
 
 
@@ -42,12 +41,6 @@ async def get_db():
 
 # Database session dependency type
 DbSession = Annotated[AsyncSession, Depends(get_db)]
-
-
-# ============ Global Singleton ============
-
-# Global strategy instance, ensures round-robin state is maintained across requests
-_global_strategy = RoundRobinStrategy()
 
 
 # ============ Repository Dependencies ============
@@ -104,7 +97,7 @@ def get_proxy_service(db: DbSession) -> ProxyService:
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     log_repo = SQLAlchemyLogRepository(db)
-    return ProxyService(model_repo, provider_repo, log_repo, strategy=_global_strategy)
+    return ProxyService(model_repo, provider_repo, log_repo)
 
 
 # ============ Auth Dependencies ============

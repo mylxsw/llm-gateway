@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common';
 import { LogCostStatsResponse } from '@/types';
@@ -156,8 +156,6 @@ function TrendBars({
   segments,
   maxTotal,
   height,
-  barWidthClassName,
-  scroller,
   bucketUnit,
 }: {
   title: string;
@@ -165,13 +163,11 @@ function TrendBars({
   segments: Segment[];
   maxTotal: number;
   height: number;
-  barWidthClassName: string;
-  scroller?: React.RefObject<HTMLDivElement | null>;
   bucketUnit: 'hour' | 'day';
 }) {
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
-      <div ref={scroller} className="flex items-end gap-1 overflow-x-auto pb-2">
+      <div className="grid w-full grid-flow-col auto-cols-fr items-end gap-1 overflow-hidden pb-2">
         {points.length === 0 ? (
           <div className="text-sm text-muted-foreground">No data</div>
         ) : (
@@ -187,12 +183,12 @@ function TrendBars({
             const bucketLabel = bucketDate ? formatBucketLabel(bucketDate, bucketUnit) : String(p.bucket);
 
             return (
-              <div key={p.bucket} className="flex flex-col items-center gap-1">
+              <div key={p.bucket} className="flex min-w-0 flex-col items-center gap-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      className={`flex ${barWidthClassName} flex-col justify-end overflow-hidden rounded-sm bg-muted/15 p-0 outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+                      className="flex w-full flex-col justify-end overflow-hidden rounded-sm bg-muted/15 p-0 outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       style={{ height }}
                       aria-label={`Show details for ${title} at ${bucketLabel}`}
                     >
@@ -260,35 +256,12 @@ function TrendCard({
   bucketUnit: 'hour' | 'day';
 }) {
   const [open, setOpen] = useState(false);
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const modalScrollerRef = useRef<HTMLDivElement | null>(null);
   const maxTotal = useMemo(() => {
     const totals = points.map((p) =>
       segments.reduce((acc, seg) => acc + (Number(seg.getValue(p)) || 0), 0)
     );
     return Math.max(0, ...totals);
   }, [points, segments]);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-
-    const raf = requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [points]);
-
-  useEffect(() => {
-    if (!open) return;
-    const el = modalScrollerRef.current;
-    if (!el) return;
-
-    const raf = requestAnimationFrame(() => {
-      el.scrollLeft = el.scrollWidth;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [open, points]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -314,8 +287,6 @@ function TrendCard({
         segments={segments}
         maxTotal={maxTotal}
         height={96}
-        barWidthClassName="w-3"
-        scroller={scrollerRef}
         bucketUnit={bucketUnit}
       />
 
@@ -343,8 +314,6 @@ function TrendCard({
             segments={segments}
             maxTotal={maxTotal}
             height={220}
-            barWidthClassName="w-4"
-            scroller={modalScrollerRef}
             bucketUnit={bucketUnit}
           />
 

@@ -48,12 +48,16 @@ class ServiceProvider(Base):
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     # Protocol type: openai or anthropic
     protocol: Mapped[str] = mapped_column(String(50), nullable=False)
-    # API Type: chat / completion / embedding
-    api_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    # API Type: chat / completion / embedding (deprecated)
+    api_type: Mapped[str] = mapped_column(String(50), nullable=False, default="chat")
     # Provider API Key (Encrypted storage recommended)
     api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Extra Headers (JSON format)
     extra_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Proxy Enabled
+    proxy_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Proxy URL (schema://auth@host:port)
+    proxy_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time
@@ -84,8 +88,10 @@ class ModelMapping(Base):
     requested_model: Mapped[str] = mapped_column(
         String(100), primary_key=True, nullable=False
     )
-    # Selection strategy, currently only supports round_robin
+    # Selection strategy: round_robin or cost_first
     strategy: Mapped[str] = mapped_column(String(50), default="round_robin")
+    # Model type: chat / speech / transcription / embedding / images
+    model_type: Mapped[str] = mapped_column(String(50), default="chat")
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)
@@ -140,6 +146,14 @@ class ModelMappingProvider(Base):
     # Provider override pricing (USD per 1,000,000 tokens)
     input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Billing mode: token_flat / token_tiered / per_request (NULL treated as token_flat for backward compatibility)
+    billing_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Per-request fixed price (USD)
+    per_request_price: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 4), nullable=True
+    )
+    # Tiered pricing config (JSON). Used when billing_mode == "token_tiered"
+    tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
     # Priority (Lower value means higher priority)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     # Weight (Used for weighted round-robin, currently unused)

@@ -49,6 +49,8 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             api_type=entity.api_type,
             api_key=entity.api_key,
             extra_headers=entity.extra_headers,
+            proxy_enabled=entity.proxy_enabled,
+            proxy_url=entity.proxy_url,
             is_active=entity.is_active,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
@@ -63,6 +65,8 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             api_type=data.api_type,
             api_key=data.api_key,
             extra_headers=data.extra_headers,
+            proxy_enabled=data.proxy_enabled,
+            proxy_url=data.proxy_url,
             is_active=data.is_active,
         )
         self.session.add(entity)
@@ -91,6 +95,8 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         is_active: Optional[bool] = None,
         page: int = 1,
         page_size: int = 20,
+        name: Optional[str] = None,
+        protocol: Optional[str] = None,
     ) -> tuple[list[Provider], int]:
         """Get Provider List"""
         # Build query
@@ -100,6 +106,14 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         if is_active is not None:
             query = query.where(ServiceProvider.is_active == is_active)
             count_query = count_query.where(ServiceProvider.is_active == is_active)
+            
+        if name:
+            query = query.where(ServiceProvider.name.ilike(f"%{name}%"))
+            count_query = count_query.where(ServiceProvider.name.ilike(f"%{name}%"))
+            
+        if protocol:
+            query = query.where(ServiceProvider.protocol == protocol)
+            count_query = count_query.where(ServiceProvider.protocol == protocol)
         
         # Get total count
         total_result = await self.session.execute(count_query)

@@ -9,16 +9,24 @@ import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Download, Upload } from 'lucide-react';
-import { ModelForm, ModelList } from '@/components/models';
+import { ModelFilters, ModelFiltersState, ModelForm, ModelList } from '@/components/models';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useModels,
+  useModelStats,
   useCreateModel,
   useUpdateModel,
   useDeleteModel,
 } from '@/lib/hooks';
 import { exportModels, importModels } from '@/lib/api';
-import { ModelExport, ModelMapping, ModelMappingCreate, ModelMappingUpdate } from '@/types';
+import {
+  ModelExport,
+  ModelMapping,
+  ModelMappingCreate,
+  ModelMappingUpdate,
+  ModelType,
+  SelectionStrategy,
+} from '@/types';
 
 /**
  * Model Management Page Component
@@ -36,11 +44,24 @@ export default function ModelsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingModel, setDeletingModel] = useState<ModelMapping | null>(null);
 
+  // Filter state
+  const [filters, setFilters] = useState<ModelFiltersState>({
+    requested_model: '',
+    model_type: 'all',
+    strategy: 'all',
+    is_active: 'all',
+  });
+
   // Data query
   const { data, isLoading, isError, refetch } = useModels({
     page,
     page_size: pageSize,
+    requested_model: filters.requested_model || undefined,
+    model_type: filters.model_type === 'all' ? undefined : (filters.model_type as ModelType),
+    strategy: filters.strategy === 'all' ? undefined : (filters.strategy as SelectionStrategy),
+    is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
   });
+  const { data: statsData } = useModelStats();
 
   // Mutations
   const createMutation = useCreateModel();
@@ -83,8 +104,8 @@ export default function ModelsPage() {
       }
       setFormOpen(false);
       setEditingModel(null);
-    } catch (error) {
-      console.error('Save failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 
@@ -95,8 +116,8 @@ export default function ModelsPage() {
       await deleteMutation.mutateAsync(deletingModel.requested_model);
       setDeleteDialogOpen(false);
       setDeletingModel(null);
-    } catch (error) {
-      console.error('Delete failed:', error);
+    } catch {
+      // Errors are surfaced via mutation onError toast
     }
   };
 
@@ -185,7 +206,8 @@ export default function ModelsPage() {
           </Button>
         </div>
       </div>
-
+      {/* Filters */}
+      <ModelFilters filters={filters} onFilterChange={setFilters} />
       {/* Data List */}
       <Card>
         <CardHeader>
@@ -213,6 +235,9 @@ export default function ModelsPage() {
             <>
               <ModelList
                 models={data.items}
+                statsByModel={Object.fromEntries(
+                  (statsData ?? []).map((stat) => [stat.requested_model, stat])
+                )}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />

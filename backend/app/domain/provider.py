@@ -20,9 +20,13 @@ class ProviderBase(BaseModel):
     # Protocol Type: openai or anthropic
     protocol: str = Field(..., pattern="^(openai|anthropic)$", description="Protocol Type")
     # API Type: chat / completion / embedding
-    api_type: str = Field(..., description="API Type")
+    api_type: str = Field("chat", description="API Type (deprecated)")
     # Extra Headers
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    # Proxy Enabled
+    proxy_enabled: bool = Field(False, description="Proxy Enabled")
+    # Proxy URL (schema://auth@host:port)
+    proxy_url: Optional[str] = Field(None, description="Proxy URL")
 
 
 class ProviderCreate(ProviderBase):
@@ -44,6 +48,8 @@ class ProviderUpdate(BaseModel):
     api_key: Optional[str] = None
     extra_headers: Optional[dict[str, str]] = None
     is_active: Optional[bool] = None
+    proxy_enabled: Optional[bool] = None
+    proxy_url: Optional[str] = None
 
 
 class Provider(ProviderBase):
@@ -67,6 +73,7 @@ class ProviderResponse(ProviderBase):
     # API Key Sanitized Display
     api_key: Optional[str] = Field(None, description="Provider API Key (Sanitized)")
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    proxy_url: Optional[str] = Field(None, description="Proxy URL (Sanitized)")
     is_active: bool = Field(True, description="Is Active")
     created_at: datetime = Field(..., description="Creation Time")
     updated_at: datetime = Field(..., description="Update Time")

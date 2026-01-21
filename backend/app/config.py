@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     
     # HTTP Client Config
     # Request timeout (seconds)
-    HTTP_TIMEOUT: int = 60
+    HTTP_TIMEOUT: int = 1800
     
     # API Key Config
     # Generated API Key prefix

@@ -14,11 +14,15 @@ import {
   ModelListParams,
   ModelProviderListParams,
   ModelExport,
+  ModelStats,
+  ModelProviderStats,
   PaginatedResponse,
 } from '@/types';
 
 const MODELS_URL = '/api/admin/models';
 const MODEL_PROVIDERS_URL = '/api/admin/model-providers';
+const MODEL_STATS_URL = '/api/admin/models/stats';
+const MODEL_PROVIDER_STATS_URL = '/api/admin/models/provider-stats';
 
 // ============ Model Mapping CRUD ============
 
@@ -128,4 +132,16 @@ export async function importModels(
   data: ModelExport[]
 ): Promise<{ success: number; skipped: number; errors: string[] }> {
   return post<{success: number; skipped: number; errors: string[]}>(`${MODELS_URL}/import`, data);
+}
+
+export async function getModelStats(
+  params?: { requested_model?: string }
+): Promise<ModelStats[]> {
+  return get<ModelStats[]>(MODEL_STATS_URL, params as Record<string, unknown>);
+}
+
+export async function getModelProviderStats(
+  params?: { requested_model?: string }
+): Promise<ModelProviderStats[]> {
+  return get<ModelProviderStats[]>(MODEL_PROVIDER_STATS_URL, params as Record<string, unknown>);
 }

@@ -67,16 +67,24 @@ async def import_providers(
 async def list_providers(
     service: ProviderServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    name: Optional[str] = Query(None, description="Filter by name"),
+    protocol: Optional[str] = Query(None, description="Filter by protocol"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
 ):
     """
     Get Provider List
     
-    Supports pagination and active status filtering.
+    Supports pagination and filtering.
     """
     try:
-        items, total = await service.get_all(is_active, page, page_size)
+        items, total = await service.get_all(
+            is_active=is_active, 
+            page=page, 
+            page_size=page_size,
+            name=name,
+            protocol=protocol
+        )
         return PaginatedProviderResponse(
             items=items,
             total=total,

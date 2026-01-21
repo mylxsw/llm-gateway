@@ -229,3 +229,25 @@ class LogCostStatsResponse(BaseModel):
     summary: LogCostSummary
     trend: list[LogCostTrendPoint]
     by_model: list[LogCostByModel]
+
+
+class ModelStats(BaseModel):
+    """Aggregated model stats based on request logs"""
+
+    requested_model: str
+    avg_response_time_ms: Optional[float] = None
+    avg_first_byte_time_ms: Optional[float] = None
+    success_rate: float = 0.0
+    failure_rate: float = 0.0
+
+
+class ModelProviderStats(BaseModel):
+    """Aggregated model/provider stats based on request logs"""
+
+    requested_model: str
+    target_model: str
+    provider_name: str
+    avg_first_byte_time_ms: Optional[float] = None
+    avg_response_time_ms: Optional[float] = None
+    success_rate: float = 0.0
+    failure_rate: float = 0.0
