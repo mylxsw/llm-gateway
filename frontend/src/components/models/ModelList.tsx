@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Server, Trash2 } from 'lucide-react';
 import { ModelMapping, ModelStats } from '@/types';
-import { formatDateTime, getActiveStatus, formatDuration } from '@/lib/utils';
+import { getActiveStatus, formatDuration } from '@/lib/utils';
 
 interface ModelListProps {
   /** Model mapping list data */
@@ -39,11 +39,6 @@ export function ModelList({
   onEdit,
   onDelete,
 }: ModelListProps) {
-  const formatRate = (value: number | null | undefined) => {
-    if (value === null || value === undefined) return '-';
-    return `${(value * 100).toFixed(1)}%`;
-  };
-
   return (
     <Table>
       <TableHeader>
@@ -52,11 +47,13 @@ export function ModelList({
           <TableHead>Type</TableHead>
           <TableHead>Strategy</TableHead>
           <TableHead>Provider Count</TableHead>
-          <TableHead>Avg Response (7d)</TableHead>
-          <TableHead>Avg First Token (7d)</TableHead>
-          <TableHead>Success / Failure (7d)</TableHead>
+          <TableHead>
+            <div className="flex flex-col">
+              <span>Avg Response (7d)</span>
+              <span className="text-xs text-muted-foreground">Avg First Token (7d)</span>
+            </div>
+          </TableHead>
           <TableHead>Status</TableHead>
-          <TableHead>Updated At</TableHead>
           <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
@@ -81,19 +78,15 @@ export function ModelList({
                 <Badge variant="secondary">{model.provider_count || 0}</Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {formatDuration(stats?.avg_response_time_ms ?? null)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatDuration(stats?.avg_first_byte_time_ms ?? null)}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatRate(stats?.success_rate)} / {formatRate(stats?.failure_rate)}
+                <div className="flex flex-col gap-1">
+                  <span>{formatDuration(stats?.avg_response_time_ms ?? null)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDuration(stats?.avg_first_byte_time_ms ?? null)}
+                  </span>
+                </div>
               </TableCell>
               <TableCell>
                 <Badge className={status.className}>{status.text}</Badge>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatDateTime(model.updated_at)}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
