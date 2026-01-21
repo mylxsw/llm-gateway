@@ -40,7 +40,7 @@ class RequestLogBase(BaseModel):
 
 class RequestLogCreate(RequestLogBase):
     """Create Request Log Model"""
-    
+
     # Retry Count
     retry_count: int = Field(0, description="Retry Count")
     # First Byte Delay (ms)
@@ -73,6 +73,19 @@ class RequestLogCreate(RequestLogBase):
     trace_id: Optional[str] = Field(None, description="Trace ID")
     # Is Stream Request
     is_stream: bool = Field(False, description="Is Stream Request")
+    # Protocol Conversion Fields (for debugging and analysis)
+    # Client request protocol (openai/anthropic)
+    request_protocol: Optional[str] = Field(None, description="Client Request Protocol")
+    # Upstream supplier protocol (openai/anthropic)
+    supplier_protocol: Optional[str] = Field(None, description="Upstream Supplier Protocol")
+    # Converted request body (sent to upstream after protocol conversion)
+    converted_request_body: Optional[dict[str, Any]] = Field(
+        None, description="Converted Request Body (after protocol conversion)"
+    )
+    # Upstream response body (original response before protocol conversion)
+    upstream_response_body: Optional[str] = Field(
+        None, description="Upstream Response Body (before protocol conversion)"
+    )
 
 
 class RequestLogModel(RequestLogCreate):

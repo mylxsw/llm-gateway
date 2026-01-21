@@ -270,7 +270,16 @@ class RequestLog(Base):
     trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Is Stream Request
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    
+    # Protocol Conversion Fields (for debugging and analysis)
+    # Client request protocol (openai/anthropic)
+    request_protocol: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Upstream supplier protocol (openai/anthropic)
+    supplier_protocol: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Converted request body (sent to upstream after protocol conversion)
+    converted_request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Upstream response body (original response before protocol conversion)
+    upstream_response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Indices for optimizing queries
     __table_args__ = (
         Index("idx_request_logs_time", "request_time"),

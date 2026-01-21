@@ -329,6 +329,13 @@ class ProxyService:
         retry_handler = RetryHandler(strategy)
 
         failed_attempt_logged = False
+        # Track protocol conversion data for logging
+        conversion_data: dict[str, Any] = {
+            "request_protocol": request_protocol,
+            "supplier_protocol": None,
+            "converted_request_body": None,
+            "upstream_response_body": None,
+        }
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
             nonlocal failed_attempt_logged
@@ -368,6 +375,11 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=False,
+                # Protocol conversion fields
+                request_protocol=request_protocol,
+                supplier_protocol=attempt.provider.protocol,
+                converted_request_body=_smart_truncate(conversion_data.get("converted_request_body")),
+                upstream_response_body=self._serialize_response_body(attempt.response.body),
             )
             try:
                 await self.log_repo.create(attempt_log)
@@ -391,6 +403,9 @@ class ProxyService:
                     body=body,
                     target_model=candidate.target_model,
                 )
+                # Track conversion data for logging
+                conversion_data["supplier_protocol"] = candidate.protocol
+                conversion_data["converted_request_body"] = supplier_body
                 same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
                 proxy_config = build_proxy_config(
                     candidate.proxy_enabled,
@@ -430,6 +445,8 @@ class ProxyService:
         )
 
         if result.response.body is not None and result.final_provider is not None:
+            # Capture upstream response before protocol conversion
+            conversion_data["upstream_response_body"] = result.response.body
             try:
                 same_protocol = normalize_protocol(request_protocol) == normalize_protocol(result.final_provider.protocol)
                 if not same_protocol:
@@ -508,12 +525,16 @@ class ProxyService:
             price_source=billing.price_source,
             request_headers=sanitize_headers(headers),
             request_body=sanitized_body,
-
             response_status=result.response.status_code,
             response_body=self._serialize_response_body(result.response.body),
             error_info=result.response.error,
             trace_id=trace_id,
             is_stream=False,
+            # Protocol conversion fields
+            request_protocol=conversion_data.get("request_protocol"),
+            supplier_protocol=conversion_data.get("supplier_protocol"),
+            converted_request_body=_smart_truncate(conversion_data.get("converted_request_body")),
+            upstream_response_body=self._serialize_response_body(conversion_data.get("upstream_response_body")),
         )
         
         # DEBUG: Log request details
@@ -590,6 +611,13 @@ class ProxyService:
         strategy = self._get_strategy(model_mapping.strategy)
         retry_handler = RetryHandler(strategy)
 
+        # Track protocol conversion data for logging
+        stream_conversion_data: dict[str, Any] = {
+            "request_protocol": request_protocol,
+            "supplier_protocol": None,
+            "converted_request_body": None,
+        }
+
         # 8. Execute streaming request
         def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
@@ -604,6 +632,9 @@ class ProxyService:
                     body=body,
                     target_model=candidate.target_model,
                 )
+                # Track conversion data for logging
+                stream_conversion_data["supplier_protocol"] = candidate.protocol
+                stream_conversion_data["converted_request_body"] = supplier_body
             except Exception as e:
                 error_msg = str(e)
                 logger.error(
@@ -736,6 +767,11 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=True,
+                # Protocol conversion fields
+                request_protocol=request_protocol,
+                supplier_protocol=attempt.provider.protocol,
+                converted_request_body=_smart_truncate(stream_conversion_data.get("converted_request_body")),
+                upstream_response_body=self._serialize_response_body(attempt.response.body),
             )
             try:
                 with anyio.CancelScope(shield=True):
@@ -865,6 +901,12 @@ class ProxyService:
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                     is_stream=True,
+                    # Protocol conversion fields
+                    request_protocol=stream_conversion_data.get("request_protocol"),
+                    supplier_protocol=stream_conversion_data.get("supplier_protocol"),
+                    converted_request_body=_smart_truncate(stream_conversion_data.get("converted_request_body")),
+                    # For stream, upstream_response_body is the raw stream which is already in combined_body
+                    upstream_response_body=raw_stream_text if raw_stream_text else None,
                 )
                 
                 # DEBUG: Log request details
