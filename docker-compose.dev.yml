@@ -1,0 +1,17 @@
+services:
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-gateway:local
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: ${DEBUG:-false}
+      DATABASE_TYPE: ${DATABASE_TYPE:-sqlite}
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////data/llm_gateway.db}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
