@@ -52,6 +52,7 @@
   - **Round-Robin**: Distribute requests evenly across providers
   - **Priority-Based**: Use preferred providers first, fallback to others
   - **Weight-Based**: Distribute by custom weight ratios
+  - **Cost-Based**: Automatically select the lowest-priced model based on API pricing
 - **Model Mapping**: Map virtual model names to multiple backend providers
 
 ### High Availability
@@ -62,7 +63,7 @@
 
 ### Comprehensive Observability
 
-- **Request Logging**: Full audit trail with request/response details
+- **Full Request/Response Capture**: Complete logging of request and response bodies (including streaming) to help debug issues and optimize AI system performance
 - **Token Tracking**: Automatic token counting using [tiktoken](https://github.com/openai/tiktoken)
 - **Latency Metrics**: First-byte delay and total response time
 - **Cost Analytics**: Aggregated statistics by time, model, provider, and API key
