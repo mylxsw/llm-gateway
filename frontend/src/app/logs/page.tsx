@@ -32,7 +32,7 @@ export default function LogsPage() {
 
   // Data query
   const { data, isLoading, isError, refetch } = useLogs(filters);
-  const { data: providersData } = useProviders({ is_active: true });
+  const { data: providersData } = useProviders({ is_active: true, page: 1, page_size: 1000 });
   const { data: modelsData } = useModels({ is_active: true, page: 1, page_size: 1000 });
   const { data: apiKeysData } = useApiKeys({ is_active: true, page: 1, page_size: 1000 });
 

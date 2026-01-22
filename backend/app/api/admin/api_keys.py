@@ -34,7 +34,7 @@ async def list_api_keys(
     service: ApiKeyServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=1000, description="Items per page"),
 ):
     """
     Get API Key list

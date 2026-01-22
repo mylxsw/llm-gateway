@@ -89,7 +89,7 @@ async def list_models(
     model_type: Optional[str] = Query(None, description="Filter by model type"),
     strategy: Optional[str] = Query(None, description="Filter by strategy"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    page_size: int = Query(20, ge=1, le=1000, description="Items per page"),
 ):
     """
     Get Model Mapping List
