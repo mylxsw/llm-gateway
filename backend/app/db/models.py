@@ -258,6 +258,8 @@ class RequestLog(Base):
     price_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Request Headers (JSON format, sanitized)
     request_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Response Headers (JSON format)
+    response_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Request Body (JSON format)
     request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Response Status Code

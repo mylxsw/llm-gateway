@@ -59,6 +59,8 @@ class RequestLogCreate(RequestLogBase):
     price_source: Optional[str] = Field(None, description="Price source")
     # Request Headers (Sanitized)
     request_headers: Optional[dict[str, Any]] = Field(None, description="Request Headers")
+    # Response Headers (Sanitized)
+    response_headers: Optional[dict[str, Any]] = Field(None, description="Response Headers")
     # Request Body
     request_body: Optional[dict[str, Any]] = Field(None, description="Request Body")
     # Response Status Code

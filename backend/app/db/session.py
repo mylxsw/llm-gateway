@@ -125,6 +125,7 @@ def _run_migrations(sync_conn) -> None:
             "supplier_protocol": "supplier_protocol VARCHAR(50)",
             "converted_request_body": "converted_request_body JSON",
             "upstream_response_body": "upstream_response_body TEXT",
+            "response_headers": "response_headers JSON",
         },
     )
     ensure_columns(
