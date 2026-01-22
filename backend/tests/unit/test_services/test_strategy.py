@@ -291,3 +291,69 @@ class TestCostFirstStrategy:
         # Provider 2: $1 * 1M/1M = $1.00
         # Provider 3: $5 * 1M/1M = $5.00
         # Provider 1: $10 * 1M/1M = $10.00
+
+    @pytest.mark.asyncio
+    async def test_select_tie_round_robin(self):
+        """Test round robin selection when costs are equal"""
+        # Create two candidates with equal lowest cost
+        tie_candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="Provider1",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model1",
+                priority=1,
+                billing_mode="token_flat",
+                input_price=1.0,
+                output_price=3.0,
+                model_input_price=5.0,
+                model_output_price=15.0,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="Provider2",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="model2",
+                priority=2,
+                billing_mode="token_flat",
+                input_price=1.0,  # Same price
+                output_price=3.0,
+                model_input_price=5.0,
+                model_output_price=15.0,
+            ),
+            CandidateProvider(
+                provider_id=3,
+                provider_name="Provider3",
+                base_url="https://api3.com",
+                protocol="openai",
+                api_key="key3",
+                target_model="model3",
+                priority=3,
+                billing_mode="token_flat",
+                input_price=2.0,  # Higher price
+                output_price=6.0,
+                model_input_price=5.0,
+                model_output_price=15.0,
+            ),
+        ]
+        
+        # Reset internal round robin state if needed (not directly exposed but we can rely on fresh state for test)
+        # Actually CostFirstStrategy.__init__ creates a new RoundRobinStrategy
+        
+        # 1st selection
+        selected = await self.strategy.select(tie_candidates, "tie-test-model", input_tokens=1000)
+        assert selected.provider_id in [1, 2]
+        first_id = selected.provider_id
+        
+        # 2nd selection
+        selected = await self.strategy.select(tie_candidates, "tie-test-model", input_tokens=1000)
+        assert selected.provider_id in [1, 2]
+        assert selected.provider_id != first_id
+        
+        # 3rd selection (should loop back)
+        selected = await self.strategy.select(tie_candidates, "tie-test-model", input_tokens=1000)
+        assert selected.provider_id == first_id

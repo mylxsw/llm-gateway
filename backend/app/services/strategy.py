@@ -176,7 +176,12 @@ class CostFirstStrategy(SelectionStrategy):
     Selects providers based on lowest cost for the current request.
     Calculates cost based on input tokens and provider billing configuration.
     Falls back to next lowest cost provider on failure.
+    If multiple providers have the same lowest cost, uses Round Robin to distribute load.
     """
+
+    def __init__(self):
+        """Initialize Strategy"""
+        self._round_robin = RoundRobinStrategy()
 
     def _calculate_input_cost(self, candidate: CandidateProvider, input_tokens: int) -> float:
         """
@@ -259,8 +264,28 @@ class CostFirstStrategy(SelectionStrategy):
         # Sort by cost (lowest first), then by priority, then by provider_id
         candidates_with_cost.sort(key=lambda x: (x[1], x[0].priority, x[0].provider_id))
 
-        selected = candidates_with_cost[0][0]
-        selected_cost = candidates_with_cost[0][1]
+        # Find all candidates with the same lowest cost
+        min_cost = candidates_with_cost[0][1]
+        lowest_cost_candidates = []
+        # Use a small epsilon for float comparison if needed, but costs are likely exact or distinctly different
+        # Using exact match for now as price configuration is usually precise
+        for c, cost in candidates_with_cost:
+            if abs(cost - min_cost) < 1e-9:
+                lowest_cost_candidates.append(c)
+            else:
+                break
+        
+        if len(lowest_cost_candidates) > 1:
+            # Use Round Robin for ties
+            selected = await self._round_robin.select(lowest_cost_candidates, requested_model)
+            selected_cost = min_cost
+            logger.info(
+                f"CostFirstStrategy: Found {len(lowest_cost_candidates)} providers with same lowest cost "
+                f"(${min_cost:.6f}). Using Round Robin selection."
+            )
+        else:
+            selected = candidates_with_cost[0][0]
+            selected_cost = candidates_with_cost[0][1]
 
         logger.info(
             f"CostFirstStrategy: Selected provider {selected.provider_name} (ID: {selected.provider_id}) "

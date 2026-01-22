@@ -93,6 +93,8 @@ class ProxyService:
         model_repo: ModelRepository,
         provider_repo: ProviderRepository,
         log_repo: LogRepository,
+        round_robin_strategy: Optional[SelectionStrategy] = None,
+        cost_first_strategy: Optional[SelectionStrategy] = None,
     ):
         """
         Initialize Service
@@ -101,14 +103,16 @@ class ProxyService:
             model_repo: Model Repository
             provider_repo: Provider Repository
             log_repo: Log Repository
+            round_robin_strategy: Optional Round Robin Strategy instance
+            cost_first_strategy: Optional Cost First Strategy instance
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
         self.log_repo = log_repo
         self.rule_engine = RuleEngine()
         # Strategy selection instances (reused for performance)
-        self._round_robin_strategy = RoundRobinStrategy()
-        self._cost_first_strategy = CostFirstStrategy()
+        self._round_robin_strategy = round_robin_strategy or RoundRobinStrategy()
+        self._cost_first_strategy = cost_first_strategy or CostFirstStrategy()
 
     def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
         """
