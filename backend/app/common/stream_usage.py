@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from app.common.token_counter import get_token_counter
+from app.common.usage_extractor import UsageDetails, extract_usage_details
 
 
 class SSEDecoder:
@@ -68,7 +69,9 @@ class StreamUsageResult:
     output_preview: str
     output_preview_truncated: bool
     output_tokens: int
+    input_tokens: Optional[int]
     upstream_reported_output_tokens: Optional[int]
+    usage_details: Optional[dict[str, Any]]
 
 
 class StreamUsageAccumulator:
@@ -90,6 +93,8 @@ class StreamUsageAccumulator:
 
         self._text_parts: list[str] = []
         self._upstream_output_tokens: Optional[int] = None
+        self._upstream_input_tokens: Optional[int] = None
+        self._usage_details: Optional[UsageDetails] = None
 
     def feed(self, chunk: bytes) -> None:
         for payload in self._decoder.feed(chunk):
@@ -115,7 +120,9 @@ class StreamUsageAccumulator:
             output_preview=preview,
             output_preview_truncated=truncated,
             output_tokens=output_tokens,
+            input_tokens=self._upstream_input_tokens,
             upstream_reported_output_tokens=self._upstream_output_tokens,
+            usage_details=self._usage_details.__dict__ if self._usage_details else None,
         )
 
     def _handle_payload(self, payload: str) -> None:
@@ -137,14 +144,7 @@ class StreamUsageAccumulator:
             self._handle_openai_event(data)
 
     def _handle_openai_event(self, data: dict[str, Any]) -> None:
-        usage = data.get("usage")
-        if isinstance(usage, dict):
-            completion_tokens = usage.get("completion_tokens")
-            if isinstance(completion_tokens, int):
-                self._upstream_output_tokens = completion_tokens
-            output_tokens = usage.get("output_tokens")
-            if isinstance(output_tokens, int):
-                self._upstream_output_tokens = output_tokens
+        self._update_usage_from_payload(data)
 
         choices = data.get("choices")
         if not isinstance(choices, list):
@@ -184,20 +184,7 @@ class StreamUsageAccumulator:
 
     def _handle_anthropic_event(self, data: dict[str, Any]) -> None:
         event_type = data.get("type")
-
-        # usage may appear in message_delta / message_start
-        usage: Optional[dict[str, Any]] = None
-        if isinstance(data.get("usage"), dict):
-            usage = data.get("usage")
-        elif isinstance(data.get("message"), dict) and isinstance(data["message"].get("usage"), dict):
-            usage = data["message"]["usage"]
-        elif isinstance(data.get("delta"), dict) and isinstance(data["delta"].get("usage"), dict):
-            usage = data["delta"]["usage"]
-
-        if usage:
-            output_tokens = usage.get("output_tokens")
-            if isinstance(output_tokens, int):
-                self._upstream_output_tokens = output_tokens
+        self._update_usage_from_payload(data)
 
         # Anthropic Messages stream: content_block_delta.delta.text
         if event_type == "content_block_delta":
@@ -206,6 +193,16 @@ class StreamUsageAccumulator:
                 text = delta.get("text")
                 if isinstance(text, str) and text:
                     self._text_parts.append(text)
+
+    def _update_usage_from_payload(self, data: dict[str, Any]) -> None:
+        details = extract_usage_details(data)
+        if not details:
+            return
+        self._usage_details = details
+        if details.output_tokens is not None:
+            self._upstream_output_tokens = details.output_tokens
+        if details.input_tokens is not None:
+            self._upstream_input_tokens = details.input_tokens
             return
 
         # Compatible with old format: carry completion field directly

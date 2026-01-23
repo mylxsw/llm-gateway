@@ -262,6 +262,8 @@ class RequestLog(Base):
     response_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Response Body
     response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Usage Details (JSON format)
+    usage_details: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Error Info
     error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Trace ID
