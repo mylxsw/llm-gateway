@@ -67,6 +67,8 @@ class RequestLogCreate(RequestLogBase):
     response_status: Optional[int] = Field(None, description="Response Status Code")
     # Response Body
     response_body: Optional[str] = Field(None, description="Response Body")
+    # Usage Details (normalized)
+    usage_details: Optional[dict[str, Any]] = Field(None, description="Usage Details")
     # Error Info
     error_info: Optional[str] = Field(None, description="Error Info")
     # Matched Provider Count

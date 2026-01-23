@@ -24,7 +24,7 @@ from app.common.token_counter import get_token_counter
 from app.common.costs import calculate_cost_from_billing, resolve_billing
 from app.common.utils import generate_trace_id
 from app.common.time import utc_now
-from app.common.usage_extractor import extract_output_tokens
+from app.common.usage_extractor import extract_usage_details
 from app.common.proxy import build_proxy_config
 from app.domain.log import RequestLogCreate
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
@@ -243,11 +243,7 @@ class ProxyService:
         provider_mapping_by_id = {pm.provider_id: pm for pm in eligible_provider_mappings}
 
         token_counter = get_token_counter(request_protocol)
-        if "input" in body:
-            input_tokens = token_counter.count_input(body["input"], requested_model)
-        else:
-            messages = body.get("messages", [])
-            input_tokens = token_counter.count_messages(messages, requested_model)
+        input_tokens = token_counter.count_request(body, requested_model)
 
         context = RuleContext(
             current_model=requested_model,
@@ -485,15 +481,40 @@ class ProxyService:
                     total_time_ms=result.response.total_time_ms,
                 )
         
-        # 9. Calculate Output Token
+        # 9. Calculate Output Token and usage details
         output_tokens = 0
+        usage_details: Optional[dict[str, Any]] = None
         if result.success and result.response.body:
+            upstream_body = conversion_data.get("upstream_response_body")
+            details = None
             try:
-                extracted = extract_output_tokens(result.response.body)
-                if extracted is not None:
-                    output_tokens = extracted
+                details = extract_usage_details(upstream_body) or extract_usage_details(result.response.body)
             except Exception:
-                pass
+                details = None
+
+            if details:
+                usage_details = dict(details.__dict__)
+                if details.input_tokens is not None:
+                    input_tokens = details.input_tokens
+                if details.output_tokens is not None:
+                    output_tokens = details.output_tokens
+                else:
+                    output_tokens = token_counter.count_output_body(result.response.body, requested_model)
+                    usage_details["output_tokens"] = output_tokens
+                    usage_details["source"] = "mixed"
+                if usage_details.get("input_tokens") is None:
+                    usage_details["input_tokens"] = input_tokens
+                    usage_details["source"] = "mixed"
+                if usage_details.get("total_tokens") is None and usage_details.get("input_tokens") is not None:
+                    usage_details["total_tokens"] = usage_details["input_tokens"] + (usage_details.get("output_tokens") or 0)
+            else:
+                output_tokens = token_counter.count_output_body(result.response.body, requested_model)
+                usage_details = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": (input_tokens or 0) + (output_tokens or 0),
+                    "source": "estimated",
+                }
         
         # 10. Record log
         final_provider_id = result.final_provider.provider_id if result.final_provider else None
@@ -538,6 +559,7 @@ class ProxyService:
             request_body=sanitized_body,
             response_status=result.response.status_code,
             response_body=self._serialize_response_body(result.response.body),
+            usage_details=usage_details,
             error_info=result.response.error,
             trace_id=trace_id,
             is_stream=False,
@@ -847,6 +869,24 @@ class ProxyService:
                 return
             finally:
                 usage_result = usage_acc.finalize()
+                usage_details = usage_result.usage_details
+                if usage_result.input_tokens is not None:
+                    input_tokens = usage_result.input_tokens
+                if usage_details is None:
+                    usage_details = {
+                        "input_tokens": input_tokens,
+                        "output_tokens": usage_result.output_tokens,
+                        "total_tokens": (input_tokens or 0) + (usage_result.output_tokens or 0),
+                        "source": "estimated",
+                    }
+                elif usage_details.get("input_tokens") is None:
+                    usage_details["input_tokens"] = input_tokens
+                    usage_details["source"] = "mixed"
+                if usage_details.get("output_tokens") is None:
+                    usage_details["output_tokens"] = usage_result.output_tokens
+                    usage_details["source"] = "mixed"
+                if usage_details.get("total_tokens") is None and usage_details.get("input_tokens") is not None:
+                    usage_details["total_tokens"] = usage_details["input_tokens"] + (usage_details.get("output_tokens") or 0)
                 total_time_ms = initial_response.total_time_ms
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
@@ -911,6 +951,7 @@ class ProxyService:
                     request_body=sanitized_body,
                     response_body=combined_body if raw_stream_text or reconstructed_body else None,
                     response_status=initial_response.status_code,
+                    usage_details=usage_details,
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                     is_stream=True,
