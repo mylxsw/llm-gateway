@@ -21,7 +21,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -169,11 +168,6 @@ class ModelMappingProvider(Base):
     # Update Time
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
-    )
-    
-    # Unique Constraint: Only one mapping per provider for the same model
-    __table_args__ = (
-        UniqueConstraint("requested_model", "provider_id", name="uq_model_provider"),
     )
     
     # Relationships

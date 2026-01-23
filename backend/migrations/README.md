@@ -25,3 +25,4 @@ psql -U username -d database_name -f migrations/add_is_stream_column.sql
   - `supplier_protocol` - Upstream supplier protocol (openai/anthropic)
   - `converted_request_body` - Request body after protocol conversion
   - `upstream_response_body` - Original upstream response before protocol conversion
+- `remove_model_provider_unique_constraint.sql` - Drops the unique constraint on `(requested_model, provider_id)` to allow duplicate provider mappings per model.

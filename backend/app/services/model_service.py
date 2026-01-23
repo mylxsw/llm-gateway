@@ -349,7 +349,6 @@ class ModelService:
         
         Raises:
             NotFoundError: Model or provider not found
-            ConflictError: Mapping already exists
         """
         # Check if model exists
         model = await self.model_repo.get_mapping(data.requested_model)
@@ -365,17 +364,6 @@ class ModelService:
             raise NotFoundError(
                 message=f"Provider with id {data.provider_id} not found",
                 code="provider_not_found",
-            )
-        
-        # Check if mapping already exists
-        existing = await self.model_repo.get_all_provider_mappings(
-            requested_model=data.requested_model,
-            provider_id=data.provider_id,
-        )
-        if existing:
-            raise ConflictError(
-                message=f"Mapping for model '{data.requested_model}' and provider {data.provider_id} already exists",
-                code="duplicate_mapping",
             )
         
         return await self.model_repo.add_provider_mapping(data)
