@@ -44,6 +44,8 @@ function protocolLabel(protocol: ProtocolType) {
   switch (protocol) {
     case 'openai':
       return 'OpenAI';
+    case 'openai_responses':
+      return 'OpenAI Responses';
     case 'anthropic':
       return 'Anthropic';
   }

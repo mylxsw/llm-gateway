@@ -16,6 +16,14 @@ import httpx
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 from app.common.errors import ServiceError
+from app.common.openai_responses import (
+    chat_completions_request_to_responses,
+    chat_completion_to_responses_response,
+    chat_completions_sse_to_responses_sse,
+    responses_request_to_chat_completions,
+    responses_response_to_chat_completion,
+    responses_sse_to_chat_completions_sse,
+)
 from app.common.stream_usage import SSEDecoder
 
 try:
@@ -49,6 +57,7 @@ except Exception as e:
 
 
 OPENAI_PROTOCOL = "openai"
+OPENAI_RESPONSES_PROTOCOL = "openai_responses"
 ANTHROPIC_PROTOCOL = "anthropic"
 
 
@@ -233,7 +242,7 @@ def _ensure_openai_tooling_fields(
 
 def normalize_protocol(protocol: str) -> str:
     protocol = (protocol or OPENAI_PROTOCOL).lower().strip()
-    if protocol not in (OPENAI_PROTOCOL, ANTHROPIC_PROTOCOL):
+    if protocol not in (OPENAI_PROTOCOL, OPENAI_RESPONSES_PROTOCOL, ANTHROPIC_PROTOCOL):
         raise ServiceError(message=f"Unsupported protocol '{protocol}'", code="unsupported_protocol")
     return protocol
 
@@ -407,6 +416,7 @@ def convert_request_for_supplier(
     Only supports Chat/Messages conversion:
     - OpenAI: /v1/chat/completions
     - Anthropic: /v1/messages
+    - OpenAI Responses: /v1/responses
     """
     request_protocol = normalize_protocol(request_protocol)
     supplier_protocol = normalize_protocol(supplier_protocol)
@@ -423,6 +433,52 @@ def convert_request_for_supplier(
                 else:
                     new_body["max_tokens"] = 4096
         return path, new_body
+
+    if request_protocol == OPENAI_PROTOCOL and supplier_protocol == OPENAI_RESPONSES_PROTOCOL:
+        if path == "/v1/chat/completions":
+            openai_body = _normalize_openai_tooling_fields(body)
+            responses_body = chat_completions_request_to_responses(openai_body)
+            responses_body["model"] = target_model
+            return "/v1/responses", responses_body
+        if path == "/v1/completions":
+            prompt = body.get("prompt")
+            if prompt is None:
+                raise ServiceError(message="OpenAI request missing 'prompt'", code="invalid_request")
+            responses_body: dict[str, Any] = {"model": target_model, "input": prompt}
+            for key in (
+                "temperature",
+                "top_p",
+                "presence_penalty",
+                "frequency_penalty",
+                "seed",
+                "n",
+                "stop",
+                "stream",
+                "stream_options",
+                "user",
+                "metadata",
+            ):
+                if key in body:
+                    responses_body[key] = body[key]
+            max_output_tokens = body.get("max_tokens")
+            if max_output_tokens is not None:
+                responses_body["max_output_tokens"] = max_output_tokens
+            return "/v1/responses", responses_body
+        raise ServiceError(
+            message=f"Unsupported OpenAI endpoint for conversion: {path}",
+            code="unsupported_protocol_conversion",
+        )
+
+    if request_protocol == OPENAI_RESPONSES_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
+        if path != "/v1/responses":
+            raise ServiceError(
+                message=f"Unsupported OpenAI Responses endpoint for conversion: {path}",
+                code="unsupported_protocol_conversion",
+            )
+        openai_body = responses_request_to_chat_completions(body)
+        openai_body["model"] = target_model
+        openai_body = _normalize_openai_tooling_fields(openai_body)
+        return "/v1/chat/completions", openai_body
 
     if request_protocol == OPENAI_PROTOCOL and supplier_protocol == ANTHROPIC_PROTOCOL:
         if path != "/v1/chat/completions":
@@ -476,6 +532,36 @@ def convert_request_for_supplier(
             )
         return "/v1/chat/completions", openai_body
 
+    if request_protocol == OPENAI_RESPONSES_PROTOCOL and supplier_protocol == ANTHROPIC_PROTOCOL:
+        if path != "/v1/responses":
+            raise ServiceError(
+                message=f"Unsupported OpenAI Responses endpoint for conversion: {path}",
+                code="unsupported_protocol_conversion",
+            )
+        openai_body = responses_request_to_chat_completions(body)
+        openai_body = _normalize_openai_tooling_fields(openai_body)
+        openai_body["model"] = target_model
+        messages = openai_body.get("messages")
+        if not isinstance(messages, list):
+            raise ServiceError(message="OpenAI request missing 'messages'", code="invalid_request")
+        optional_params = {k: v for k, v in openai_body.items() if k not in ("model", "messages")}
+        if "max_tokens" not in optional_params and "max_completion_tokens" in optional_params:
+            optional_params["max_tokens"] = optional_params["max_completion_tokens"]
+        if "max_tokens" not in optional_params:
+            optional_params["max_tokens"] = 4096
+        anthropic_body = AnthropicConfig().transform_request(
+            model=target_model,
+            messages=messages,
+            optional_params=optional_params,
+            litellm_params={},
+            headers={},
+        )
+        if isinstance(anthropic_body, dict):
+            anthropic_body = _ensure_anthropic_tooling_fields(
+                source_openai_body=openai_body, target_anthropic_body=anthropic_body
+            )
+        return "/v1/messages", anthropic_body
+
     raise ServiceError(
         message=f"Unsupported protocol conversion: {request_protocol} -> {supplier_protocol}",
         code="unsupported_protocol_conversion",
@@ -500,6 +586,12 @@ def convert_response_for_user(
 
     if not isinstance(body, dict):
         return body
+
+    if request_protocol == OPENAI_PROTOCOL and supplier_protocol == OPENAI_RESPONSES_PROTOCOL:
+        return responses_response_to_chat_completion(body)
+
+    if request_protocol == OPENAI_RESPONSES_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
+        return chat_completion_to_responses_response(body)
 
     if request_protocol == ANTHROPIC_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
         if _HAS_EXPERIMENTAL_PASSTHROUGH:
@@ -553,6 +645,16 @@ async def convert_stream_for_user(
 
     if request_protocol == supplier_protocol:
         async for chunk in upstream:
+            yield chunk
+        return
+
+    if request_protocol == OPENAI_PROTOCOL and supplier_protocol == OPENAI_RESPONSES_PROTOCOL:
+        async for chunk in responses_sse_to_chat_completions_sse(upstream=upstream, model=model):
+            yield chunk
+        return
+
+    if request_protocol == OPENAI_RESPONSES_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
+        async for chunk in chat_completions_sse_to_responses_sse(upstream=upstream, model=model):
             yield chunk
         return
 

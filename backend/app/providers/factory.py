@@ -20,7 +20,7 @@ def get_provider_client(protocol: str) -> ProviderClient:
     Uses caching to avoid repeated client instantiation.
     
     Args:
-        protocol: Protocol type, "openai" or "anthropic"
+        protocol: Protocol type, "openai", "openai_responses", or "anthropic"
     
     Returns:
         ProviderClient: Corresponding client instance
@@ -31,7 +31,7 @@ def get_provider_client(protocol: str) -> ProviderClient:
     protocol = protocol.lower()
     
     if protocol not in _clients:
-        if protocol == "openai":
+        if protocol in ("openai", "openai_responses"):
             _clients[protocol] = OpenAIClient()
         elif protocol == "anthropic":
             _clients[protocol] = AnthropicClient()

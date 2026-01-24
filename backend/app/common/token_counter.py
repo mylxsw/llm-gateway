@@ -379,7 +379,7 @@ def get_token_counter(protocol: str) -> TokenCounter:
     Get Token Counter for specified protocol
     
     Args:
-        protocol: Protocol type, "openai" or "anthropic"
+        protocol: Protocol type, "openai", "openai_responses", or "anthropic"
     
     Returns:
         TokenCounter: Corresponding counter instance

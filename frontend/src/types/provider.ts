@@ -4,7 +4,7 @@
  */
 
 /** Protocol Type */
-export type ProtocolType = 'openai' | 'anthropic';
+export type ProtocolType = 'openai' | 'openai_responses' | 'anthropic';
 
 /** Provider Entity */
 export interface Provider {

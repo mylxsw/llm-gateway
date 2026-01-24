@@ -3,9 +3,12 @@ import json
 import pytest
 
 from app.common.openai_responses import (
+    chat_completions_request_to_responses,
     chat_completion_to_responses_response,
     chat_completions_sse_to_responses_sse,
+    responses_response_to_chat_completion,
     responses_request_to_chat_completions,
+    responses_sse_to_chat_completions_sse,
 )
 from app.common.stream_usage import SSEDecoder
 
@@ -43,6 +46,23 @@ def test_responses_request_to_chat_completions_content_blocks():
     assert chat["messages"][0]["content"] == "hi"
 
 
+def test_chat_completions_request_to_responses_system_and_user():
+    responses = chat_completions_request_to_responses(
+        {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "hello"},
+            ],
+            "max_tokens": 42,
+        }
+    )
+    assert responses["instructions"] == "You are helpful"
+    assert responses["input"][0]["role"] == "user"
+    assert responses["input"][0]["content"][0]["type"] == "input_text"
+    assert responses["max_output_tokens"] == 42
+
+
 def test_chat_completion_to_responses_response_usage_mapping():
     resp = chat_completion_to_responses_response(
         {
@@ -60,6 +80,30 @@ def test_chat_completion_to_responses_response_usage_mapping():
     assert resp["output"][0]["type"] == "message"
     assert resp["output"][0]["content"][0]["type"] == "output_text"
     assert resp["output"][0]["content"][0]["text"] == "Hello"
+
+
+def test_responses_response_to_chat_completion_usage_mapping():
+    chat = responses_response_to_chat_completion(
+        {
+            "id": "resp_1",
+            "object": "response",
+            "created_at": 123456,
+            "model": "gpt-4o-mini",
+            "output": [
+                {
+                    "id": "msg_1",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello"}],
+                }
+            ],
+            "usage": {"input_tokens": 3, "output_tokens": 5, "total_tokens": 8},
+        }
+    )
+    assert chat["object"] == "chat.completion"
+    assert chat["created"] == 123456
+    assert chat["usage"] == {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
+    assert chat["choices"][0]["message"]["content"] == "Hello"
 
 
 @pytest.mark.asyncio
@@ -98,3 +142,27 @@ async def test_chat_completions_sse_to_responses_sse_text_delta():
 
     assert payloads[4].strip() == "[DONE]"
 
+
+@pytest.mark.asyncio
+async def test_responses_sse_to_chat_completions_sse_text_delta():
+    async def upstream():
+        yield (
+            b'data: {"type":"response.created","response":{"id":"resp_1","object":"response","created_at":1,"model":"gpt-4o-mini"}}\n\n'
+        )
+        yield b'data: {"type":"response.output_text.delta","delta":"Hel"}\n\n'
+        yield b'data: {"type":"response.output_text.delta","delta":"lo"}\n\n'
+        yield b'data: {"type":"response.completed"}\n\n'
+
+    out_chunks: list[bytes] = []
+    async for chunk in responses_sse_to_chat_completions_sse(upstream=upstream(), model="gpt-4o-mini"):
+        out_chunks.append(chunk)
+
+    decoder = SSEDecoder()
+    payloads: list[str] = []
+    for chunk in out_chunks:
+        payloads.extend(decoder.feed(chunk))
+
+    assert payloads[-1].strip() == "[DONE]"
+    content_payloads = [p for p in payloads if p.strip() not in ("", "[DONE]")]
+    chunk_obj = json.loads(next(p for p in content_payloads if '"chat.completion.chunk"' in p))
+    assert chunk_obj["choices"][0]["delta"]["content"] == "Hel"
