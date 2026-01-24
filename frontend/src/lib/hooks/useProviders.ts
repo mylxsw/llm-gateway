@@ -11,6 +11,7 @@ import {
   createProvider,
   updateProvider,
   deleteProvider,
+  getProviderModels,
 } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/api/error';
 import {
@@ -18,6 +19,7 @@ import {
   ProviderCreate,
   ProviderUpdate,
   ProviderListParams,
+  ProviderModelListResponse,
 } from '@/types';
 
 /** Query Keys */
@@ -25,6 +27,7 @@ const QUERY_KEYS = {
   all: ['providers'] as const,
   list: (params?: ProviderListParams) => [...QUERY_KEYS.all, 'list', params] as const,
   detail: (id: number) => [...QUERY_KEYS.all, 'detail', id] as const,
+  models: (id: number) => [...QUERY_KEYS.all, 'models', id] as const,
 };
 
 /**
@@ -47,6 +50,22 @@ export function useProvider(id: number) {
     queryKey: QUERY_KEYS.detail(id),
     queryFn: () => getProvider(id),
     enabled: id > 0, // Only query when ID is valid
+  });
+}
+
+/**
+ * Get Provider Model List Hook
+ * @param id - Provider ID
+ * @param options - Query options
+ */
+export function useProviderModels(
+  id: number,
+  options?: { enabled?: boolean }
+) {
+  return useQuery<ProviderModelListResponse>({
+    queryKey: QUERY_KEYS.models(id),
+    queryFn: () => getProviderModels(id),
+    enabled: id > 0 && (options?.enabled ?? true),
   });
 }
 
