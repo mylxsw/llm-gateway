@@ -77,13 +77,13 @@ class ApiKeyService:
     async def get_by_id(self, id: int) -> ApiKeyResponse:
         """
         Get API Key by ID
-        
+
         Args:
             id: API Key ID
-        
+
         Returns:
             ApiKeyResponse: API Key info (key_value sanitized)
-        
+
         Raises:
             NotFoundError: API Key not found
         """
@@ -94,6 +94,27 @@ class ApiKeyService:
                 code="api_key_not_found",
             )
         return self._to_response(api_key)
+
+    async def get_raw_key_value(self, id: int) -> str:
+        """
+        Get raw (unsanitized) key_value by ID
+
+        Args:
+            id: API Key ID
+
+        Returns:
+            str: Raw key_value
+
+        Raises:
+            NotFoundError: API Key not found
+        """
+        api_key = await self.repo.get_by_id(id)
+        if not api_key:
+            raise NotFoundError(
+                message=f"API Key with id {id} not found",
+                code="api_key_not_found",
+            )
+        return api_key.key_value
     
     async def get_all(
         self,

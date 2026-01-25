@@ -60,11 +60,33 @@ async def get_api_key(
 ):
     """
     Get single API Key details
-    
+
     key_value will be sanitized.
     """
     try:
         return await service.get_by_id(key_id)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+class RawKeyValueResponse(BaseModel):
+    """Raw key_value response"""
+    key_value: str
+
+
+@router.get("/{key_id}/raw", response_model=RawKeyValueResponse)
+async def get_raw_key_value(
+    key_id: int,
+    service: ApiKeyServiceDep,
+):
+    """
+    Get raw (unsanitized) key_value
+
+    Use this endpoint to retrieve the full API key for viewing or copying.
+    """
+    try:
+        key_value = await service.get_raw_key_value(key_id)
+        return RawKeyValueResponse(key_value=key_value)
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
