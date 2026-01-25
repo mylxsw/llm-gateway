@@ -140,6 +140,55 @@ async def test_convert_request_openai_to_anthropic_preserves_tools():
 
 
 @pytest.mark.asyncio
+async def test_convert_request_openai_to_anthropic_preserves_tool_calls_and_user():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "user": "user_1",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "get_weather", "arguments": "{\"city\":\"Paris\"}"},
+                        }
+                    ],
+                }
+            ],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "description": "Get weather",
+                        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+                    },
+                }
+            ],
+            "tool_choice": {"type": "function", "function": {"name": "get_weather"}},
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["model"] == "claude-3-5-sonnet"
+    assert out_body.get("metadata", {}).get("user_id") == "user_1"
+    assert isinstance(out_body.get("messages"), list)
+    content = out_body["messages"][0].get("content")
+    assert isinstance(content, list)
+    tool_use_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
+    assert tool_use_blocks
+    assert tool_use_blocks[0].get("name") == "get_weather"
+    assert tool_use_blocks[0].get("id") == "call_1"
+
+
+@pytest.mark.asyncio
 async def test_convert_request_anthropic_to_openai_preserves_tools():
     path, out_body = convert_request_for_supplier(
         request_protocol="anthropic",
@@ -168,6 +217,47 @@ async def test_convert_request_anthropic_to_openai_preserves_tools():
     assert out_body["tools"][0]["type"] == "function"
     assert out_body["tools"][0]["function"]["name"] == "get_weather"
     assert out_body.get("tool_choice") == {"type": "function", "function": {"name": "get_weather"}}
+
+
+@pytest.mark.asyncio
+async def test_convert_request_anthropic_to_openai_preserves_tool_calls():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_123",
+                            "name": "get_weather",
+                            "input": {"city": "Paris"},
+                        }
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "toolu_123", "content": "Sunny"}
+                    ],
+                },
+            ],
+            "max_tokens": 16,
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert out_body["model"] == "gpt-4o-mini"
+    assert out_body["messages"][0]["role"] == "assistant"
+    assert out_body["messages"][0]["tool_calls"][0]["id"] == "toolu_123"
+    assert out_body["messages"][0]["tool_calls"][0]["function"]["name"] == "get_weather"
+    assert out_body["messages"][1]["role"] == "tool"
+    assert out_body["messages"][1]["tool_call_id"] == "toolu_123"
 
 
 def test_convert_response_openai_to_anthropic():

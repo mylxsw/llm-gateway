@@ -213,6 +213,104 @@ def _ensure_anthropic_tooling_fields(
     return out
 
 
+def _ensure_anthropic_tool_calls(
+    *, source_openai_body: dict[str, Any], target_anthropic_body: dict[str, Any]
+) -> dict[str, Any]:
+    openai_messages = source_openai_body.get("messages")
+    target_messages = target_anthropic_body.get("messages")
+    if not isinstance(openai_messages, list) or not isinstance(target_messages, list):
+        return target_anthropic_body
+
+    target_index = 0
+    for openai_msg in openai_messages:
+        if not isinstance(openai_msg, dict):
+            continue
+        if openai_msg.get("role") == "system":
+            continue
+        tool_calls = openai_msg.get("tool_calls")
+        if not isinstance(tool_calls, list) or not tool_calls:
+            if target_index < len(target_messages):
+                target_index += 1
+            continue
+        while target_index < len(target_messages):
+            candidate = target_messages[target_index]
+            if isinstance(candidate, dict):
+                break
+            target_index += 1
+        if target_index >= len(target_messages):
+            break
+
+        target_msg = target_messages[target_index]
+        content = target_msg.get("content")
+        if isinstance(content, str):
+            content_list: list[dict[str, Any]] = (
+                [{"type": "text", "text": content}] if content else []
+            )
+        elif isinstance(content, list):
+            content_list = content
+        else:
+            content_list = []
+
+        existing: set[tuple[Optional[str], str]] = set()
+        existing_by_name: dict[str, dict[str, Any]] = {}
+        for block in content_list:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                block_name = block.get("name")
+                existing.add((block.get("id"), block_name))
+                if isinstance(block_name, str) and block_name and block_name not in existing_by_name:
+                    existing_by_name[block_name] = block
+
+        for tc in tool_calls:
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function")
+            if not isinstance(fn, dict):
+                continue
+            name = fn.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            tool_id = tc.get("id")
+            key = (tool_id if isinstance(tool_id, str) else None, name)
+            if key in existing:
+                continue
+            existing_block = existing_by_name.get(name)
+            if existing_block is not None:
+                if isinstance(tool_id, str) and tool_id and not existing_block.get("id"):
+                    existing_block["id"] = tool_id
+                args = fn.get("arguments")
+                if isinstance(args, dict) and not existing_block.get("input"):
+                    existing_block["input"] = args
+                elif isinstance(args, str) and not existing_block.get("input"):
+                    try:
+                        parsed = json.loads(args)
+                        if isinstance(parsed, dict):
+                            existing_block["input"] = parsed
+                    except Exception:
+                        pass
+                continue
+            tool_use: dict[str, Any] = {"type": "tool_use", "name": name, "input": {}}
+            if isinstance(tool_id, str) and tool_id:
+                tool_use["id"] = tool_id
+            args = fn.get("arguments")
+            if isinstance(args, dict):
+                tool_use["input"] = args
+            elif isinstance(args, str):
+                try:
+                    parsed = json.loads(args)
+                    if isinstance(parsed, dict):
+                        tool_use["input"] = parsed
+                except Exception:
+                    pass
+            content_list.append(tool_use)
+
+        target_msg["content"] = content_list
+        target_messages[target_index] = target_msg
+        target_index += 1
+
+    target_anthropic_body["messages"] = target_messages
+    return target_anthropic_body
+
+
 def _ensure_openai_tooling_fields(
     *, source_anthropic_body: dict[str, Any], target_openai_body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -323,9 +421,27 @@ def _translate_anthropic_to_openai_request(
             openai_messages.append({"role": role, "content": content})
         elif isinstance(content, list):
             text_parts: list[str] = []
+            tool_calls: list[dict[str, Any]] = []
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str):
                     text_parts.append(block["text"])
+                elif isinstance(block, dict) and block.get("type") == "tool_use":
+                    name = block.get("name")
+                    if not isinstance(name, str) or not name:
+                        continue
+                    tool_id = block.get("id")
+                    tool_call: dict[str, Any] = {
+                        "type": "function",
+                        "function": {"name": name, "arguments": "{}"},
+                    }
+                    if isinstance(tool_id, str) and tool_id:
+                        tool_call["id"] = tool_id
+                    tool_input = block.get("input")
+                    if isinstance(tool_input, dict):
+                        tool_call["function"]["arguments"] = json.dumps(tool_input, ensure_ascii=False)
+                    elif isinstance(tool_input, str):
+                        tool_call["function"]["arguments"] = tool_input
+                    tool_calls.append(tool_call)
                 elif isinstance(block, dict) and block.get("type") == "tool_result":
                     # Minimal conversion: treat tool_result as tool message content.
                     tool_call_id = block.get("tool_use_id")
@@ -340,8 +456,11 @@ def _translate_anthropic_to_openai_request(
                         openai_messages.append(
                             {"role": "tool", "tool_call_id": tool_call_id, "content": tool_content}
                         )
-            if text_parts:
-                openai_messages.append({"role": role, "content": "".join(text_parts)})
+            if text_parts or tool_calls:
+                message: dict[str, Any] = {"role": role, "content": "".join(text_parts)}
+                if tool_calls:
+                    message["tool_calls"] = tool_calls
+                openai_messages.append(message)
 
     out: dict[str, Any] = {"model": target_model, "messages": openai_messages}
     metadata = anthropic_body.get("metadata")
@@ -521,6 +640,17 @@ def convert_request_for_supplier(
             anthropic_body = _ensure_anthropic_tooling_fields(
                 source_openai_body=openai_body, target_anthropic_body=anthropic_body
             )
+            anthropic_body = _ensure_anthropic_tool_calls(
+                source_openai_body=openai_body, target_anthropic_body=anthropic_body
+            )
+            user_id = openai_body.get("user")
+            if isinstance(user_id, str) and user_id:
+                metadata = anthropic_body.get("metadata")
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                if "user_id" not in metadata:
+                    metadata["user_id"] = user_id
+                anthropic_body["metadata"] = metadata
         return "/v1/messages", anthropic_body
 
     if request_protocol == ANTHROPIC_PROTOCOL and supplier_protocol == OPENAI_PROTOCOL:
@@ -579,6 +709,17 @@ def convert_request_for_supplier(
             anthropic_body = _ensure_anthropic_tooling_fields(
                 source_openai_body=openai_body, target_anthropic_body=anthropic_body
             )
+            anthropic_body = _ensure_anthropic_tool_calls(
+                source_openai_body=openai_body, target_anthropic_body=anthropic_body
+            )
+            user_id = openai_body.get("user")
+            if isinstance(user_id, str) and user_id:
+                metadata = anthropic_body.get("metadata")
+                if not isinstance(metadata, dict):
+                    metadata = {}
+                if "user_id" not in metadata:
+                    metadata["user_id"] = user_id
+                anthropic_body["metadata"] = metadata
         return "/v1/messages", anthropic_body
 
     raise ServiceError(
@@ -778,6 +919,9 @@ async def convert_stream_for_user(
         decoder = SSEDecoder()
         response_id: Optional[str] = None
         sent_role = False
+        current_tool_id: Optional[str] = None
+        current_tool_name: Optional[str] = None
+        current_tool_index = 0
         done = False
 
         async for chunk in upstream:
@@ -801,10 +945,46 @@ async def convert_stream_for_user(
 
                 if event_type == "content_block_start":
                     content_block = data.get("content_block", {})
-                    if isinstance(content_block, dict) and content_block.get("type") == "text":
-                        text = content_block.get("text") or ""
-                        if text:
-                            delta: dict[str, Any] = {"content": text}
+                    if isinstance(content_block, dict):
+                        block_type = content_block.get("type")
+                        if block_type == "text":
+                            text = content_block.get("text") or ""
+                            if text:
+                                delta: dict[str, Any] = {"content": text}
+                                if not sent_role:
+                                    delta["role"] = "assistant"
+                                    sent_role = True
+                                yield _encode_sse_json(
+                                    {
+                                        "id": response_id or f"chatcmpl-{uuid.uuid4().hex}",
+                                        "object": "chat.completion.chunk",
+                                        "created": int(time.time()),
+                                        "model": model,
+                                        "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
+                                    }
+                                )
+                        elif block_type == "tool_use":
+                            current_tool_id = content_block.get("id")
+                            current_tool_name = content_block.get("name")
+                            if isinstance(data.get("index"), int):
+                                current_tool_index = data["index"]
+                            tool_args = content_block.get("input")
+                            if isinstance(tool_args, dict):
+                                arguments = json.dumps(tool_args, ensure_ascii=False)
+                            elif isinstance(tool_args, str):
+                                arguments = tool_args
+                            else:
+                                arguments = "{}"
+                            delta = {
+                                "tool_calls": [
+                                    {
+                                        "index": current_tool_index,
+                                        "id": current_tool_id,
+                                        "type": "function",
+                                        "function": {"name": current_tool_name, "arguments": arguments},
+                                    }
+                                ]
+                            }
                             if not sent_role:
                                 delta["role"] = "assistant"
                                 sent_role = True
@@ -845,10 +1025,10 @@ async def convert_stream_for_user(
                                 delta: dict[str, Any] = {
                                     "tool_calls": [
                                         {
-                                            "index": 0,
-                                            "id": None,
+                                            "index": current_tool_index,
+                                            "id": current_tool_id,
                                             "type": "function",
-                                            "function": {"name": None, "arguments": partial_json},
+                                            "function": {"name": current_tool_name, "arguments": partial_json},
                                         }
                                     ]
                                 }
