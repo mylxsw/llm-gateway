@@ -54,9 +54,9 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
     ),
     "moonshot": ProtocolConfig(
         frontend="moonshot",
-        implementation=ANTHROPIC_PROTOCOL,
+        implementation=OPENAI_PROTOCOL,
         base_url="https://api.moonshot.cn/v1",
-        label="Moonshot (Anthropic)",
+        label="Moonshot (OpenAI)",
     ),
 }
 
