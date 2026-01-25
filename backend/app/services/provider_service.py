@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from app.common.errors import ConflictError, NotFoundError
 from app.common.proxy import build_proxy_config
+from app.common.provider_protocols import resolve_implementation_protocol
 from app.common.sanitizer import sanitize_api_key_display, sanitize_proxy_url
 from app.domain.provider import Provider, ProviderCreate, ProviderUpdate, ProviderResponse
 from app.providers import get_provider_client
@@ -240,7 +241,8 @@ class ProviderService:
                 code="provider_not_found",
             )
 
-        client = get_provider_client(provider.protocol)
+        implementation_protocol = resolve_implementation_protocol(provider.protocol)
+        client = get_provider_client(implementation_protocol)
         proxy_config = build_proxy_config(provider.proxy_enabled, provider.proxy_url)
         response = await client.list_models(
             base_url=provider.base_url,

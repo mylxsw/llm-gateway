@@ -327,6 +327,18 @@ class AnthropicClient(ProviderClient):
                         status_code=response.status_code,
                         headers=dict(response.headers),
                     )
+
+                    if response.status_code >= 400:
+                        body_bytes = await response.aread()
+                        timer.mark_first_byte()
+                        timer.stop()
+                        provider_response.first_byte_delay_ms = timer.first_byte_delay_ms
+                        provider_response.total_time_ms = timer.total_time_ms
+                        provider_response.body = body_bytes
+                        reason = response.reason_phrase or "Upstream error"
+                        provider_response.error = f"{response.status_code} {reason}"
+                        yield body_bytes or b"", provider_response
+                        return
                     
                     async for chunk in response.aiter_bytes():
                         if first_chunk:

@@ -11,6 +11,7 @@ import {
   ProviderListParams,
   ProviderExport,
   ProviderModelListResponse,
+  ProviderProtocolConfig,
   PaginatedResponse,
 } from '@/types';
 
@@ -87,4 +88,11 @@ export async function getProviderModels(
   id: number
 ): Promise<ProviderModelListResponse> {
   return get<ProviderModelListResponse>(`${BASE_URL}/${id}/models`);
+}
+
+/**
+ * Get Provider Protocol Configs
+ */
+export async function getProviderProtocols(): Promise<ProviderProtocolConfig[]> {
+  return get<ProviderProtocolConfig[]>(`${BASE_URL}/protocols`);
 }

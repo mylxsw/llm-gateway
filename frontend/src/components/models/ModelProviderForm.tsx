@@ -30,6 +30,7 @@ import { RuleBuilder } from '@/components/common';
 import { toast } from 'sonner';
 import { getModelProviders } from '@/lib/api';
 import { useProviderModels } from '@/lib/hooks';
+import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
@@ -92,6 +93,7 @@ export function ModelProviderForm({
   onSubmit,
   loading = false,
 }: ModelProviderFormProps) {
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
   // Check if edit mode
   const isEdit = !!mapping;
   
@@ -479,7 +481,7 @@ export function ModelProviderForm({
                 <SelectContent>
                   {providers.map((provider) => (
                     <SelectItem key={provider.id} value={String(provider.id)}>
-                      {provider.name} ({provider.protocol})
+                      {provider.name} ({getProviderProtocolLabel(provider.protocol, protocolConfigs)})
                     </SelectItem>
                   ))}
                 </SelectContent>

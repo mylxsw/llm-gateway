@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from app.api.deps import ProviderServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.provider import ProviderCreate, ProviderUpdate, ProviderResponse, ProviderExport
+from app.common.provider_protocols import list_frontend_protocol_configs
 
 router = APIRouter(
     prefix="/admin/providers",
@@ -43,6 +44,13 @@ class ProviderModelListResponse(BaseModel):
     models: list[str]
     success: bool
     error: Optional[dict[str, object]] = None
+
+
+class ProviderProtocolConfigResponse(BaseModel):
+    protocol: str
+    label: str
+    implementation: str
+    base_url: str
 
 
 @router.get("/export", response_model=list[ProviderExport])
@@ -103,6 +111,19 @@ async def list_providers(
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get("/protocols", response_model=list[ProviderProtocolConfigResponse])
+async def list_provider_protocols():
+    return [
+        ProviderProtocolConfigResponse(
+            protocol=config.frontend,
+            label=config.label,
+            implementation=config.implementation,
+            base_url=config.base_url,
+        )
+        for config in list_frontend_protocol_configs()
+    ]
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)

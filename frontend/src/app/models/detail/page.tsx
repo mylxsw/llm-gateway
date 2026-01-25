@@ -39,16 +39,13 @@ import {
 } from '@/types';
 import { formatDateTime, getActiveStatus, formatDuration } from '@/lib/utils';
 import { ProtocolType } from '@/types/provider';
+import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 
-function protocolLabel(protocol: ProtocolType) {
-  switch (protocol) {
-    case 'openai':
-      return 'OpenAI';
-    case 'openai_responses':
-      return 'OpenAI Responses';
-    case 'anthropic':
-      return 'Anthropic';
-  }
+function protocolLabel(
+  protocol: ProtocolType,
+  configs: ReturnType<typeof useProviderProtocolConfigs>['configs']
+) {
+  return getProviderProtocolLabel(protocol, configs);
 }
 
 function roundUpTo4Decimals(value: number) {
@@ -148,6 +145,7 @@ function ModelDetailContent() {
   const { data: modelStatsData } = useModelStats({ requested_model: requestedModel });
   const { data: providerStatsData } = useModelProviderStats({ requested_model: requestedModel });
   const { data: providersData } = useProviders();
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const providersById = useMemo(() => {
     const entries = providersData?.items?.map((p) => [p.id, p] as const) ?? [];
     return new Map(entries);
@@ -374,7 +372,7 @@ function ModelDetailContent() {
                               className="font-normal text-muted-foreground border-muted-foreground/30"
                               title={`Protocol: ${protocol}`}
                             >
-                              {protocolLabel(protocol)}
+                              {protocolLabel(protocol, protocolConfigs)}
                             </Badge>
                           ) : null}
                         </div>

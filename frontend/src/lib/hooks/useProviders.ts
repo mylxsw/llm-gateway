@@ -12,6 +12,7 @@ import {
   updateProvider,
   deleteProvider,
   getProviderModels,
+  getProviderProtocols,
 } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/api/error';
 import {
@@ -20,6 +21,7 @@ import {
   ProviderUpdate,
   ProviderListParams,
   ProviderModelListResponse,
+  ProviderProtocolConfig,
 } from '@/types';
 
 /** Query Keys */
@@ -28,6 +30,7 @@ const QUERY_KEYS = {
   list: (params?: ProviderListParams) => [...QUERY_KEYS.all, 'list', params] as const,
   detail: (id: number) => [...QUERY_KEYS.all, 'detail', id] as const,
   models: (id: number) => [...QUERY_KEYS.all, 'models', id] as const,
+  protocols: () => [...QUERY_KEYS.all, 'protocols'] as const,
 };
 
 /**
@@ -66,6 +69,17 @@ export function useProviderModels(
     queryKey: QUERY_KEYS.models(id),
     queryFn: () => getProviderModels(id),
     enabled: id > 0 && (options?.enabled ?? true),
+  });
+}
+
+/**
+ * Get Provider Protocol Configs Hook
+ */
+export function useProviderProtocols(options?: { enabled?: boolean }) {
+  return useQuery<ProviderProtocolConfig[]>({
+    queryKey: QUERY_KEYS.protocols(),
+    queryFn: () => getProviderProtocols(),
+    enabled: options?.enabled ?? true,
   });
 }
 

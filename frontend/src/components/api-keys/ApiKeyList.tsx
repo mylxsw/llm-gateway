@@ -16,9 +16,11 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { Pencil, Trash2, Copy, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ApiKey } from '@/types';
-import { formatDateTime, getActiveStatus, copyToClipboard } from '@/lib/utils';
+import { formatDateTime, getActiveStatus } from '@/lib/utils';
+import { getRawKeyValue } from '@/lib/api/api-keys';
 
 interface ApiKeyListProps {
   /** API Key list data */
@@ -37,22 +39,53 @@ export function ApiKeyList({
   onEdit,
   onDelete,
 }: ApiKeyListProps) {
-  // Store copy state and visibility state
+  // Store copy state, visibility state, loading state, and raw key values
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [visibleId, setVisibleId] = useState<number | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [rawKeyValues, setRawKeyValues] = useState<Record<number, string>>({});
+
+  // Fetch raw key value from backend
+  const fetchRawKeyValue = async (id: number): Promise<string | null> => {
+    if (rawKeyValues[id]) {
+      return rawKeyValues[id];
+    }
+    setLoadingId(id);
+    try {
+      const keyValue = await getRawKeyValue(id);
+      setRawKeyValues(prev => ({ ...prev, [id]: keyValue }));
+      return keyValue;
+    } catch {
+      toast.error('Failed to fetch API Key');
+      return null;
+    } finally {
+      setLoadingId(null);
+    }
+  };
 
   // Copy API Key
   const handleCopy = async (apiKey: ApiKey) => {
-    const success = await copyToClipboard(apiKey.key_value);
-    if (success) {
-      setCopiedId(apiKey.id);
-      setTimeout(() => setCopiedId(null), 2000);
+    const keyValue = await fetchRawKeyValue(apiKey.id);
+    if (keyValue) {
+      try {
+        await navigator.clipboard.writeText(keyValue);
+        setCopiedId(apiKey.id);
+        toast.success('API Key copied to clipboard');
+        setTimeout(() => setCopiedId(null), 2000);
+      } catch {
+        toast.error('Failed to copy to clipboard');
+      }
     }
   };
 
   // Toggle visibility
-  const toggleVisible = (id: number) => {
-    setVisibleId(visibleId === id ? null : id);
+  const toggleVisible = async (id: number) => {
+    if (visibleId === id) {
+      setVisibleId(null);
+    } else {
+      await fetchRawKeyValue(id);
+      setVisibleId(id);
+    }
   };
 
   return (
@@ -73,7 +106,9 @@ export function ApiKeyList({
           const status = getActiveStatus(apiKey.is_active);
           const isVisible = visibleId === apiKey.id;
           const isCopied = copiedId === apiKey.id;
-          
+          const isLoading = loadingId === apiKey.id;
+          const rawKeyValue = rawKeyValues[apiKey.id];
+
           return (
             <TableRow key={apiKey.id}>
               <TableCell className="font-mono text-sm">
@@ -83,7 +118,7 @@ export function ApiKeyList({
               <TableCell>
                 <div className="flex items-center gap-2">
                   <code className="text-sm font-mono">
-                    {isVisible ? apiKey.key_value : apiKey.key_value.replace(/./g, '•')}
+                    {isVisible && rawKeyValue ? rawKeyValue : apiKey.key_value}
                   </code>
                   <Button
                     variant="ghost"
@@ -91,8 +126,11 @@ export function ApiKeyList({
                     className="h-7 w-7"
                     onClick={() => toggleVisible(apiKey.id)}
                     title={isVisible ? 'Hide' : 'Show'}
+                    disabled={isLoading}
                   >
-                    {isVisible ? (
+                    {isLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" suppressHydrationWarning />
+                    ) : isVisible ? (
                       <EyeOff className="h-3.5 w-3.5" suppressHydrationWarning />
                     ) : (
                       <Eye className="h-3.5 w-3.5" suppressHydrationWarning />
@@ -104,8 +142,11 @@ export function ApiKeyList({
                     className="h-7 w-7"
                     onClick={() => handleCopy(apiKey)}
                     title="Copy"
+                    disabled={isLoading}
                   >
-                    {isCopied ? (
+                    {isLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" suppressHydrationWarning />
+                    ) : isCopied ? (
                       <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
                     ) : (
                       <Copy className="h-3.5 w-3.5" suppressHydrationWarning />

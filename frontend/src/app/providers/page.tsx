@@ -20,6 +20,7 @@ import {
 } from '@/lib/hooks';
 import { exportProviders, importProviders, getProviderModels } from '@/lib/api';
 import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
+import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 
 /**
  * Provider Management Page Component
@@ -64,6 +65,7 @@ export default function ProvidersPage() {
   const createMutation = useCreateProvider();
   const updateMutation = useUpdateProvider();
   const deleteMutation = useDeleteProvider();
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
 
   // File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -293,7 +295,7 @@ export default function ProvidersPage() {
             <DialogTitle>Upstream Models</DialogTitle>
             <DialogDescription>
               {selectedProvider
-                ? `Provider: ${selectedProvider.name} (${selectedProvider.protocol})`
+                ? `Provider: ${selectedProvider.name} (${getProviderProtocolLabel(selectedProvider.protocol, protocolConfigs)})`
                 : 'No provider selected'}
             </DialogDescription>
           </DialogHeader>

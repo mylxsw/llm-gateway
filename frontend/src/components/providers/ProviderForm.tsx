@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import {
@@ -28,6 +28,10 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
 import { isValidUrl, isNotEmpty } from '@/lib/utils';
+import {
+  getProviderProtocolConfig,
+  useProviderProtocolConfigs,
+} from '@/lib/providerProtocols';
 
 interface ProviderFormProps {
   /** Whether dialog is open */
@@ -53,12 +57,6 @@ interface FormData {
   proxy_url: string;
 }
 
-/** Protocol Options */
-const PROTOCOL_OPTIONS: { value: ProtocolType; label: string }[] = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'openai_responses', label: 'OpenAI Responses' },
-  { value: 'anthropic', label: 'Anthropic' },
-];
 
 /**
  * Provider Form Component
@@ -95,11 +93,15 @@ export function ProviderForm({
 
   // Watch form values
   const protocol = watch('protocol');
+  const baseUrl = watch('base_url');
   const isActive = watch('is_active');
   const proxyEnabled = watch('proxy_enabled');
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
+  const protocolConfig = getProviderProtocolConfig(protocol, protocolConfigs);
   
   // Extra headers state
   const [extraHeaders, setExtraHeaders] = useState<{ key: string; value: string }[]>([]);
+  const lastAutoBaseUrl = useRef<string | null>(null);
 
   // Add header
   const addHeader = () => {
@@ -132,6 +134,8 @@ export function ProviderForm({
         proxy_enabled: provider.proxy_enabled ?? false,
         proxy_url: '',
       });
+      lastAutoBaseUrl.current =
+        getProviderProtocolConfig(provider.protocol, protocolConfigs)?.base_url ?? null;
       
       // Fill extra headers
       if (provider.extra_headers) {
@@ -154,9 +158,23 @@ export function ProviderForm({
         proxy_enabled: false,
         proxy_url: '',
       });
+      lastAutoBaseUrl.current = getProviderProtocolConfig('openai', protocolConfigs)?.base_url ?? null;
       setExtraHeaders([]);
     }
   }, [provider, reset]);
+
+  useEffect(() => {
+    if (!protocolConfig) return;
+    const nextBaseUrl = protocolConfig.base_url;
+    const shouldAutoFill =
+      !baseUrl || (lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
+
+    if (shouldAutoFill && baseUrl !== nextBaseUrl) {
+      setValue('base_url', nextBaseUrl, { shouldDirty: true });
+    }
+
+    lastAutoBaseUrl.current = nextBaseUrl;
+  }, [baseUrl, protocolConfig, setValue]);
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
@@ -215,24 +233,6 @@ export function ProviderForm({
             )}
           </div>
 
-          {/* Base URL */}
-          <div className="space-y-2">
-            <Label htmlFor="base_url">
-              Base URL <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="base_url"
-              placeholder="https://api.openai.com"
-              {...register('base_url', {
-                required: 'Base URL is required',
-                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
-              })}
-            />
-            {errors.base_url && (
-              <p className="text-sm text-destructive">{errors.base_url.message}</p>
-            )}
-          </div>
-
           {/* Protocol Type */}
           <div className="space-y-2">
             <Label>
@@ -246,13 +246,31 @@ export function ProviderForm({
                 <SelectValue placeholder="Select Protocol Type" />
               </SelectTrigger>
               <SelectContent>
-                {PROTOCOL_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
+                {protocolConfigs.map((option) => (
+                  <SelectItem key={option.protocol} value={option.protocol}>
                     {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Base URL */}
+          <div className="space-y-2">
+            <Label htmlFor="base_url">
+              Base URL <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="base_url"
+              placeholder={protocolConfig?.base_url || 'https://api.openai.com'}
+              {...register('base_url', {
+                required: 'Base URL is required',
+                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
+              })}
+            />
+            {errors.base_url && (
+              <p className="text-sm text-destructive">{errors.base_url.message}</p>
+            )}
           </div>
 
           {/* API Key */}

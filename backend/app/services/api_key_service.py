@@ -4,12 +4,14 @@ API Key Management Service Module
 Provides business logic processing for API Keys.
 """
 
+from datetime import datetime
 from typing import Optional
 
 from app.common.errors import ConflictError, NotFoundError, AuthenticationError
 from app.common.time import utc_now
 from app.common.sanitizer import sanitize_api_key_display
 from app.common.utils import generate_api_key
+from app.db.session import AsyncSessionLocal
 from app.domain.api_key import (
     ApiKeyModel,
     ApiKeyCreate,
@@ -18,6 +20,7 @@ from app.domain.api_key import (
     ApiKeyCreateResponse,
 )
 from app.repositories.api_key_repo import ApiKeyRepository
+from app.repositories.sqlalchemy.api_key_repo import SQLAlchemyApiKeyRepository
 
 
 class ApiKeyService:
@@ -35,6 +38,11 @@ class ApiKeyService:
             repo: API Key Repository
         """
         self.repo = repo
+
+    async def _write_last_used(self, api_key_id: int, last_used_at: datetime) -> None:
+        async with AsyncSessionLocal() as session:
+            repo = SQLAlchemyApiKeyRepository(session)
+            await repo.update_last_used(api_key_id, last_used_at)
     
     async def create(self, data: ApiKeyCreate) -> ApiKeyCreateResponse:
         """
@@ -77,13 +85,13 @@ class ApiKeyService:
     async def get_by_id(self, id: int) -> ApiKeyResponse:
         """
         Get API Key by ID
-        
+
         Args:
             id: API Key ID
-        
+
         Returns:
             ApiKeyResponse: API Key info (key_value sanitized)
-        
+
         Raises:
             NotFoundError: API Key not found
         """
@@ -94,6 +102,27 @@ class ApiKeyService:
                 code="api_key_not_found",
             )
         return self._to_response(api_key)
+
+    async def get_raw_key_value(self, id: int) -> str:
+        """
+        Get raw (unsanitized) key_value by ID
+
+        Args:
+            id: API Key ID
+
+        Returns:
+            str: Raw key_value
+
+        Raises:
+            NotFoundError: API Key not found
+        """
+        api_key = await self.repo.get_by_id(id)
+        if not api_key:
+            raise NotFoundError(
+                message=f"API Key with id {id} not found",
+                code="api_key_not_found",
+            )
+        return api_key.key_value
     
     async def get_all(
         self,
@@ -206,7 +235,10 @@ class ApiKeyService:
             )
         
         # Update last used time
-        await self.repo.update_last_used(api_key.id, utc_now())
+        try:
+            await self._write_last_used(api_key.id, utc_now())
+        except Exception:
+            pass
         
         return api_key
     

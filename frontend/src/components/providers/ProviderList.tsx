@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, Pencil, Trash2 } from 'lucide-react';
 import { Provider } from '@/types';
 import { formatDateTime, truncate, getActiveStatus } from '@/lib/utils';
+import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 
 interface ProviderListProps {
   /** Provider list data */
@@ -40,6 +41,7 @@ export function ProviderList({
   onFetchModels,
   onDelete,
 }: ProviderListProps) {
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
   return (
     <Table>
       <TableHeader>
@@ -68,7 +70,9 @@ export function ProviderList({
                 </span>
               </TableCell>
               <TableCell>
-                <Badge variant="outline">{provider.protocol}</Badge>
+                <Badge variant="outline">
+                  {getProviderProtocolLabel(provider.protocol, protocolConfigs)}
+                </Badge>
               </TableCell>
               <TableCell>
                 <Badge className={status.className}>{status.text}</Badge>

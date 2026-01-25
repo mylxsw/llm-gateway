@@ -16,6 +16,13 @@ import httpx
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 from app.common.errors import ServiceError
+from app.common.provider_protocols import (
+    ANTHROPIC_PROTOCOL,
+    OPENAI_PROTOCOL,
+    OPENAI_RESPONSES_PROTOCOL,
+    IMPLEMENTATION_PROTOCOLS,
+    resolve_implementation_protocol,
+)
 from app.common.openai_responses import (
     chat_completions_request_to_responses,
     chat_completion_to_responses_response,
@@ -56,9 +63,6 @@ except Exception as e:
     ) from e
 
 
-OPENAI_PROTOCOL = "openai"
-OPENAI_RESPONSES_PROTOCOL = "openai_responses"
-ANTHROPIC_PROTOCOL = "anthropic"
 
 
 def _normalize_openai_tooling_fields(body: dict[str, Any]) -> dict[str, Any]:
@@ -241,10 +245,14 @@ def _ensure_openai_tooling_fields(
 
 
 def normalize_protocol(protocol: str) -> str:
-    protocol = (protocol or OPENAI_PROTOCOL).lower().strip()
-    if protocol not in (OPENAI_PROTOCOL, OPENAI_RESPONSES_PROTOCOL, ANTHROPIC_PROTOCOL):
-        raise ServiceError(message=f"Unsupported protocol '{protocol}'", code="unsupported_protocol")
-    return protocol
+    implementation = resolve_implementation_protocol(protocol)
+    implementation = (implementation or OPENAI_PROTOCOL).lower().strip()
+    if implementation not in IMPLEMENTATION_PROTOCOLS:
+        raise ServiceError(
+            message=f"Unsupported protocol '{protocol}'",
+            code="unsupported_protocol",
+        )
+    return implementation
 
 
 def _encode_sse_data(payload: str) -> bytes:
@@ -490,6 +498,11 @@ def convert_request_for_supplier(
         messages = openai_body.get("messages")
         if not isinstance(messages, list):
             raise ServiceError(message="OpenAI request missing 'messages'", code="invalid_request")
+
+        has_system = any(isinstance(m, dict) and m.get("role") == "system" for m in messages)
+        for m in messages:
+            if isinstance(m, dict) and m.get("role") == "developer":
+                m["role"] = "user" if has_system else "system"
 
         optional_params = {k: v for k, v in openai_body.items() if k not in ("model", "messages")}
         if "max_tokens" not in optional_params and "max_completion_tokens" in optional_params:

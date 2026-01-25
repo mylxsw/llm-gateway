@@ -20,6 +20,7 @@ from app.common.protocol_conversion import (
     convert_stream_for_user,
     normalize_protocol,
 )
+from app.common.provider_protocols import resolve_implementation_protocol
 from app.common.token_counter import get_token_counter
 from app.common.costs import calculate_cost_from_billing, resolve_billing
 from app.common.utils import generate_trace_id
@@ -27,12 +28,14 @@ from app.common.time import utc_now
 from app.common.usage_extractor import extract_usage_details
 from app.common.proxy import build_proxy_config
 from app.domain.log import RequestLogCreate
+from app.db.session import AsyncSessionLocal
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
 from app.providers import get_provider_client, ProviderResponse
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.repositories.log_repo import LogRepository
+from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
 from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
 from app.services.retry_handler import RetryHandler, AttemptRecord
 from app.services.strategy import RoundRobinStrategy, CostFirstStrategy, PriorityStrategy, SelectionStrategy
@@ -116,6 +119,11 @@ class ProxyService:
         self._round_robin_strategy = round_robin_strategy or RoundRobinStrategy()
         self._cost_first_strategy = cost_first_strategy or CostFirstStrategy()
         self._priority_strategy = priority_strategy or PriorityStrategy()
+
+    async def _write_log(self, log_data: RequestLogCreate) -> None:
+        async with AsyncSessionLocal() as session:
+            repo = SQLAlchemyLogRepository(session)
+            await repo.create(log_data)
 
     def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
         """
@@ -384,12 +392,12 @@ class ProxyService:
                 is_stream=False,
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=attempt.provider.protocol,
+                supplier_protocol=resolve_implementation_protocol(attempt.provider.protocol),
                 converted_request_body=_smart_truncate(conversion_data.get("converted_request_body")),
                 upstream_response_body=self._serialize_response_body(attempt.response.body),
             )
             try:
-                await self.log_repo.create(attempt_log)
+                await self._write_log(attempt_log)
                 failed_attempt_logged = True
             except Exception:
                 logger.exception(
@@ -401,19 +409,21 @@ class ProxyService:
 
         # 8. Execute request (with retry)
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
+            supplier_protocol: Optional[str] = None
             try:
-                client = get_provider_client(candidate.protocol)
+                supplier_protocol = resolve_implementation_protocol(candidate.protocol)
+                client = get_provider_client(supplier_protocol)
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
-                    supplier_protocol=candidate.protocol,
+                    supplier_protocol=supplier_protocol,
                     path=path,
                     body=body,
                     target_model=candidate.target_model,
                 )
                 # Track conversion data for logging
-                conversion_data["supplier_protocol"] = candidate.protocol
+                conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
-                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
                 proxy_config = build_proxy_config(
                     candidate.proxy_enabled,
                     candidate.proxy_url,
@@ -438,7 +448,7 @@ class ProxyService:
                     candidate.provider_id,
                     candidate.provider_name,
                     request_protocol,
-                    candidate.protocol,
+                    supplier_protocol or candidate.protocol,
                     error_msg,
                 )
                 return ProviderResponse(status_code=400, error=error_msg)
@@ -455,11 +465,12 @@ class ProxyService:
             # Capture upstream response before protocol conversion
             conversion_data["upstream_response_body"] = result.response.body
             try:
-                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(result.final_provider.protocol)
+                supplier_protocol = resolve_implementation_protocol(result.final_provider.protocol)
+                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
                 if not same_protocol:
                     result.response.body = convert_response_for_user(
                         request_protocol=request_protocol,
-                        supplier_protocol=result.final_provider.protocol,
+                        supplier_protocol=supplier_protocol,
                         body=result.response.body,
                         target_model=result.final_provider.target_model,
                     )
@@ -471,7 +482,7 @@ class ProxyService:
                     result.final_provider.provider_id,
                     result.final_provider.provider_name,
                     request_protocol,
-                    result.final_provider.protocol,
+                    supplier_protocol,
                     error_msg,
                 )
                 result.response = ProviderResponse(
@@ -579,7 +590,7 @@ class ProxyService:
             logger.debug(f"Request Log: {log_data.json()}")
 
         if result.success or not failed_attempt_logged:
-            await self.log_repo.create(log_data)
+            await self._write_log(log_data)
         
         return result.response, {
             "trace_id": trace_id,
@@ -658,17 +669,19 @@ class ProxyService:
             async def error_gen(msg: str):
                 yield b"", ProviderResponse(status_code=400, error=msg)
 
+            supplier_protocol: Optional[str] = None
             try:
-                client = get_provider_client(candidate.protocol)
+                supplier_protocol = resolve_implementation_protocol(candidate.protocol)
+                client = get_provider_client(supplier_protocol)
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
-                    supplier_protocol=candidate.protocol,
+                    supplier_protocol=supplier_protocol,
                     path=path,
                     body=body,
                     target_model=candidate.target_model,
                 )
                 # Track conversion data for logging
-                stream_conversion_data["supplier_protocol"] = candidate.protocol
+                stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
             except Exception as e:
                 error_msg = str(e)
@@ -678,7 +691,7 @@ class ProxyService:
                     candidate.provider_id,
                     candidate.provider_name,
                     request_protocol,
-                    candidate.protocol,
+                    supplier_protocol or candidate.protocol,
                     error_msg,
                 )
                 return error_gen(error_msg)
@@ -722,14 +735,14 @@ class ProxyService:
                         yield chunk
 
                 try:
-                    same_protocol = normalize_protocol(request_protocol) == normalize_protocol(candidate.protocol)
+                    same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
                     if same_protocol:
                         async for chunk in upstream_bytes():
                             yield chunk, first_resp
                     else:
                         async for out_chunk in convert_stream_for_user(
                             request_protocol=request_protocol,
-                            supplier_protocol=candidate.protocol,
+                            supplier_protocol=supplier_protocol,
                             upstream=upstream_bytes(),
                             model=candidate.target_model,
                         ):
@@ -742,7 +755,7 @@ class ProxyService:
                         candidate.provider_id,
                         candidate.provider_name,
                         request_protocol,
-                        candidate.protocol,
+                        supplier_protocol or candidate.protocol,
                         err,
                     )
                     if (request_protocol or "openai").lower() == "anthropic":
@@ -810,13 +823,13 @@ class ProxyService:
                 is_stream=True,
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=attempt.provider.protocol,
+                supplier_protocol=resolve_implementation_protocol(attempt.provider.protocol),
                 converted_request_body=_smart_truncate(stream_conversion_data.get("converted_request_body")),
                 upstream_response_body=self._serialize_response_body(attempt.response.body),
             )
             try:
                 with anyio.CancelScope(shield=True):
-                    await self.log_repo.create(attempt_log)
+                    await self._write_log(attempt_log)
             except Exception:
                 pass
 
@@ -838,6 +851,7 @@ class ProxyService:
 
         # Wrap generator to handle logging
         async def wrapped_generator():
+            nonlocal input_tokens
             usage_acc = StreamUsageAccumulator(
                 protocol=protocol,
                 model=requested_model,
@@ -978,7 +992,7 @@ class ProxyService:
                 # client disconnect triggers cancellation, use shield to ensure logs are written to DB
                 try:
                     with anyio.CancelScope(shield=True):
-                        await self.log_repo.create(log_data)
+                        await self._write_log(log_data)
                 except Exception:
                     # Log writing failure does not affect main flow
                     pass

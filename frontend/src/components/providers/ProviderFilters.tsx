@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Filter, X } from 'lucide-react';
 import { ProtocolType } from '@/types';
+import { useProviderProtocolConfigs } from '@/lib/providerProtocols';
 
 export interface ProviderFiltersState {
   name?: string;
@@ -27,6 +28,7 @@ interface ProviderFiltersProps {
 }
 
 export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProps) {
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const defaultValues = useMemo(
     () => ({
       name: filters.name,
@@ -84,9 +86,11 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="openai_responses">OpenAI Responses</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
+                {protocolConfigs.map((option) => (
+                  <SelectItem key={option.protocol} value={option.protocol}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

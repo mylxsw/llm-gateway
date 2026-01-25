@@ -1,5 +1,6 @@
 *.log
 *.db
+*.db-journal
 *.pyc
 .env
 data/
