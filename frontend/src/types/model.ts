@@ -172,3 +172,30 @@ export interface ModelProviderStats {
   success_rate: number;
   failure_rate: number;
 }
+
+export interface ModelMatchRequest {
+  input_tokens: number;
+  headers?: Record<string, string>;
+  api_key?: string;
+}
+
+export interface ModelMatchProvider {
+  provider_id: number;
+  provider_name: string;
+  target_model_name: string;
+  protocol: ProtocolType;
+  priority: number;
+  weight: number;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | null;
+  input_price?: number | null;
+  output_price?: number | null;
+  per_request_price?: number | null;
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
+  model_input_price?: number | null;
+  model_output_price?: number | null;
+  estimated_cost?: number | null;
+}

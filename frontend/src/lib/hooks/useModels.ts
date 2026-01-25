@@ -17,6 +17,7 @@ import {
   deleteModelProvider,
   getModelStats,
   getModelProviderStats,
+  matchModelProviders,
 } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/api/error';
 import {
@@ -28,6 +29,7 @@ import {
   ModelMappingProviderUpdate,
   ModelListParams,
   ModelProviderListParams,
+  ModelMatchRequest,
 } from '@/types';
 
 /** Query Keys */
@@ -42,6 +44,8 @@ const QUERY_KEYS = {
     [...QUERY_KEYS.models, 'stats', params] as const,
   modelProviderStats: (params?: { requested_model?: string }) =>
     [...QUERY_KEYS.models, 'provider-stats', params] as const,
+  modelMatch: (requestedModel: string) =>
+    [...QUERY_KEYS.models, 'match', requestedModel] as const,
 };
 
 // ============ Model Mapping Hooks ============
@@ -221,6 +225,27 @@ export function useDeleteModelProvider() {
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Delete failed'));
+    },
+  });
+}
+
+/**
+ * Match Model Providers (Rule Engine Simulation)
+ */
+export function useMatchModelProviders() {
+  return useMutation({
+    mutationFn: ({
+      requestedModel,
+      data,
+    }: {
+      requestedModel: string;
+      data: ModelMatchRequest;
+    }) => matchModelProviders(requestedModel, data),
+    onSuccess: () => {
+      toast.success('Matched successfully');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Match failed'));
     },
   });
 }

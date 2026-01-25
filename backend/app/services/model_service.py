@@ -4,14 +4,16 @@ Model Management Service Module
 Provides business logic processing for Model Mappings and Model-Provider Mappings.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
-from app.common.errors import ConflictError, NotFoundError, ValidationError
+from app.common.errors import ConflictError, NotFoundError, ServiceError
 from app.domain.model import (
     ModelMapping,
     ModelMappingCreate,
     ModelMappingUpdate,
     ModelMappingResponse,
+    ModelMatchRequest,
+    ModelMatchProviderResponse,
     ModelMappingProvider,
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
@@ -19,6 +21,11 @@ from app.domain.model import (
 )
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
+from app.common.costs import calculate_cost_from_billing, resolve_billing
+from app.rules.context import RuleContext, TokenUsage
+from app.rules.engine import RuleEngine
+from app.services.retry_handler import RetryHandler
+from app.services.strategy import CostFirstStrategy, PriorityStrategy, RoundRobinStrategy, SelectionStrategy
 
 
 class ModelService:
@@ -42,6 +49,9 @@ class ModelService:
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
+        self._round_robin_strategy = RoundRobinStrategy()
+        self._cost_first_strategy = CostFirstStrategy()
+        self._priority_strategy = PriorityStrategy()
     
     # ============ Model Mapping Operations ============
     
@@ -90,6 +100,129 @@ class ModelService:
             )
         
         return await self._to_mapping_response(mapping, include_providers=True)
+
+    async def match_providers(
+        self,
+        requested_model: str,
+        data: ModelMatchRequest,
+    ) -> list[ModelMatchProviderResponse]:
+        """
+        Match providers for a model using rule engine context.
+        """
+        mapping = await self.model_repo.get_mapping(requested_model)
+        if not mapping:
+            raise NotFoundError(
+                message=f"Model '{requested_model}' not found",
+                code="model_not_found",
+            )
+
+        if not mapping.is_active:
+            raise ServiceError(
+                message=f"Model '{requested_model}' is disabled",
+                code="model_disabled",
+            )
+
+        provider_mappings = await self.model_repo.get_provider_mappings(
+            requested_model=requested_model,
+            is_active=True,
+        )
+
+        if not provider_mappings:
+            raise ServiceError(
+                message=f"No providers configured for model '{requested_model}'",
+                code="no_available_provider",
+            )
+
+        providers = {}
+        for pm in provider_mappings:
+            provider = await self.provider_repo.get_by_id(pm.provider_id)
+            if provider:
+                providers[pm.provider_id] = provider
+
+        eligible_provider_mappings = [
+            pm for pm in provider_mappings if providers.get(pm.provider_id) is not None
+        ]
+        eligible_providers = {pid: p for pid, p in providers.items()}
+
+        if not eligible_provider_mappings:
+            raise ServiceError(message="No available providers", code="no_available_provider")
+
+        headers = self._normalize_headers(data.headers, data.api_key)
+        request_body = {"model": requested_model}
+        context = RuleContext(
+            current_model=requested_model,
+            headers=headers,
+            request_body=request_body,
+            token_usage=TokenUsage(input_tokens=data.input_tokens),
+        )
+
+        candidates = await RuleEngine().evaluate(
+            context=context,
+            model_mapping=mapping,
+            provider_mappings=eligible_provider_mappings,
+            providers=eligible_providers,
+        )
+
+        if not candidates:
+            raise ServiceError(
+                message="No providers matched the rules",
+                code="no_available_provider",
+            )
+
+        strategy = self._get_strategy(mapping.strategy)
+        retry_handler = RetryHandler(strategy)
+        ordered_candidates = await retry_handler.get_ordered_candidates(
+            candidates,
+            requested_model,
+            input_tokens=data.input_tokens,
+        )
+
+        response_items: list[ModelMatchProviderResponse] = []
+        for candidate in ordered_candidates:
+            try:
+                billing = resolve_billing(
+                    input_tokens=data.input_tokens,
+                    model_input_price=candidate.model_input_price,
+                    model_output_price=candidate.model_output_price,
+                    provider_billing_mode=candidate.billing_mode,
+                    provider_per_request_price=candidate.per_request_price,
+                    provider_tiered_pricing=candidate.tiered_pricing,
+                    provider_input_price=candidate.input_price,
+                    provider_output_price=candidate.output_price,
+                )
+                cost_breakdown = calculate_cost_from_billing(
+                    input_tokens=data.input_tokens,
+                    output_tokens=0,
+                    billing=billing,
+                )
+                estimated_cost = (
+                    cost_breakdown.total_cost
+                    if billing.billing_mode == "per_request"
+                    else cost_breakdown.input_cost
+                )
+            except Exception:
+                estimated_cost = None
+
+            response_items.append(
+                ModelMatchProviderResponse(
+                    provider_id=candidate.provider_id,
+                    provider_name=candidate.provider_name,
+                    target_model_name=candidate.target_model,
+                    protocol=candidate.protocol,
+                    priority=candidate.priority,
+                    weight=candidate.weight,
+                    billing_mode=candidate.billing_mode,
+                    input_price=candidate.input_price,
+                    output_price=candidate.output_price,
+                    per_request_price=candidate.per_request_price,
+                    tiered_pricing=candidate.tiered_pricing,
+                    model_input_price=candidate.model_input_price,
+                    model_output_price=candidate.model_output_price,
+                    estimated_cost=estimated_cost,
+                )
+            )
+
+        return response_items
     
     async def get_all_mappings(
         self,
@@ -173,6 +306,32 @@ class ModelService:
             )
         
         await self.model_repo.delete_mapping(requested_model)
+
+    @staticmethod
+    def _normalize_headers(
+        headers: Optional[dict[str, Any]],
+        api_key: Optional[str],
+    ) -> dict[str, str]:
+        normalized = {}
+        if headers:
+            for key, value in headers.items():
+                if key is None:
+                    continue
+                normalized[str(key).lower()] = "" if value is None else str(value)
+
+        api_key_value = api_key.strip() if api_key else ""
+        if api_key_value:
+            normalized.setdefault("authorization", f"Bearer {api_key_value}")
+            normalized.setdefault("x-api-key", api_key_value)
+
+        return normalized
+
+    def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
+        if strategy_name == "cost_first":
+            return self._cost_first_strategy
+        if strategy_name == "priority":
+            return self._priority_strategy
+        return self._round_robin_strategy
     
     # ============ Model-Provider Mapping Operations ============
     
@@ -190,7 +349,6 @@ class ModelService:
         
         Raises:
             NotFoundError: Model or provider not found
-            ConflictError: Mapping already exists
         """
         # Check if model exists
         model = await self.model_repo.get_mapping(data.requested_model)
@@ -206,17 +364,6 @@ class ModelService:
             raise NotFoundError(
                 message=f"Provider with id {data.provider_id} not found",
                 code="provider_not_found",
-            )
-        
-        # Check if mapping already exists
-        existing = await self.model_repo.get_all_provider_mappings(
-            requested_model=data.requested_model,
-            provider_id=data.provider_id,
-        )
-        if existing:
-            raise ConflictError(
-                message=f"Mapping for model '{data.requested_model}' and provider {data.provider_id} already exists",
-                code="duplicate_mapping",
             )
         
         return await self.model_repo.add_provider_mapping(data)

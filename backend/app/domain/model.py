@@ -93,6 +93,41 @@ class ModelMappingResponse(ModelMapping):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ModelMatchRequest(BaseModel):
+    """Model Match Request Model"""
+
+    input_tokens: int = Field(..., ge=0, description="Input token count")
+    headers: Optional[dict[str, str]] = Field(None, description="Request headers")
+    api_key: Optional[str] = Field(None, description="API Key value")
+
+
+class ModelMatchProviderResponse(BaseModel):
+    """Model Match Provider Response Model"""
+
+    provider_id: int = Field(..., description="Provider ID")
+    provider_name: str = Field(..., description="Provider Name")
+    target_model_name: str = Field(..., description="Target Model Name")
+    protocol: str = Field(..., description="Provider Protocol")
+    priority: int = Field(0, description="Priority")
+    weight: int = Field(1, description="Weight")
+    billing_mode: Optional[BillingMode] = Field(None, description="Billing mode")
+    input_price: Optional[float] = Field(None, description="Input price override ($/1M tokens)")
+    output_price: Optional[float] = Field(None, description="Output price override ($/1M tokens)")
+    per_request_price: Optional[float] = Field(None, description="Per-request price ($)")
+    tiered_pricing: Optional[list[TokenTierPrice]] = Field(
+        None, description="Tiered pricing (based on input tokens)"
+    )
+    model_input_price: Optional[float] = Field(
+        None, description="Model fallback input price ($/1M tokens)"
+    )
+    model_output_price: Optional[float] = Field(
+        None, description="Model fallback output price ($/1M tokens)"
+    )
+    estimated_cost: Optional[float] = Field(
+        None, description="Estimated cost based on input tokens"
+    )
+
+
 # ============ Model-Provider Mapping ============
 
 class ModelMappingProviderBase(BaseModel):

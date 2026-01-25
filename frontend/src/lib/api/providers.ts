@@ -10,6 +10,7 @@ import {
   ProviderUpdate,
   ProviderListParams,
   ProviderExport,
+  ProviderModelListResponse,
   PaginatedResponse,
 } from '@/types';
 
@@ -76,4 +77,14 @@ export async function importProviders(
   data: ProviderCreate[]
 ): Promise<{ success: number; skipped: number }> {
   return post<{ success: number; skipped: number }>(`${BASE_URL}/import`, data);
+}
+
+/**
+ * Get Provider Models
+ * @param id - Provider ID
+ */
+export async function getProviderModels(
+  id: number
+): Promise<ProviderModelListResponse> {
+  return get<ProviderModelListResponse>(`${BASE_URL}/${id}/models`);
 }

@@ -85,6 +85,30 @@ def test_convert_request_openai_legacy_functions_normalizes_to_tools():
     assert out_body.get("tool_choice") == {"type": "function", "function": {"name": "get_weather"}}
 
 
+def test_convert_request_openai_to_openai_responses_chat():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "Hi"},
+            ],
+            "max_tokens": 12,
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert path == "/v1/responses"
+    assert out_body["model"] == "gpt-4o-mini"
+    assert out_body["instructions"] == "You are helpful"
+    assert isinstance(out_body.get("input"), list)
+    assert out_body["input"][0]["role"] == "user"
+    assert out_body["max_output_tokens"] == 12
+
+
 @pytest.mark.asyncio
 async def test_convert_request_openai_to_anthropic_preserves_tools():
     path, out_body = convert_request_for_supplier(
@@ -187,6 +211,34 @@ def test_convert_response_anthropic_to_openai():
             "stop_reason": "end_turn",
             "stop_sequence": None,
             "usage": {"input_tokens": 1, "output_tokens": 2},
+        },
+    )
+
+    assert converted["object"] == "chat.completion"
+    assert converted["choices"][0]["message"]["content"] == "Hello"
+    assert converted["usage"]["prompt_tokens"] == 1
+    assert converted["usage"]["completion_tokens"] == 2
+
+
+def test_convert_response_openai_responses_to_openai():
+    converted = convert_response_for_user(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        target_model="gpt-4o-mini",
+        body={
+            "id": "resp_1",
+            "object": "response",
+            "created_at": 123,
+            "model": "gpt-4o-mini",
+            "output": [
+                {
+                    "id": "msg_1",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello"}],
+                }
+            ],
+            "usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3},
         },
     )
 
@@ -316,4 +368,31 @@ async def test_convert_stream_anthropic_to_openai():
     assert payloads[-1].strip() == "[DONE]"
     content_payloads = [p for p in payloads if p.strip() not in ("[DONE]", "")]
     chunk_obj = json.loads(next(p for p in content_payloads if '"chat.completion.chunk"' in p))
+    assert chunk_obj["choices"][0]["delta"]["content"] == "Hi"
+
+
+@pytest.mark.asyncio
+async def test_convert_stream_openai_responses_to_openai():
+    upstream_events = [
+        {
+            "type": "response.created",
+            "response": {"id": "resp_1", "object": "response", "created_at": 1, "model": "gpt-4o-mini"},
+        },
+        {"type": "response.output_text.delta", "delta": "Hi"},
+        {"type": "response.completed"},
+    ]
+    upstream = _agen([f"data: {json.dumps(e)}\n\n".encode() for e in upstream_events])
+
+    decoder = SSEDecoder()
+    payloads = []
+    async for c in convert_stream_for_user(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        upstream=upstream,
+        model="gpt-4o-mini",
+    ):
+        payloads.extend(decoder.feed(c))
+
+    assert payloads[-1].strip() == "[DONE]"
+    chunk_obj = json.loads(next(p for p in payloads if '"chat.completion.chunk"' in p))
     assert chunk_obj["choices"][0]["delta"]["content"] == "Hi"

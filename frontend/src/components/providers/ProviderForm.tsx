@@ -56,6 +56,7 @@ interface FormData {
 /** Protocol Options */
 const PROTOCOL_OPTIONS: { value: ProtocolType; label: string }[] = [
   { value: 'openai', label: 'OpenAI' },
+  { value: 'openai_responses', label: 'OpenAI Responses' },
   { value: 'anthropic', label: 'Anthropic' },
 ];
 

@@ -34,6 +34,8 @@ export interface RequestLogDetail extends RequestLog {
   request_body?: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   response_body?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  usage_details?: Record<string, any>;
   error_info?: string;
   price_source?: 'SupplierOverride' | 'ModelFallback' | 'DefaultZero' | string | null;
   request_protocol?: string;

@@ -19,6 +19,8 @@ from app.domain.model import (
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelMatchRequest,
+    ModelMatchProviderResponse,
     ModelExport,
 )
 from app.domain.log import ModelStats, ModelProviderStats
@@ -151,6 +153,21 @@ async def get_model(
     """
     try:
         return await service.get_mapping(requested_model)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.post("/models/{requested_model:path}/match", response_model=list[ModelMatchProviderResponse])
+async def match_model_providers(
+    requested_model: str,
+    data: ModelMatchRequest,
+    service: ModelServiceDep,
+):
+    """
+    Match model providers based on input tokens and headers.
+    """
+    try:
+        return await service.match_providers(requested_model, data)
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 

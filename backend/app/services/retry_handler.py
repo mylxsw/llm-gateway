@@ -75,6 +75,44 @@ class RetryHandler:
         self.max_retries = settings.RETRY_MAX_ATTEMPTS
         # Retry interval (ms)
         self.retry_delay_ms = settings.RETRY_DELAY_MS
+
+    async def get_ordered_candidates(
+        self,
+        candidates: list[CandidateProvider],
+        requested_model: str,
+        *,
+        input_tokens: Optional[int] = None,
+    ) -> list[CandidateProvider]:
+        """
+        Get candidate order based on the selection strategy.
+
+        This mirrors provider selection + failover ordering without making requests.
+        """
+        if not candidates:
+            return []
+
+        ordered: list[CandidateProvider] = []
+        tried_providers: set[int] = set()
+        current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
+        while current_provider is not None:
+            if current_provider.provider_id in tried_providers:
+                break
+            ordered.append(current_provider)
+            tried_providers.add(current_provider.provider_id)
+            if len(tried_providers) >= len(candidates):
+                break
+            current_provider = await self._get_next_untried_provider(
+                candidates, tried_providers, requested_model, current_provider, input_tokens
+            )
+
+        if len(ordered) == len(candidates):
+            return ordered
+
+        for candidate in candidates:
+            if candidate.provider_id not in tried_providers:
+                ordered.append(candidate)
+
+        return ordered
     
     async def execute_with_retry(
         self,

@@ -6,3 +6,4 @@ export * from './ModelForm';
 export * from './ModelList';
 export * from './ModelProviderForm';
 export * from './ModelFilters';
+export * from './ModelMatchDialog';

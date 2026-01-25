@@ -17,8 +17,8 @@ class ProviderBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Provider Name")
     # Base URL
     base_url: str = Field(..., description="Base URL")
-    # Protocol Type: openai or anthropic
-    protocol: str = Field(..., pattern="^(openai|anthropic)$", description="Protocol Type")
+    # Protocol Type: openai, openai_responses, or anthropic
+    protocol: str = Field(..., pattern="^(openai|openai_responses|anthropic)$", description="Protocol Type")
     # API Type: chat / completion / embedding
     api_type: str = Field("chat", description="API Type (deprecated)")
     # Extra Headers
@@ -43,7 +43,7 @@ class ProviderUpdate(BaseModel):
     
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     base_url: Optional[str] = None
-    protocol: Optional[str] = Field(None, pattern="^(openai|anthropic)$")
+    protocol: Optional[str] = Field(None, pattern="^(openai|openai_responses|anthropic)$")
     api_type: Optional[str] = None
     api_key: Optional[str] = None
     extra_headers: Optional[dict[str, str]] = None

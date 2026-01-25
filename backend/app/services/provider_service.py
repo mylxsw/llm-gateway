@@ -4,11 +4,14 @@ Provider Management Service Module
 Provides business logic processing for Providers.
 """
 
-from typing import Optional
+import json
+from typing import Any, Optional
 
 from app.common.errors import ConflictError, NotFoundError
+from app.common.proxy import build_proxy_config
 from app.common.sanitizer import sanitize_api_key_display, sanitize_proxy_url
 from app.domain.provider import Provider, ProviderCreate, ProviderUpdate, ProviderResponse
+from app.providers import get_provider_client
 from app.repositories.provider_repo import ProviderRepository
 
 
@@ -217,6 +220,94 @@ class ProviderService:
             success += 1
             
         return {"success": success, "skipped": skipped}
+
+    async def list_upstream_models(
+        self, id: int
+    ) -> tuple[Provider, list[str], Optional[dict[str, Any]]]:
+        """
+        List upstream models for the given provider
+
+        Args:
+            id: Provider ID
+
+        Returns:
+            tuple[Provider, list[str], Optional[dict[str, Any]]]: Provider info, model list, and error info
+        """
+        provider = await self.repo.get_by_id(id)
+        if not provider:
+            raise NotFoundError(
+                message=f"Provider with id {id} not found",
+                code="provider_not_found",
+            )
+
+        client = get_provider_client(provider.protocol)
+        proxy_config = build_proxy_config(provider.proxy_enabled, provider.proxy_url)
+        response = await client.list_models(
+            base_url=provider.base_url,
+            api_key=provider.api_key,
+            extra_headers=provider.extra_headers,
+            proxy_config=proxy_config,
+        )
+
+        if not response.is_success:
+            details: dict[str, Any] = {
+                "provider_id": provider.id,
+                "status_code": response.status_code,
+            }
+            if response.error:
+                details["error"] = response.error
+            if response.body is not None:
+                details["body"] = response.body
+            error = {
+                "message": "Upstream model list request failed",
+                "code": "upstream_model_list_failed",
+                "details": details,
+            }
+            return provider, [], error
+
+        models = self._extract_model_ids(response.body)
+        return provider, models, None
+
+    @staticmethod
+    def _extract_model_ids(body: Any) -> list[str]:
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                return []
+
+        candidates: Any = None
+        if isinstance(body, dict):
+            if isinstance(body.get("data"), list):
+                candidates = body["data"]
+            elif isinstance(body.get("models"), list):
+                candidates = body["models"]
+            elif isinstance(body.get("items"), list):
+                candidates = body["items"]
+        elif isinstance(body, list):
+            candidates = body
+
+        if not isinstance(candidates, list):
+            return []
+
+        seen = set()
+        results: list[str] = []
+        for item in candidates:
+            model_id = None
+            if isinstance(item, dict):
+                for key in ("id", "model", "name"):
+                    value = item.get(key)
+                    if isinstance(value, str) and value:
+                        model_id = value
+                        break
+            elif isinstance(item, str):
+                model_id = item
+
+            if model_id and model_id not in seen:
+                seen.add(model_id)
+                results.append(model_id)
+
+        return results
     
     def _to_response(self, provider: Provider) -> ProviderResponse:
         """

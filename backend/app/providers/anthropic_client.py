@@ -183,6 +183,87 @@ class AnthropicClient(ProviderClient):
                 total_time_ms=timer.total_time_ms,
             )
     
+    async def list_models(
+        self,
+        base_url: str,
+        api_key: Optional[str],
+        extra_headers: Optional[dict[str, str]] = None,
+        proxy_config: Optional[dict[str, str]] = None,
+    ) -> ProviderResponse:
+        """
+        List available models from Anthropic-compatible provider
+        """
+        cleaned_base = base_url.rstrip('/')
+        cleaned_path = "/v1/models"
+        if cleaned_path.startswith('/v1/'):
+            cleaned_path = cleaned_path[3:]
+        elif cleaned_path == '/v1':
+            cleaned_path = ''
+        url = f"{cleaned_base}{cleaned_path}"
+        prepared_headers = self._prepare_headers({}, api_key, extra_headers)
+
+        logger.debug(
+            "Anthropic List Models: url=%s headers=%s",
+            url,
+            prepared_headers,
+        )
+
+        timer = Timer().start()
+
+        try:
+            proxy_url = proxy_config.get("all://") if proxy_config else None
+            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
+                response = await client.request(
+                    method="GET",
+                    url=url,
+                    headers=prepared_headers,
+                )
+
+                timer.mark_first_byte()
+
+                response_body: Any = response.text
+                try:
+                    response_body = response.json()
+                except json.JSONDecodeError:
+                    pass
+
+                timer.stop()
+
+                return ProviderResponse(
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    body=response_body,
+                    first_byte_delay_ms=timer.first_byte_delay_ms,
+                    total_time_ms=timer.total_time_ms,
+                )
+
+        except httpx.TimeoutException as e:
+            timer.stop()
+            return ProviderResponse(
+                status_code=504,
+                error=f"Request timeout: {str(e)}",
+                first_byte_delay_ms=timer.first_byte_delay_ms,
+                total_time_ms=timer.total_time_ms,
+            )
+
+        except httpx.RequestError as e:
+            timer.stop()
+            return ProviderResponse(
+                status_code=502,
+                error=f"Request error: {str(e)}",
+                first_byte_delay_ms=timer.first_byte_delay_ms,
+                total_time_ms=timer.total_time_ms,
+            )
+
+        except Exception as e:
+            timer.stop()
+            return ProviderResponse(
+                status_code=500,
+                error=f"Unexpected error: {str(e)}",
+                first_byte_delay_ms=timer.first_byte_delay_ms,
+                total_time_ms=timer.total_time_ms,
+            )
+
     async def forward_stream(
         self,
         base_url: str,

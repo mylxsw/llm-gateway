@@ -85,6 +85,7 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="openai">OpenAI</SelectItem>
+                <SelectItem value="openai_responses">OpenAI Responses</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
               </SelectContent>
             </Select>

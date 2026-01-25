@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import {
@@ -27,6 +27,9 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { RuleBuilder } from '@/components/common';
+import { toast } from 'sonner';
+import { getModelProviders } from '@/lib/api';
+import { useProviderModels } from '@/lib/hooks';
 import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
@@ -125,7 +128,19 @@ export function ModelProviderForm({
   const providerId = watch('provider_id');
   const isActive = watch('is_active');
   const billingMode = watch('billing_mode');
+  const targetModelName = watch('target_model_name');
   const supportsBilling = modelType === 'chat' || modelType === 'embedding';
+  const [providerModels, setProviderModels] = useState<string[]>([]);
+  const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
+  const [selectedProviderModel, setSelectedProviderModel] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const lastSyncedTarget = useRef<string>('');
+  const providerModelQuery = useProviderModels(Number(providerId), { enabled: false });
+
+  const normalizedTargetModel = useMemo(
+    () => targetModelName.trim().toLowerCase(),
+    [targetModelName]
+  );
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -183,6 +198,7 @@ export function ModelProviderForm({
         weight: mapping.weight,
         is_active: mapping.is_active,
       });
+      lastSyncedTarget.current = mapping.target_model_name?.trim() || '';
     } else {
       const fallbackInputPrice =
         defaultPrices?.input_price === null || defaultPrices?.input_price === undefined
@@ -211,8 +227,97 @@ export function ModelProviderForm({
         weight: 1,
         is_active: true,
       });
+      lastSyncedTarget.current = '';
     }
   }, [defaultPrices?.input_price, defaultPrices?.output_price, mapping, reset]);
+
+  useEffect(() => {
+    if (!supportsBilling) return;
+    if (!normalizedTargetModel) return;
+    if (normalizedTargetModel === lastSyncedTarget.current.toLowerCase()) return;
+
+    const timeoutId = setTimeout(async () => {
+      setHistoryLoading(true);
+      try {
+        const result = await getModelProviders();
+        const matches = result.items.filter(
+          (item) => item.target_model_name.trim().toLowerCase() === normalizedTargetModel
+        );
+        if (matches.length === 0) {
+          return;
+        }
+
+        const match = matches.sort((a, b) => {
+          const aTime = new Date(a.updated_at).getTime();
+          const bTime = new Date(b.updated_at).getTime();
+          return bTime - aTime;
+        })[0];
+
+        const resolvedBillingMode =
+          (match.billing_mode || 'token_flat') as FormData['billing_mode'];
+
+        setValue('billing_mode', resolvedBillingMode);
+        if (resolvedBillingMode === 'per_request') {
+          setValue('per_request_price', String(match.per_request_price ?? 0));
+        } else if (resolvedBillingMode === 'token_tiered') {
+          const tiers =
+            match.tiered_pricing && match.tiered_pricing.length > 0
+              ? match.tiered_pricing.map((tier) => ({
+                  max_input_tokens:
+                    tier.max_input_tokens === null || tier.max_input_tokens === undefined
+                      ? ''
+                      : String(tier.max_input_tokens),
+                  input_price: String(tier.input_price ?? 0),
+                  output_price: String(tier.output_price ?? 0),
+                }))
+              : [{ max_input_tokens: '', input_price: '0', output_price: '0' }];
+          setValue('tiers', tiers);
+        } else {
+          setValue('input_price', String(match.input_price ?? 0));
+          setValue('output_price', String(match.output_price ?? 0));
+        }
+      } catch (error) {
+        toast.error('Failed to load model price history');
+      } finally {
+        lastSyncedTarget.current = targetModelName.trim();
+        setHistoryLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [normalizedTargetModel, setValue, supportsBilling, targetModelName]);
+
+  const handleOpenProviderModelDialog = async () => {
+    if (!providerId) {
+      toast.error('Please select a provider first');
+      return;
+    }
+    const result = await providerModelQuery.refetch();
+    const data = result.data;
+    if (!data) {
+      toast.error('Failed to load provider models');
+      return;
+    }
+    if (!data.success) {
+      toast.error(data.error?.message || 'Failed to load provider models');
+      return;
+    }
+    const models = data.models || [];
+    setProviderModels(models);
+    setSelectedProviderModel(models[0] || '');
+    setProviderModelDialogOpen(true);
+  };
+
+  const handleConfirmProviderModel = () => {
+    if (!selectedProviderModel) {
+      return;
+    }
+    setValue('target_model_name', selectedProviderModel, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setProviderModelDialogOpen(false);
+  };
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
@@ -390,16 +495,31 @@ export function ModelProviderForm({
             <Label htmlFor="target_model_name">
               Target Model Name <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id="target_model_name"
-              placeholder="Actual model name used by this provider, e.g. gpt-4-0613"
-              {...register('target_model_name', {
-                required: 'Target model name is required',
-              })}
-            />
+            <div className="flex gap-2">
+              <Input
+                id="target_model_name"
+                placeholder="Actual model name used by this provider, e.g. gpt-4-0613"
+                {...register('target_model_name', {
+                  required: 'Target model name is required',
+                })}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleOpenProviderModelDialog}
+                disabled={!providerId || providerModelQuery.isFetching}
+              >
+                {providerModelQuery.isFetching ? 'Loading...' : 'Pick from provider'}
+              </Button>
+            </div>
             {errors.target_model_name && (
               <p className="text-sm text-destructive">
                 {errors.target_model_name.message}
+              </p>
+            )}
+            {historyLoading && (
+              <p className="text-xs text-muted-foreground">
+                Loading previous pricing for this model...
               </p>
             )}
           </div>
@@ -600,6 +720,56 @@ export function ModelProviderForm({
           </DialogFooter>
         </form>
       </DialogContent>
+      <Dialog open={providerModelDialogOpen} onOpenChange={setProviderModelDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Select Provider Model</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-md border p-2 max-h-64 overflow-y-auto">
+              {providerModels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No models found.</p>
+              ) : (
+                <div className="space-y-1">
+                  {providerModels.map((modelName) => {
+                    const isSelected = modelName === selectedProviderModel;
+                    return (
+                      <button
+                        type="button"
+                        key={modelName}
+                        className={`w-full text-left px-3 py-2 rounded-md border transition ${
+                          isSelected
+                            ? 'bg-primary/10 border-primary'
+                            : 'border-transparent hover:border-border hover:bg-muted/40'
+                        }`}
+                        onClick={() => setSelectedProviderModel(modelName)}
+                      >
+                        <span className="font-mono text-sm">{modelName}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProviderModelDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmProviderModel}
+              disabled={!selectedProviderModel}
+            >
+              Use selected model
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

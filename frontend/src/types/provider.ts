@@ -4,7 +4,7 @@
  */
 
 /** Protocol Type */
-export type ProtocolType = 'openai' | 'anthropic';
+export type ProtocolType = 'openai' | 'openai_responses' | 'anthropic';
 
 /** Provider Entity */
 export interface Provider {
@@ -52,6 +52,20 @@ export interface ProviderListParams {
   page_size?: number;
   name?: string;
   protocol?: string;
+}
+
+/** Provider Model List Response */
+export interface ProviderModelListResponse {
+  provider_id: number;
+  provider_name: string;
+  protocol: ProtocolType;
+  models: string[];
+  success: boolean;
+  error?: {
+    message: string;
+    code: string;
+    details?: Record<string, unknown>;
+  };
 }
 
 /** Provider Export Entity (includes API key) */

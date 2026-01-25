@@ -35,6 +35,16 @@ class ImportProviderResponse(BaseModel):
     skipped: int
 
 
+class ProviderModelListResponse(BaseModel):
+    """Provider Models Response"""
+    provider_id: int
+    provider_name: str
+    protocol: str
+    models: list[str]
+    success: bool
+    error: Optional[dict[str, object]] = None
+
+
 @router.get("/export", response_model=list[ProviderExport])
 async def export_providers(
     service: ProviderServiceDep,
@@ -105,6 +115,28 @@ async def get_provider(
     """
     try:
         return await service.get_by_id(provider_id)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get("/{provider_id}/models", response_model=ProviderModelListResponse)
+async def list_provider_models(
+    provider_id: int,
+    service: ProviderServiceDep,
+):
+    """
+    List upstream models for the provider
+    """
+    try:
+        provider, models, error = await service.list_upstream_models(provider_id)
+        return ProviderModelListResponse(
+            provider_id=provider.id,
+            provider_name=provider.name,
+            protocol=provider.protocol,
+            models=models,
+            success=error is None,
+            error=error,
+        )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 

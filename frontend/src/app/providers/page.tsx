@@ -8,6 +8,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Download, Upload } from 'lucide-react';
 import { ProviderFilters, ProviderFiltersState, ProviderForm, ProviderList } from '@/components/providers';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
@@ -17,7 +18,7 @@ import {
   useUpdateProvider,
   useDeleteProvider,
 } from '@/lib/hooks';
-import { exportProviders, importProviders } from '@/lib/api';
+import { exportProviders, importProviders, getProviderModels } from '@/lib/api';
 import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
 
 /**
@@ -35,6 +36,13 @@ export default function ProvidersPage() {
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
+
+  // Provider model list dialog state
+  const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+  const [modelList, setModelList] = useState<string[]>([]);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ProviderFiltersState>({
@@ -76,6 +84,30 @@ export default function ProvidersPage() {
   const handleDelete = (provider: Provider) => {
     setDeletingProvider(provider);
     setDeleteDialogOpen(true);
+  };
+
+  const handleFetchModels = async (provider: Provider) => {
+    setSelectedProvider(provider);
+    setModelDialogOpen(true);
+    setModelLoading(true);
+    setModelError(null);
+    setModelList([]);
+    try {
+      const result = await getProviderModels(provider.id);
+      if (!result.success) {
+        const message = result.error?.message || 'Failed to fetch models';
+        setModelError(message);
+        return;
+      }
+      setModelList(result.models || []);
+    } catch (error) {
+      console.error('Fetch models failed:', error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to fetch models';
+      setModelError(message);
+    } finally {
+      setModelLoading(false);
+    }
   };
 
   // Submit form
@@ -219,6 +251,7 @@ export default function ProvidersPage() {
               <ProviderList
                 providers={data.items}
                 onEdit={handleEdit}
+                onFetchModels={handleFetchModels}
                 onDelete={handleDelete}
               />
               <Pagination
@@ -253,6 +286,40 @@ export default function ProvidersPage() {
         destructive
         loading={deleteMutation.isPending}
       />
+
+      <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upstream Models</DialogTitle>
+            <DialogDescription>
+              {selectedProvider
+                ? `Provider: ${selectedProvider.name} (${selectedProvider.protocol})`
+                : 'No provider selected'}
+            </DialogDescription>
+          </DialogHeader>
+          {modelLoading && <LoadingSpinner />}
+          {!modelLoading && modelError && (
+            <div className="text-sm text-destructive">{modelError}</div>
+          )}
+          {!modelLoading && !modelError && (
+            <div className="max-h-[360px] overflow-auto rounded-md border p-3">
+              {modelList.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No models returned from upstream.
+                </div>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {modelList.map((model) => (
+                    <li key={model} className="font-mono">
+                      {model}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

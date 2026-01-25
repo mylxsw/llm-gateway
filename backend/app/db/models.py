@@ -21,7 +21,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -171,11 +170,6 @@ class ModelMappingProvider(Base):
         DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
     )
     
-    # Unique Constraint: Only one mapping per provider for the same model
-    __table_args__ = (
-        UniqueConstraint("requested_model", "provider_id", name="uq_model_provider"),
-    )
-    
     # Relationships
     provider: Mapped["ServiceProvider"] = relationship(
         "ServiceProvider", back_populates="model_mappings"
@@ -268,6 +262,8 @@ class RequestLog(Base):
     response_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Response Body
     response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Usage Details (JSON format)
+    usage_details: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Error Info
     error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Trace ID

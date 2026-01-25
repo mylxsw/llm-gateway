@@ -83,6 +83,28 @@ class ProviderClient(ABC):
             ProviderResponse: Provider response
         """
         pass
+
+    @abstractmethod
+    async def list_models(
+        self,
+        base_url: str,
+        api_key: Optional[str],
+        extra_headers: Optional[dict[str, str]] = None,
+        proxy_config: Optional[dict[str, str]] = None,
+    ) -> ProviderResponse:
+        """
+        List available models from upstream provider
+
+        Args:
+            base_url: Provider base URL
+            api_key: Provider API Key
+            extra_headers: Extra headers
+            proxy_config: httpx proxy configuration
+
+        Returns:
+            ProviderResponse: Provider response
+        """
+        pass
     
     @abstractmethod
     async def forward_stream(

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Sparkles, Pencil, Trash2 } from 'lucide-react';
 import { Provider } from '@/types';
 import { formatDateTime, truncate, getActiveStatus } from '@/lib/utils';
 
@@ -25,6 +25,8 @@ interface ProviderListProps {
   providers: Provider[];
   /** Edit callback */
   onEdit: (provider: Provider) => void;
+  /** Fetch models callback */
+  onFetchModels: (provider: Provider) => void;
   /** Delete callback */
   onDelete: (provider: Provider) => void;
 }
@@ -35,6 +37,7 @@ interface ProviderListProps {
 export function ProviderList({
   providers,
   onEdit,
+  onFetchModels,
   onDelete,
 }: ProviderListProps) {
   return (
@@ -75,6 +78,14 @@ export function ProviderList({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onFetchModels(provider)}
+                    title="Fetch Models"
+                  >
+                    <Sparkles className="h-4 w-4" suppressHydrationWarning />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

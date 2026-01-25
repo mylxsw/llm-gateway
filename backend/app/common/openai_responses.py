@@ -16,6 +16,119 @@ from typing import Any, AsyncGenerator, Optional
 from app.common.stream_usage import SSEDecoder
 
 
+def _coerce_openai_content_to_responses(content: Any) -> list[dict[str, Any]]:
+    if content is None:
+        return []
+
+    if isinstance(content, str):
+        return [{"type": "input_text", "text": content}]
+
+    if isinstance(content, list):
+        out: list[dict[str, Any]] = []
+        for item in content:
+            if isinstance(item, str):
+                if item:
+                    out.append({"type": "input_text", "text": item})
+                continue
+            if not isinstance(item, dict):
+                continue
+            block_type = item.get("type")
+            if block_type in ("text", "input_text", "output_text"):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str) and text:
+                    out.append({"type": "input_text", "text": text})
+                continue
+            if block_type in ("image_url", "input_image"):
+                url: Optional[str] = None
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                    url = image_url["url"]
+                elif isinstance(image_url, str):
+                    url = image_url
+                elif isinstance(item.get("url"), str):
+                    url = item.get("url")
+                if url:
+                    out.append({"type": "input_image", "image_url": {"url": url}})
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text:
+                out.append({"type": "input_text", "text": text})
+        return out
+
+    if isinstance(content, dict):
+        text = content.get("text") or content.get("content")
+        if isinstance(text, str):
+            return [{"type": "input_text", "text": text}]
+
+    return [{"type": "input_text", "text": str(content)}]
+
+
+def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any]:
+    """
+    Translate `/v1/chat/completions` request body into `/v1/responses` request body.
+    """
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        raise ValueError("Chat Completions request missing 'messages'")
+
+    instructions: list[str] = []
+    input_messages: list[dict[str, Any]] = []
+
+    for item in messages:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role") if isinstance(item.get("role"), str) else "user"
+        content = _coerce_openai_content_to_responses(item.get("content"))
+        if role == "system":
+            if content:
+                instructions.append("".join(block.get("text", "") for block in content if block.get("type") == "input_text"))
+            continue
+        input_messages.append({"role": role, "content": content})
+
+    responses_body: dict[str, Any] = {"model": body.get("model")}
+    if instructions:
+        responses_body["instructions"] = "\n".join([text for text in instructions if text])
+
+    if input_messages:
+        responses_body["input"] = input_messages
+    else:
+        responses_body["input"] = ""
+
+    passthrough_keys = (
+        "temperature",
+        "top_p",
+        "presence_penalty",
+        "frequency_penalty",
+        "seed",
+        "n",
+        "stop",
+        "stream",
+        "stream_options",
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "response_format",
+        "logprobs",
+        "top_logprobs",
+        "user",
+        "metadata",
+    )
+    for key in passthrough_keys:
+        if key in body:
+            responses_body[key] = body[key]
+
+    max_output_tokens = None
+    if "max_completion_tokens" in body:
+        max_output_tokens = body.get("max_completion_tokens")
+    elif "max_tokens" in body:
+        max_output_tokens = body.get("max_tokens")
+
+    if max_output_tokens is not None:
+        responses_body["max_output_tokens"] = max_output_tokens
+
+    return responses_body
+
+
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
 
@@ -195,6 +308,28 @@ def _extract_assistant_text_from_chat_completion(chat_body: dict[str, Any]) -> s
     return ""
 
 
+def _extract_assistant_text_from_responses(resp_body: dict[str, Any]) -> str:
+    output = resp_body.get("output")
+    if not isinstance(output, list):
+        return ""
+
+    parts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "message":
+            continue
+        content = item.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") in ("output_text", "text"):
+                text = block.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+    return "".join(parts)
+
+
 def chat_completion_to_responses_response(chat_body: dict[str, Any]) -> dict[str, Any]:
     """
     Translate `/v1/chat/completions` response body into `/v1/responses` response body.
@@ -231,6 +366,44 @@ def chat_completion_to_responses_response(chat_body: dict[str, Any]) -> dict[str
         "usage": {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+        },
+    }
+
+
+def responses_response_to_chat_completion(resp_body: dict[str, Any]) -> dict[str, Any]:
+    """
+    Translate `/v1/responses` response body into `/v1/chat/completions` response body.
+    """
+    created_at = resp_body.get("created_at")
+    if not isinstance(created_at, int):
+        created_at = int(time.time())
+
+    resp_id = resp_body.get("id")
+    chat_id = f"chatcmpl_{resp_id}" if isinstance(resp_id, str) and resp_id else _new_id("chatcmpl")
+
+    usage = resp_body.get("usage") if isinstance(resp_body.get("usage"), dict) else {}
+    prompt_tokens = int(usage.get("input_tokens") or 0)
+    completion_tokens = int(usage.get("output_tokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or (prompt_tokens + completion_tokens))
+
+    text = _extract_assistant_text_from_responses(resp_body)
+
+    return {
+        "id": chat_id,
+        "object": "chat.completion",
+        "created": created_at,
+        "model": resp_body.get("model"),
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": text},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
         },
     }
@@ -328,3 +501,73 @@ async def chat_completions_sse_to_responses_sse(
     yield f"data: {json.dumps(completed, ensure_ascii=False)}\n\n".encode("utf-8")
     yield b"data: [DONE]\n\n"
 
+
+async def responses_sse_to_chat_completions_sse(
+    *,
+    upstream: AsyncGenerator[bytes, None],
+    model: str,
+    response_id: Optional[str] = None,
+) -> AsyncGenerator[bytes, None]:
+    """
+    Convert OpenAI Responses SSE stream to Chat Completions SSE stream.
+    """
+    decoder = SSEDecoder()
+    resp_id = response_id or _new_id("chatcmpl")
+    sent_role = False
+    done = False
+
+    async for chunk in upstream:
+        for payload in decoder.feed(chunk):
+            if not payload:
+                continue
+            if payload.strip() == "[DONE]":
+                if not done:
+                    yield b"data: [DONE]\n\n"
+                    done = True
+                continue
+
+            try:
+                data = json.loads(payload)
+            except Exception:
+                continue
+
+            event_type = data.get("type")
+            if event_type == "response.created":
+                response = data.get("response")
+                if isinstance(response, dict) and isinstance(response.get("id"), str):
+                    resp_id = response["id"]
+                continue
+
+            if event_type == "response.output_text.delta":
+                delta_text = data.get("delta")
+                if isinstance(delta_text, str) and delta_text:
+                    delta: dict[str, Any] = {"content": delta_text}
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+                    payload_obj = {
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
+                    }
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                continue
+
+            if event_type == "response.completed":
+                payload_obj = {
+                    "id": resp_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                }
+                yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                if not done:
+                    yield b"data: [DONE]\n\n"
+                    done = True
+                continue
+
+    if not done:
+        yield b"data: [DONE]\n\n"

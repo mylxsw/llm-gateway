@@ -3,8 +3,6 @@ ModelService provider mapping unit tests
 """
 
 import pytest
-
-from app.common.errors import ConflictError
 from app.domain.model import ModelMappingCreate, ModelMappingProviderCreate
 from app.domain.provider import ProviderCreate
 from app.repositories.sqlalchemy.model_repo import SQLAlchemyModelRepository
@@ -13,7 +11,7 @@ from app.services.model_service import ModelService
 
 
 @pytest.mark.asyncio
-async def test_create_provider_mapping_rejects_duplicates(db_session):
+async def test_create_provider_mapping_allows_duplicates(db_session):
     model_repo = SQLAlchemyModelRepository(db_session)
     provider_repo = SQLAlchemyProviderRepository(db_session)
     service = ModelService(model_repo, provider_repo)
@@ -41,14 +39,15 @@ async def test_create_provider_mapping_rejects_duplicates(db_session):
     assert created.provider_id == provider.id
     assert created.provider_name == "p1"
 
-    with pytest.raises(ConflictError) as exc:
-        await service.create_provider_mapping(
-            ModelMappingProviderCreate(
-                requested_model="gpt-4o-mini",
-                provider_id=provider.id,
-                target_model_name="gpt-4o-mini",
-                input_price=0.0,
-                output_price=0.0,
-            )
+    created_second = await service.create_provider_mapping(
+        ModelMappingProviderCreate(
+            requested_model="gpt-4o-mini",
+            provider_id=provider.id,
+            target_model_name="gpt-4o-mini",
+            input_price=0.0,
+            output_price=0.0,
         )
-    assert exc.value.code == "duplicate_mapping"
+    )
+    assert created_second.requested_model == "gpt-4o-mini"
+    assert created_second.provider_id == provider.id
+    assert created_second.provider_name == "p1"

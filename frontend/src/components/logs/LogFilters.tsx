@@ -43,6 +43,7 @@ const FILTER_KEYS: Array<keyof LogQueryParams> = [
   'has_error',
   'status_min',
   'status_max',
+  'api_key_id',
   'api_key_name',
   'retry_count_min',
   'retry_count_max',
@@ -107,6 +108,7 @@ export function LogFilters({
       has_error: filters.has_error,
       status_min: filters.status_min,
       status_max: filters.status_max,
+      api_key_id: filters.api_key_id,
       api_key_name: filters.api_key_name,
       retry_count_min: filters.retry_count_min,
       retry_count_max: filters.retry_count_max,
@@ -116,6 +118,7 @@ export function LogFilters({
       total_time_max: filters.total_time_max,
     }),
     [
+      filters.api_key_id,
       filters.api_key_name,
       filters.end_time,
       filters.has_error,
