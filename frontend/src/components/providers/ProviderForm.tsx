@@ -233,24 +233,6 @@ export function ProviderForm({
             )}
           </div>
 
-          {/* Base URL */}
-          <div className="space-y-2">
-            <Label htmlFor="base_url">
-              Base URL <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="base_url"
-              placeholder="https://api.openai.com"
-              {...register('base_url', {
-                required: 'Base URL is required',
-                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
-              })}
-            />
-            {errors.base_url && (
-              <p className="text-sm text-destructive">{errors.base_url.message}</p>
-            )}
-          </div>
-
           {/* Protocol Type */}
           <div className="space-y-2">
             <Label>
@@ -273,14 +255,22 @@ export function ProviderForm({
             </Select>
           </div>
 
-          {/* Implementation Protocol */}
+          {/* Base URL */}
           <div className="space-y-2">
-            <Label>Implementation Protocol</Label>
+            <Label htmlFor="base_url">
+              Base URL <span className="text-destructive">*</span>
+            </Label>
             <Input
-              value={protocolConfig?.implementation ?? ''}
-              readOnly
-              aria-readonly="true"
+              id="base_url"
+              placeholder={protocolConfig?.base_url || 'https://api.openai.com'}
+              {...register('base_url', {
+                required: 'Base URL is required',
+                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
+              })}
             />
+            {errors.base_url && (
+              <p className="text-sm text-destructive">{errors.base_url.message}</p>
+            )}
           </div>
 
           {/* API Key */}
