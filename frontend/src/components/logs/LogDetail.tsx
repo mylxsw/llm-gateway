@@ -382,15 +382,11 @@ export function LogDetail({ log }: LogDetailProps) {
             <div className="space-y-6">
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">Request Headers</h3>
-                <div className="rounded-md border p-4 bg-muted/30 max-h-96 overflow-auto">
-                  <JsonViewer data={log.request_headers || {}} />
-                </div>
+                <JsonViewer data={log.request_headers || {}} />
               </div>
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">Response Headers</h3>
-                <div className="rounded-md border p-4 bg-muted/30 max-h-96 overflow-auto">
-                  <JsonViewer data={log.response_headers || {}} />
-                </div>
+                <JsonViewer data={log.response_headers || {}} />
               </div>
             </div>
           )}
