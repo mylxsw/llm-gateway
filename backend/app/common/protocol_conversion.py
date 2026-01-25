@@ -499,6 +499,11 @@ def convert_request_for_supplier(
         if not isinstance(messages, list):
             raise ServiceError(message="OpenAI request missing 'messages'", code="invalid_request")
 
+        has_system = any(isinstance(m, dict) and m.get("role") == "system" for m in messages)
+        for m in messages:
+            if isinstance(m, dict) and m.get("role") == "developer":
+                m["role"] = "user" if has_system else "system"
+
         optional_params = {k: v for k, v in openai_body.items() if k not in ("model", "messages")}
         if "max_tokens" not in optional_params and "max_completion_tokens" in optional_params:
             optional_params["max_tokens"] = optional_params["max_completion_tokens"]

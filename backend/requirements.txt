@@ -19,7 +19,7 @@ socksio>=1.0.0
 aiofiles>=23.2.1
 
 # 协议转换（OpenAI <-> Anthropic）
-litellm>=1.55.0
+litellm>=1.81.3
 
 # Token 计数
 tiktoken>=0.5.2
