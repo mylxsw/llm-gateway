@@ -21,6 +21,10 @@ aiofiles>=23.2.1
 # 协议转换（OpenAI <-> Anthropic）
 litellm>=1.81.3
 
+# Local: API Protocol Converter SDK
+# Install from local directory: pip install -e ../llm_api_converter
+-e ../llm_api_converter
+
 # Token 计数
 tiktoken>=0.5.2
 

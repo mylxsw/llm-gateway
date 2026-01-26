@@ -97,6 +97,25 @@ class AnthropicMessagesDecoder:
             ir_message = IRMessage(role=role)
             ir_message.content = self._decode_content(content)
 
+            # Check if message contains only tool_result blocks
+            # If so, convert each to a separate TOOL role message
+            if role == Role.USER:
+                tool_results = [b for b in ir_message.content if isinstance(b, IRToolResultBlock)]
+                other_content = [b for b in ir_message.content if not isinstance(b, IRToolResultBlock)]
+
+                if tool_results:
+                    # Add each tool result as separate TOOL message
+                    for tr in tool_results:
+                        tool_msg = IRMessage(role=Role.TOOL)
+                        tool_msg.content = [tr]
+                        ir_messages.append(tool_msg)
+
+                    # If there's other content, add it as user message
+                    if other_content:
+                        ir_message.content = other_content
+                        ir_messages.append(ir_message)
+                    continue
+
             ir_messages.append(ir_message)
 
         return ir_messages
