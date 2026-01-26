@@ -210,4 +210,6 @@ export interface ModelTestResponse {
   response_status: number;
   total_time_ms?: number | null;
   first_byte_delay_ms?: number | null;
+  provider_name?: string | null;
+  target_model?: string | null;
 }

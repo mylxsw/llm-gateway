@@ -52,15 +52,21 @@ export function ModelTestDialog({
   const testMutation = useTestModel();
 
   const availableProtocols = useMemo(() => {
-    const items = model?.providers ?? [];
-    const unique = new Set<ProtocolType>();
-    for (const provider of items) {
-      if (provider.provider_protocol) {
-        unique.add(provider.provider_protocol);
-      }
+    const hasProviders = (model?.providers?.length ?? 0) > 0;
+    if (!hasProviders) {
+      return [];
     }
-    return Array.from(unique);
-  }, [model?.providers]);
+    const supported: ProtocolType[] = [
+      'openai',
+      'openai_responses',
+      'anthropic',
+    ];
+    if (protocolConfigs.length === 0) {
+      return supported;
+    }
+    const configured = new Set(protocolConfigs.map((config) => config.protocol));
+    return supported.filter((protocol) => configured.has(protocol));
+  }, [model?.providers, protocolConfigs]);
 
   useEffect(() => {
     if (open) {
@@ -173,6 +179,18 @@ export function ModelTestDialog({
         ) : null}
 
         <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Provider</span>
+            <span className="font-mono">
+              {result?.provider_name ?? '-'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Target Model</span>
+            <span className="font-mono">
+              {result?.target_model ?? '-'}
+            </span>
+          </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Latency</span>
             <span className="font-mono">

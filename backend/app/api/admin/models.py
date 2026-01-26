@@ -73,6 +73,8 @@ class ModelTestResponse(BaseModel):
     response_status: int
     total_time_ms: Optional[int] = None
     first_byte_delay_ms: Optional[int] = None
+    provider_name: Optional[str] = None
+    target_model: Optional[str] = None
 
 
 def _build_test_payload(
@@ -407,6 +409,8 @@ async def test_model(
                 response_status=initial_response.status_code,
                 total_time_ms=initial_response.total_time_ms or elapsed_ms,
                 first_byte_delay_ms=initial_response.first_byte_delay_ms,
+                provider_name=_log_info.get("provider_name") if _log_info else None,
+                target_model=_log_info.get("target_model") if _log_info else None,
             )
 
         start = time.monotonic()
@@ -431,6 +435,8 @@ async def test_model(
             response_status=response.status_code,
             total_time_ms=response.total_time_ms or elapsed_ms,
             first_byte_delay_ms=response.first_byte_delay_ms,
+            provider_name=_log_info.get("provider_name") if _log_info else None,
+            target_model=_log_info.get("target_model") if _log_info else None,
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
