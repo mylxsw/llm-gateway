@@ -1,0 +1,13 @@
+# API Protocol Converter SDK Dependencies
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Development
+mypy>=1.0.0
+black>=23.0.0
+isort>=5.0.0
+
+# Type stubs (optional)
+types-requests>=2.0.0
