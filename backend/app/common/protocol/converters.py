@@ -594,10 +594,15 @@ class SDKStreamConverter(IStreamConverter):
         """Convert OpenAI stream to Anthropic format."""
         decoder = _SSEDecoder()
         sent_message_start = False
-        sent_content_block_start = False
-        sent_content_block_finish = False
         sent_message_stop = False
-        holding: Optional[Dict[str, Any]] = None
+
+        # State tracking
+        current_block_index = 0
+        # current_block_type: "text" | "tool_use" | None
+        current_block_type: Optional[str] = None
+        # OpenAI tool index -> Anthropic block index mapping is implicit
+        # We track the current OpenAI tool index being processed to detect switches
+        current_openai_tool_index: Optional[int] = None
 
         async for chunk in upstream:
             for payload in decoder.feed(chunk):
@@ -623,15 +628,6 @@ class SDKStreamConverter(IStreamConverter):
                             },
                         }
                     )
-                if not sent_content_block_start:
-                    sent_content_block_start = True
-                    yield _encode_sse_json(
-                        {
-                            "type": "content_block_start",
-                            "index": 0,
-                            "content_block": {"type": "text", "text": ""},
-                        }
-                    )
 
                 try:
                     data = json.loads(payload)
@@ -646,44 +642,114 @@ class SDKStreamConverter(IStreamConverter):
                 delta = choice.get("delta", {})
                 finish_reason = choice.get("finish_reason")
 
-                if delta and delta.get("content"):
-                    processed = {
-                        "type": "content_block_delta",
-                        "index": choice.get("index", 0),
-                        "delta": {"type": "text_delta", "text": delta["content"]},
-                    }
-                elif finish_reason is not None:
-                    processed = {
-                        "type": "message_delta",
-                        "delta": {
-                            "stop_reason": _map_openai_to_anthropic_finish_reason(
-                                finish_reason
+                # Handle Text Content
+                content = delta.get("content")
+                if content is not None:
+                    # If we were in a tool block or this is the first block, start text block
+                    if current_block_type != "text":
+                        if current_block_type is not None:
+                            # Close previous block
+                            yield _encode_sse_json(
+                                {
+                                    "type": "content_block_stop",
+                                    "index": current_block_index,
+                                }
                             )
-                        },
-                        "usage": {"output_tokens": 0},
-                    }
-                else:
-                    continue
+                            current_block_index += 1
 
-                if (
-                    processed.get("type") == "message_delta"
-                    and not sent_content_block_finish
-                ):
-                    holding = processed
-                    sent_content_block_finish = True
-                    yield _encode_sse_json({"type": "content_block_stop", "index": 0})
-                    continue
+                        # Start new text block
+                        yield _encode_sse_json(
+                            {
+                                "type": "content_block_start",
+                                "index": current_block_index,
+                                "content_block": {"type": "text", "text": ""},
+                            }
+                        )
+                        current_block_type = "text"
+                        current_openai_tool_index = None
 
-                if holding is not None:
-                    yield _encode_sse_json(holding)
-                    holding = processed
-                    continue
+                    yield _encode_sse_json(
+                        {
+                            "type": "content_block_delta",
+                            "index": current_block_index,
+                            "delta": {"type": "text_delta", "text": content},
+                        }
+                    )
 
-                yield _encode_sse_json(processed)
+                # Handle Tool Calls
+                tool_calls = delta.get("tool_calls")
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        idx = tool_call.get("index")
 
-        if holding is not None:
-            yield _encode_sse_json(holding)
-            holding = None
+                        # Check if we switched to a new tool call or from text
+                        if (
+                            idx != current_openai_tool_index
+                            or current_block_type != "tool_use"
+                        ):
+                            if current_block_type is not None:
+                                # Close previous block
+                                yield _encode_sse_json(
+                                    {
+                                        "type": "content_block_stop",
+                                        "index": current_block_index,
+                                    }
+                                )
+                                current_block_index += 1
+
+                            # Start new tool block
+                            t_id = tool_call.get("id", "")
+                            t_name = tool_call.get("function", {}).get("name", "")
+
+                            yield _encode_sse_json(
+                                {
+                                    "type": "content_block_start",
+                                    "index": current_block_index,
+                                    "content_block": {
+                                        "type": "tool_use",
+                                        "id": t_id,
+                                        "name": t_name,
+                                        "input": {},  # Empty input for now
+                                    },
+                                }
+                            )
+                            current_block_type = "tool_use"
+                            current_openai_tool_index = idx
+
+                        # Handle arguments
+                        args = tool_call.get("function", {}).get("arguments")
+                        if args:
+                            yield _encode_sse_json(
+                                {
+                                    "type": "content_block_delta",
+                                    "index": current_block_index,
+                                    "delta": {
+                                        "type": "input_json_delta",
+                                        "partial_json": args,
+                                    },
+                                }
+                            )
+
+                # Handle Finish Reason
+                if finish_reason:
+                    # Close any open block
+                    if current_block_type is not None:
+                        yield _encode_sse_json(
+                            {"type": "content_block_stop", "index": current_block_index}
+                        )
+
+                    stop_reason = _map_openai_to_anthropic_finish_reason(finish_reason)
+                    yield _encode_sse_json(
+                        {
+                            "type": "message_delta",
+                            "delta": {"stop_reason": stop_reason},
+                            "usage": {"output_tokens": 0},
+                        }
+                    )
+
+                    if not sent_message_stop:
+                        sent_message_stop = True
+                        yield _encode_sse_json({"type": "message_stop"})
 
         if not sent_message_stop:
             sent_message_stop = True
