@@ -626,7 +626,8 @@ class SDKStreamConverter(IStreamConverter):
                                 "stop_sequence": None,
                                 "usage": {"input_tokens": 0, "output_tokens": 0},
                             },
-                        }
+                        },
+                        event="message_start",
                     )
 
                 try:
@@ -653,7 +654,8 @@ class SDKStreamConverter(IStreamConverter):
                                 {
                                     "type": "content_block_stop",
                                     "index": current_block_index,
-                                }
+                                },
+                                event="content_block_stop",
                             )
                             current_block_index += 1
 
@@ -663,7 +665,8 @@ class SDKStreamConverter(IStreamConverter):
                                 "type": "content_block_start",
                                 "index": current_block_index,
                                 "content_block": {"type": "text", "text": ""},
-                            }
+                            },
+                            event="content_block_start",
                         )
                         current_block_type = "text"
                         current_openai_tool_index = None
@@ -673,7 +676,8 @@ class SDKStreamConverter(IStreamConverter):
                             "type": "content_block_delta",
                             "index": current_block_index,
                             "delta": {"type": "text_delta", "text": content},
-                        }
+                        },
+                        event="content_block_delta",
                     )
 
                 # Handle Tool Calls
@@ -693,7 +697,8 @@ class SDKStreamConverter(IStreamConverter):
                                     {
                                         "type": "content_block_stop",
                                         "index": current_block_index,
-                                    }
+                                    },
+                                    event="content_block_stop",
                                 )
                                 current_block_index += 1
 
@@ -711,7 +716,8 @@ class SDKStreamConverter(IStreamConverter):
                                         "name": t_name,
                                         "input": {},  # Empty input for now
                                     },
-                                }
+                                },
+                                event="content_block_start",
                             )
                             current_block_type = "tool_use"
                             current_openai_tool_index = idx
@@ -727,7 +733,8 @@ class SDKStreamConverter(IStreamConverter):
                                         "type": "input_json_delta",
                                         "partial_json": args,
                                     },
-                                }
+                                },
+                                event="content_block_delta",
                             )
 
                 # Handle Finish Reason
@@ -735,7 +742,11 @@ class SDKStreamConverter(IStreamConverter):
                     # Close any open block
                     if current_block_type is not None:
                         yield _encode_sse_json(
-                            {"type": "content_block_stop", "index": current_block_index}
+                            {
+                                "type": "content_block_stop",
+                                "index": current_block_index,
+                            },
+                            event="content_block_stop",
                         )
 
                     stop_reason = _map_openai_to_anthropic_finish_reason(finish_reason)
@@ -744,16 +755,19 @@ class SDKStreamConverter(IStreamConverter):
                             "type": "message_delta",
                             "delta": {"stop_reason": stop_reason},
                             "usage": {"output_tokens": 0},
-                        }
+                        },
+                        event="message_delta",
                     )
 
                     if not sent_message_stop:
                         sent_message_stop = True
-                        yield _encode_sse_json({"type": "message_stop"})
+                        yield _encode_sse_json(
+                            {"type": "message_stop"}, event="message_stop"
+                        )
 
         if not sent_message_stop:
             sent_message_stop = True
-            yield _encode_sse_json({"type": "message_stop"})
+            yield _encode_sse_json({"type": "message_stop"}, event="message_stop")
 
     async def _convert_openai_responses_to_openai(
         self,
@@ -848,8 +862,12 @@ def _encode_sse_data(payload: str) -> bytes:
     return f"data: {payload}\n\n".encode("utf-8")
 
 
-def _encode_sse_json(obj: Dict[str, Any]) -> bytes:
+def _encode_sse_json(obj: Dict[str, Any], event: Optional[str] = None) -> bytes:
     """Encode dict as SSE JSON data line."""
+    if event:
+        return f"event: {event}\n".encode("utf-8") + _encode_sse_data(
+            json.dumps(obj, ensure_ascii=False)
+        )
     return _encode_sse_data(json.dumps(obj, ensure_ascii=False))
 
 

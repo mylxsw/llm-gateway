@@ -857,13 +857,13 @@ class ProxyService:
                     )
                     if (request_protocol or "openai").lower() == "anthropic":
                         yield (
-                            f"data: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
+                            f"event: error\ndata: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
                                 "utf-8"
                             ),
                             first_resp,
                         )
                         yield (
-                            f"data: {json.dumps({'type': 'message_stop'}, ensure_ascii=False)}\n\n".encode(
+                            f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'}, ensure_ascii=False)}\n\n".encode(
                                 "utf-8"
                             ),
                             first_resp,
