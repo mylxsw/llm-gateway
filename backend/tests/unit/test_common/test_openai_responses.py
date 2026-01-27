@@ -3,11 +3,11 @@ import json
 import pytest
 
 from app.common.openai_responses import (
-    chat_completions_request_to_responses,
     chat_completion_to_responses_response,
+    chat_completions_request_to_responses,
     chat_completions_sse_to_responses_sse,
-    responses_response_to_chat_completion,
     responses_request_to_chat_completions,
+    responses_response_to_chat_completion,
     responses_sse_to_chat_completions_sse,
 )
 from app.common.stream_usage import SSEDecoder
@@ -70,7 +70,13 @@ def test_chat_completion_to_responses_response_usage_mapping():
             "object": "chat.completion",
             "created": 123456,
             "model": "gpt-4o-mini",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": "Hello"}, "finish_reason": "stop"}],
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "Hello"},
+                    "finish_reason": "stop",
+                }
+            ],
             "usage": {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8},
         }
     )
@@ -102,7 +108,11 @@ def test_responses_response_to_chat_completion_usage_mapping():
     )
     assert chat["object"] == "chat.completion"
     assert chat["created"] == 123456
-    assert chat["usage"] == {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8}
+    assert chat["usage"] == {
+        "prompt_tokens": 3,
+        "completion_tokens": 5,
+        "total_tokens": 8,
+    }
     assert chat["choices"][0]["message"]["content"] == "Hello"
 
 
@@ -118,7 +128,9 @@ async def test_chat_completions_sse_to_responses_sse_text_delta():
         yield b"data: [DONE]\n\n"
 
     out_chunks: list[bytes] = []
-    async for chunk in chat_completions_sse_to_responses_sse(upstream=upstream(), model="gpt-4o-mini"):
+    async for chunk in chat_completions_sse_to_responses_sse(
+        upstream=upstream(), model="gpt-4o-mini"
+    ):
         out_chunks.append(chunk)
 
     decoder = SSEDecoder()
@@ -154,7 +166,9 @@ async def test_responses_sse_to_chat_completions_sse_text_delta():
         yield b'data: {"type":"response.completed"}\n\n'
 
     out_chunks: list[bytes] = []
-    async for chunk in responses_sse_to_chat_completions_sse(upstream=upstream(), model="gpt-4o-mini"):
+    async for chunk in responses_sse_to_chat_completions_sse(
+        upstream=upstream(), model="gpt-4o-mini"
+    ):
         out_chunks.append(chunk)
 
     decoder = SSEDecoder()
@@ -164,5 +178,47 @@ async def test_responses_sse_to_chat_completions_sse_text_delta():
 
     assert payloads[-1].strip() == "[DONE]"
     content_payloads = [p for p in payloads if p.strip() not in ("", "[DONE]")]
-    chunk_obj = json.loads(next(p for p in content_payloads if '"chat.completion.chunk"' in p))
+    chunk_obj = json.loads(
+        next(p for p in content_payloads if '"chat.completion.chunk"' in p)
+    )
     assert chunk_obj["choices"][0]["delta"]["content"] == "Hel"
+
+
+def test_chat_completions_request_to_responses_strips_stream_options():
+    """Test that stream_options is not passed through to Responses API.
+
+    OpenAI Responses API does not support stream_options parameter.
+    Some providers will return an error if include_usage is present.
+    """
+    responses = chat_completions_request_to_responses(
+        {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "hello"}],
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "temperature": 0.5,
+        }
+    )
+    assert "stream_options" not in responses
+    assert responses["stream"] is True
+    assert responses["temperature"] == 0.5
+
+
+def test_responses_request_to_chat_completions_strips_stream_options():
+    """Test that stream_options is not passed through to Chat Completions API.
+
+    Some OpenAI-compatible providers do not support stream_options parameter
+    and will return an error if include_usage is present.
+    """
+    chat = responses_request_to_chat_completions(
+        {
+            "model": "gpt-4o-mini",
+            "input": "hello",
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "temperature": 0.5,
+        }
+    )
+    assert "stream_options" not in chat
+    assert chat["stream"] is True
+    assert chat["temperature"] == 0.5

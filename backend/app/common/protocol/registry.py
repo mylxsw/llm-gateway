@@ -11,12 +11,12 @@ import logging
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple, Type
 
 from .base import (
-    Protocol,
+    ConversionResult,
+    IProtocolAdapter,
     IRequestConverter,
     IResponseConverter,
     IStreamConverter,
-    IProtocolAdapter,
-    ConversionResult,
+    Protocol,
     UnsupportedConversionError,
 )
 
@@ -34,8 +34,12 @@ class ConverterRegistry:
     _instance: Optional["ConverterRegistry"] = None
 
     def __init__(self):
-        self._request_converters: Dict[Tuple[Protocol, Protocol], IRequestConverter] = {}
-        self._response_converters: Dict[Tuple[Protocol, Protocol], IResponseConverter] = {}
+        self._request_converters: Dict[
+            Tuple[Protocol, Protocol], IRequestConverter
+        ] = {}
+        self._response_converters: Dict[
+            Tuple[Protocol, Protocol], IResponseConverter
+        ] = {}
         self._stream_converters: Dict[Tuple[Protocol, Protocol], IStreamConverter] = {}
         self._adapters: Dict[Protocol, IProtocolAdapter] = {}
 
@@ -70,9 +74,7 @@ class ConverterRegistry:
         """
         key = (converter.source_protocol, converter.target_protocol)
         self._request_converters[key] = converter
-        logger.debug(
-            f"Registered request converter: {key[0].value} -> {key[1].value}"
-        )
+        logger.debug(f"Registered request converter: {key[0].value} -> {key[1].value}")
 
     def register_response_converter(self, converter: IResponseConverter) -> None:
         """
@@ -83,9 +85,7 @@ class ConverterRegistry:
         """
         key = (converter.source_protocol, converter.target_protocol)
         self._response_converters[key] = converter
-        logger.debug(
-            f"Registered response converter: {key[0].value} -> {key[1].value}"
-        )
+        logger.debug(f"Registered response converter: {key[0].value} -> {key[1].value}")
 
     def register_stream_converter(self, converter: IStreamConverter) -> None:
         """
@@ -96,9 +96,7 @@ class ConverterRegistry:
         """
         key = (converter.source_protocol, converter.target_protocol)
         self._stream_converters[key] = converter
-        logger.debug(
-            f"Registered stream converter: {key[0].value} -> {key[1].value}"
-        )
+        logger.debug(f"Registered stream converter: {key[0].value} -> {key[1].value}")
 
     def get_adapter(self, protocol: Protocol) -> Optional[IProtocolAdapter]:
         """
@@ -172,15 +170,11 @@ class ConverterRegistry:
             containing lists of (source, target) tuples
         """
         return {
-            "request": [
-                (s.value, t.value) for s, t in self._request_converters.keys()
-            ],
+            "request": [(s.value, t.value) for s, t in self._request_converters.keys()],
             "response": [
                 (s.value, t.value) for s, t in self._response_converters.keys()
             ],
-            "stream": [
-                (s.value, t.value) for s, t in self._stream_converters.keys()
-            ],
+            "stream": [(s.value, t.value) for s, t in self._stream_converters.keys()],
         }
 
 
@@ -236,7 +230,9 @@ class ProtocolConverterManager:
                 target_model=target_model,
             )
 
-        converter = self._registry.get_request_converter(source_protocol, target_protocol)
+        converter = self._registry.get_request_converter(
+            source_protocol, target_protocol
+        )
         if converter is None:
             raise UnsupportedConversionError(
                 source_protocol=source_protocol.value,
@@ -273,7 +269,9 @@ class ProtocolConverterManager:
         if source_protocol == target_protocol:
             return body
 
-        converter = self._registry.get_response_converter(source_protocol, target_protocol)
+        converter = self._registry.get_response_converter(
+            source_protocol, target_protocol
+        )
         if converter is None:
             raise UnsupportedConversionError(
                 source_protocol=source_protocol.value,
@@ -312,7 +310,9 @@ class ProtocolConverterManager:
                 yield chunk
             return
 
-        converter = self._registry.get_stream_converter(source_protocol, target_protocol)
+        converter = self._registry.get_stream_converter(
+            source_protocol, target_protocol
+        )
         if converter is None:
             raise UnsupportedConversionError(
                 source_protocol=source_protocol.value,
@@ -344,6 +344,16 @@ class ProtocolConverterManager:
         # Normalize OpenAI legacy functions to tools
         if protocol == Protocol.OPENAI:
             new_body = self._normalize_openai_tooling_fields(new_body)
+
+        # Remove stream_options and include_usage for OpenAI streaming requests
+        # Some OpenAI-compatible providers do not support these parameters
+        if protocol in (Protocol.OPENAI, Protocol.OPENAI_RESPONSES):
+            stream = new_body.get("stream", False)
+            if stream:
+                if "stream_options" in new_body:
+                    del new_body["stream_options"]
+                if "include_usage" in new_body:
+                    del new_body["include_usage"]
 
         # Ensure max_tokens for Anthropic
         if protocol == Protocol.ANTHROPIC and path == "/v1/messages":
@@ -393,7 +403,10 @@ class ProtocolConverterManager:
             elif isinstance(fc, dict):
                 name = fc.get("name")
                 if isinstance(name, str) and name:
-                    out["tool_choice"] = {"type": "function", "function": {"name": name}}
+                    out["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": name},
+                    }
             # Remove deprecated function_call field
             del out["function_call"]
 

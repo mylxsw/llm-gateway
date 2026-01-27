@@ -41,7 +41,9 @@ def _coerce_openai_content_to_responses(content: Any) -> list[dict[str, Any]]:
             if block_type in ("image_url", "input_image"):
                 url: Optional[str] = None
                 image_url = item.get("image_url")
-                if isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                if isinstance(image_url, dict) and isinstance(
+                    image_url.get("url"), str
+                ):
                     url = image_url["url"]
                 elif isinstance(image_url, str):
                     url = image_url
@@ -81,13 +83,21 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
         content = _coerce_openai_content_to_responses(item.get("content"))
         if role == "system":
             if content:
-                instructions.append("".join(block.get("text", "") for block in content if block.get("type") == "input_text"))
+                instructions.append(
+                    "".join(
+                        block.get("text", "")
+                        for block in content
+                        if block.get("type") == "input_text"
+                    )
+                )
             continue
         input_messages.append({"role": role, "content": content})
 
     responses_body: dict[str, Any] = {"model": body.get("model")}
     if instructions:
-        responses_body["instructions"] = "\n".join([text for text in instructions if text])
+        responses_body["instructions"] = "\n".join(
+            [text for text in instructions if text]
+        )
 
     if input_messages:
         responses_body["input"] = input_messages
@@ -103,7 +113,6 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
         "n",
         "stop",
         "stream",
-        "stream_options",
         "tools",
         "tool_choice",
         "parallel_tool_calls",
@@ -143,7 +152,10 @@ def _coerce_input_to_messages(input_value: Any) -> list[dict[str, Any]]:
     # Some clients send OpenAI "messages" style directly in `input`.
     if isinstance(input_value, list):
         # If it looks like a list of message objects with roles, treat it as messages.
-        if all(isinstance(x, dict) and ("role" in x or x.get("type") == "message") for x in input_value):
+        if all(
+            isinstance(x, dict) and ("role" in x or x.get("type") == "message")
+            for x in input_value
+        ):
             out_messages: list[dict[str, Any]] = []
             for item in input_value:
                 if not isinstance(item, dict):
@@ -170,11 +182,19 @@ def _coerce_input_to_messages(input_value: Any) -> list[dict[str, Any]]:
 
     if isinstance(input_value, dict):
         # Single message-like object.
-        role = input_value.get("role") if isinstance(input_value.get("role"), str) else "user"
+        role = (
+            input_value.get("role")
+            if isinstance(input_value.get("role"), str)
+            else "user"
+        )
         content = (
             _coerce_content_blocks(input_value.get("content"))
             if "content" in input_value
-            else (input_value.get("text") if isinstance(input_value.get("text"), str) else "")
+            else (
+                input_value.get("text")
+                if isinstance(input_value.get("text"), str)
+                else ""
+            )
         )
         return [{"role": role, "content": content}]
 
@@ -212,7 +232,9 @@ def _coerce_content_blocks(content: Any) -> Any:
 
         if block_type in ("input_image", "image_url"):
             url: Optional[str] = None
-            if isinstance(block.get("image_url"), dict) and isinstance(block["image_url"].get("url"), str):
+            if isinstance(block.get("image_url"), dict) and isinstance(
+                block["image_url"].get("url"), str
+            ):
                 url = block["image_url"]["url"]
             elif isinstance(block.get("url"), str):
                 url = block["url"]
@@ -267,7 +289,6 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
         "n",
         "stop",
         "stream",
-        "stream_options",
         "tools",
         "tool_choice",
         "parallel_tool_calls",
@@ -283,7 +304,11 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
         if key in body:
             chat_body[key] = body[key]
 
-    if "max_output_tokens" in body and "max_tokens" not in chat_body and "max_completion_tokens" not in chat_body:
+    if (
+        "max_output_tokens" in body
+        and "max_tokens" not in chat_body
+        and "max_completion_tokens" not in chat_body
+    ):
         chat_body["max_completion_tokens"] = body.get("max_output_tokens")
 
     return chat_body
@@ -302,7 +327,11 @@ def _extract_assistant_text_from_chat_completion(chat_body: dict[str, Any]) -> s
     if isinstance(content, list):
         parts: list[str] = []
         for item in content:
-            if isinstance(item, dict) and item.get("type") in ("text", "output_text") and isinstance(item.get("text"), str):
+            if (
+                isinstance(item, dict)
+                and item.get("type") in ("text", "output_text")
+                and isinstance(item.get("text"), str)
+            ):
                 parts.append(item["text"])
         return "".join(parts)
     return ""
@@ -339,7 +368,9 @@ def chat_completion_to_responses_response(chat_body: dict[str, Any]) -> dict[str
         created_at = int(time.time())
 
     chat_id = chat_body.get("id")
-    resp_id = f"resp_{chat_id}" if isinstance(chat_id, str) and chat_id else _new_id("resp")
+    resp_id = (
+        f"resp_{chat_id}" if isinstance(chat_id, str) and chat_id else _new_id("resp")
+    )
     msg_id = _new_id("msg")
 
     usage = chat_body.get("usage") if isinstance(chat_body.get("usage"), dict) else {}
@@ -380,7 +411,11 @@ def responses_response_to_chat_completion(resp_body: dict[str, Any]) -> dict[str
         created_at = int(time.time())
 
     resp_id = resp_body.get("id")
-    chat_id = f"chatcmpl_{resp_id}" if isinstance(resp_id, str) and resp_id else _new_id("chatcmpl")
+    chat_id = (
+        f"chatcmpl_{resp_id}"
+        if isinstance(resp_id, str) and resp_id
+        else _new_id("chatcmpl")
+    )
 
     usage = resp_body.get("usage") if isinstance(resp_body.get("usage"), dict) else {}
     prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -433,7 +468,12 @@ async def chat_completions_sse_to_responses_sse(
             "model": model,
             "status": "in_progress",
             "output": [
-                {"id": msg_id, "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": ""}]}
+                {
+                    "id": msg_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": ""}],
+                }
             ],
         },
     }
@@ -462,7 +502,9 @@ async def chat_completions_sse_to_responses_sse(
             for choice in choices:
                 if not isinstance(choice, dict):
                     continue
-                delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+                delta = (
+                    choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+                )
                 content = delta.get("content")
                 if isinstance(content, str) and content:
                     text_parts.append(content)
@@ -473,7 +515,9 @@ async def chat_completions_sse_to_responses_sse(
                         "content_index": 0,
                         "item_id": msg_id,
                     }
-                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n".encode("utf-8")
+                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
 
         if saw_done:
             break
@@ -550,9 +594,13 @@ async def responses_sse_to_chat_completions_sse(
                         "object": "chat.completion.chunk",
                         "created": int(time.time()),
                         "model": model,
-                        "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
                     }
-                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
                 continue
 
             if event_type == "response.completed":
@@ -563,7 +611,9 @@ async def responses_sse_to_chat_completions_sse(
                     "model": model,
                     "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                 }
-                yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                    "utf-8"
+                )
                 if not done:
                     yield b"data: [DONE]\n\n"
                     done = True

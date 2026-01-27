@@ -175,6 +175,11 @@ class SDKRequestConverter(IRequestConverter):
             if self._target == Protocol.ANTHROPIC:
                 body = self._ensure_max_tokens_for_anthropic(body)
 
+            # Remove stream_options and include_usage when streaming to OpenAI or OpenAI Responses
+            # These parameters are not supported by all providers and can cause errors
+            if stream and self._target in (Protocol.OPENAI, Protocol.OPENAI_RESPONSES):
+                body = self._remove_unsupported_stream_params(body)
+
             # Use SDK conversion
             sdk_source = _protocol_to_sdk(self._source)
             sdk_target = _protocol_to_sdk(self._target)
@@ -241,6 +246,25 @@ class SDKRequestConverter(IRequestConverter):
                     body["max_tokens"] = body["max_completion_tokens"]
                 else:
                     body["max_tokens"] = 4096
+
+        return body
+
+    def _remove_unsupported_stream_params(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Remove stream_options and include_usage from request body.
+
+        Some OpenAI-compatible providers do not support these parameters
+        and will return an error like "Unknown parameter: 'include_usage'".
+        """
+        body = copy.deepcopy(body)
+
+        # Remove stream_options (contains include_usage)
+        if "stream_options" in body:
+            del body["stream_options"]
+
+        # Remove top-level include_usage (some clients send it at top level)
+        if "include_usage" in body:
+            del body["include_usage"]
 
         return body
 

@@ -664,3 +664,116 @@ async def test_convert_stream_openai_responses_to_openai():
     assert payloads[-1].strip() == "[DONE]"
     chunk_obj = json.loads(next(p for p in payloads if '"chat.completion.chunk"' in p))
     assert chunk_obj["choices"][0]["delta"]["content"] == "Hi"
+
+
+def test_convert_request_strips_stream_options_when_target_is_openai():
+    """Test that stream_options is removed when converting to OpenAI protocol.
+
+    Some OpenAI-compatible providers do not support stream_options parameter
+    and will return an error like "Unknown parameter: 'include_usage'".
+    """
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 16,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert "stream_options" not in out_body
+    assert out_body["stream"] is True
+
+
+def test_convert_request_strips_include_usage_when_target_is_openai():
+    """Test that top-level include_usage is removed when converting to OpenAI protocol.
+
+    Some clients send include_usage at the top level instead of inside stream_options.
+    """
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 16,
+            "stream": True,
+            "include_usage": True,
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert "include_usage" not in out_body
+    assert out_body["stream"] is True
+
+
+def test_convert_request_strips_stream_options_when_target_is_openai_responses():
+    """Test that stream_options is removed when converting to OpenAI Responses protocol."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 16,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert "stream_options" not in out_body
+    assert out_body["stream"] is True
+
+
+def test_convert_request_strips_include_usage_when_target_is_openai_responses():
+    """Test that top-level include_usage is removed when converting to OpenAI Responses protocol."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 16,
+            "stream": True,
+            "include_usage": True,
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert "include_usage" not in out_body
+    assert out_body["stream"] is True
+
+
+def test_convert_request_strips_stream_options_same_protocol_openai():
+    """Test that stream_options is removed even when source and target are both OpenAI.
+
+    This is the identity conversion case where no protocol conversion is needed,
+    but we still need to remove unsupported parameters for compatibility.
+    """
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 16,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "include_usage": True,
+        },
+        target_model="gpt-4o-mini",
+    )
+
+    assert "stream_options" not in out_body
+    assert "include_usage" not in out_body
+    assert out_body["stream"] is True
