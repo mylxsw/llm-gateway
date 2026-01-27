@@ -232,13 +232,38 @@ class StreamUsageAccumulator:
         event_type = data.get("type")
         self._update_usage_from_payload(data)
 
+        if event_type == "content_block_start":
+            index = data.get("index")
+            content_block = data.get("content_block")
+            if isinstance(index, int) and isinstance(content_block, dict):
+                if content_block.get("type") == "tool_use":
+                    if index not in self._tool_calls_buffer:
+                        self._tool_calls_buffer[index] = {
+                            "index": index,
+                            "id": content_block.get("id"),
+                            "type": "function",
+                            "function": {
+                                "name": content_block.get("name", ""),
+                                "arguments": "",
+                            },
+                        }
+
         # Anthropic Messages stream: content_block_delta.delta.text
         if event_type == "content_block_delta":
+            index = data.get("index")
             delta = data.get("delta")
             if isinstance(delta, dict):
                 text = delta.get("text")
                 if isinstance(text, str) and text:
                     self._text_parts.append(text)
+
+                # Handle tool arguments streaming
+                if delta.get("type") == "input_json_delta" and isinstance(index, int):
+                    partial_json = delta.get("partial_json")
+                    if partial_json and index in self._tool_calls_buffer:
+                        self._tool_calls_buffer[index]["function"]["arguments"] += (
+                            partial_json
+                        )
 
     def _update_usage_from_payload(self, data: dict[str, Any]) -> None:
         details = extract_usage_details(data)
