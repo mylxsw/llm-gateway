@@ -10,25 +10,25 @@ import time
 from typing import Any, Dict, List, Optional, Union
 
 from ..ir import (
+    ImageSourceType,
+    IRAudioBlock,
+    IRContentBlock,
+    IRGenerationConfig,
+    IRImageBlock,
+    IRMessage,
     IRRequest,
     IRResponse,
-    IRMessage,
-    IRContentBlock,
-    IRTextBlock,
-    IRImageBlock,
-    IRAudioBlock,
-    IRToolUseBlock,
-    IRToolResultBlock,
-    IRToolDeclaration,
-    IRToolChoice,
-    IRUsage,
-    IRGenerationConfig,
     IRResponseFormat,
     IRStreamEvent,
+    IRTextBlock,
+    IRToolChoice,
+    IRToolDeclaration,
+    IRToolResultBlock,
+    IRToolUseBlock,
+    IRUsage,
     Role,
     StopReason,
     StreamEventType,
-    ImageSourceType,
     ToolChoiceType,
 )
 from .exceptions import ConversionError, ValidationError
@@ -61,14 +61,21 @@ class OpenAIChatDecoder:
 
         # Decode response format
         if "response_format" in payload:
-            ir.response_format = self._decode_response_format(payload["response_format"])
+            ir.response_format = self._decode_response_format(
+                payload["response_format"]
+            )
 
         # User
         if "user" in payload:
             ir.user = payload["user"]
 
         # Store unsupported params
-        unsupported_keys = ["store", "stream_options", "service_tier", "parallel_tool_calls"]
+        unsupported_keys = [
+            "store",
+            "stream_options",
+            "service_tier",
+            "parallel_tool_calls",
+        ]
         for key in unsupported_keys:
             if key in payload:
                 ir.unsupported_params[key] = payload[key]
@@ -330,7 +337,9 @@ class OpenAIChatDecoder:
                 ir.usage.cache_read_tokens = prompt_details.get("cached_tokens", 0)
             completion_details = usage.get("completion_tokens_details", {})
             if completion_details:
-                ir.usage.reasoning_tokens = completion_details.get("reasoning_tokens", 0)
+                ir.usage.reasoning_tokens = completion_details.get(
+                    "reasoning_tokens", 0
+                )
 
         return ir
 
@@ -513,7 +522,9 @@ class OpenAIChatEncoder:
         if config.top_p is not None:
             payload["top_p"] = config.top_p
         if config.max_tokens is not None:
-            payload["max_tokens"] = config.max_tokens
+            # Use max_completion_tokens for better compatibility with newer OpenAI models
+            # (o1, o3, etc. require max_completion_tokens instead of max_tokens)
+            payload["max_completion_tokens"] = config.max_tokens
         if config.stop_sequences:
             payload["stop"] = config.stop_sequences
         if config.seed is not None:
@@ -539,7 +550,9 @@ class OpenAIChatEncoder:
 
         # Response format
         if ir.response_format:
-            payload["response_format"] = self._encode_response_format(ir.response_format)
+            payload["response_format"] = self._encode_response_format(
+                ir.response_format
+            )
 
         # User
         if ir.user:
@@ -747,9 +760,8 @@ class OpenAIChatEncoder:
             response["usage"] = {
                 "prompt_tokens": ir.usage.input_tokens,
                 "completion_tokens": ir.usage.output_tokens,
-                "total_tokens": ir.usage.total_tokens or (
-                    ir.usage.input_tokens + ir.usage.output_tokens
-                ),
+                "total_tokens": ir.usage.total_tokens
+                or (ir.usage.input_tokens + ir.usage.output_tokens),
             }
 
         return response

@@ -5,72 +5,72 @@ Tests all 6 conversion directions for requests, responses, and streams.
 """
 
 import json
-import pytest
+import sys
 from typing import Any, Dict, List
 
-import sys
+import pytest
+
 sys.path.insert(0, "/home/user/playground")
 
 from api_protocol_converter import (
-    convert_request,
-    convert_response,
-    convert_stream,
-    openai_chat_to_openai_responses_request,
-    openai_chat_to_openai_responses_response,
-    openai_chat_to_anthropic_messages_request,
-    openai_chat_to_anthropic_messages_response,
-    openai_responses_to_openai_chat_request,
-    openai_responses_to_openai_chat_response,
-    openai_responses_to_anthropic_messages_request,
-    openai_responses_to_anthropic_messages_response,
+    Protocol,
     anthropic_messages_to_openai_chat_request,
     anthropic_messages_to_openai_chat_response,
     anthropic_messages_to_openai_responses_request,
     anthropic_messages_to_openai_responses_response,
-    Protocol,
+    convert_request,
+    convert_response,
+    convert_stream,
+    openai_chat_to_anthropic_messages_request,
+    openai_chat_to_anthropic_messages_response,
+    openai_chat_to_openai_responses_request,
+    openai_chat_to_openai_responses_response,
+    openai_responses_to_anthropic_messages_request,
+    openai_responses_to_anthropic_messages_response,
+    openai_responses_to_openai_chat_request,
+    openai_responses_to_openai_chat_response,
 )
 from api_protocol_converter.converters.exceptions import (
-    ConversionError,
     CapabilityNotSupportedError,
+    ConversionError,
     ValidationError,
 )
-
 from tests.fixtures import (
-    # OpenAI Chat fixtures
-    OPENAI_CHAT_SIMPLE_REQUEST,
-    OPENAI_CHAT_WITH_SYSTEM_REQUEST,
-    OPENAI_CHAT_MULTIMODAL_REQUEST,
-    OPENAI_CHAT_WITH_TOOLS_REQUEST,
-    OPENAI_CHAT_TOOL_RESULT_REQUEST,
-    OPENAI_CHAT_SIMPLE_RESPONSE,
-    OPENAI_CHAT_TOOL_CALL_RESPONSE,
-    OPENAI_CHAT_STREAM_CHUNKS,
-    # OpenAI Responses fixtures
-    OPENAI_RESPONSES_SIMPLE_REQUEST,
-    OPENAI_RESPONSES_WITH_INSTRUCTIONS_REQUEST,
-    OPENAI_RESPONSES_WITH_TOOLS_REQUEST,
-    OPENAI_RESPONSES_SIMPLE_RESPONSE,
-    OPENAI_RESPONSES_TOOL_CALL_RESPONSE,
+    ANTHROPIC_MULTI_TOOL_USE_RESPONSE,
+    ANTHROPIC_MULTIMODAL_REQUEST,
     # Anthropic fixtures
     ANTHROPIC_SIMPLE_REQUEST,
-    ANTHROPIC_WITH_SYSTEM_REQUEST,
-    ANTHROPIC_MULTIMODAL_REQUEST,
-    ANTHROPIC_WITH_TOOLS_REQUEST,
-    ANTHROPIC_TOOL_RESULT_REQUEST,
     ANTHROPIC_SIMPLE_RESPONSE,
-    ANTHROPIC_TOOL_USE_RESPONSE,
     ANTHROPIC_STREAM_EVENTS,
+    ANTHROPIC_TOOL_RESULT_REQUEST,
+    ANTHROPIC_TOOL_USE_RESPONSE,
+    ANTHROPIC_WITH_BASE64_IMAGE_REQUEST,
+    ANTHROPIC_WITH_SYSTEM_REQUEST,
+    ANTHROPIC_WITH_TOOLS_REQUEST,
     # Complex fixtures
     OPENAI_CHAT_MULTI_TOOL_CALLS_RESPONSE,
-    ANTHROPIC_MULTI_TOOL_USE_RESPONSE,
+    OPENAI_CHAT_MULTIMODAL_REQUEST,
+    # OpenAI Chat fixtures
+    OPENAI_CHAT_SIMPLE_REQUEST,
+    OPENAI_CHAT_SIMPLE_RESPONSE,
+    OPENAI_CHAT_STREAM_CHUNKS,
+    OPENAI_CHAT_TOOL_CALL_RESPONSE,
+    OPENAI_CHAT_TOOL_RESULT_REQUEST,
     OPENAI_CHAT_WITH_BASE64_IMAGE_REQUEST,
-    ANTHROPIC_WITH_BASE64_IMAGE_REQUEST,
+    OPENAI_CHAT_WITH_SYSTEM_REQUEST,
+    OPENAI_CHAT_WITH_TOOLS_REQUEST,
+    # OpenAI Responses fixtures
+    OPENAI_RESPONSES_SIMPLE_REQUEST,
+    OPENAI_RESPONSES_SIMPLE_RESPONSE,
+    OPENAI_RESPONSES_TOOL_CALL_RESPONSE,
+    OPENAI_RESPONSES_WITH_INSTRUCTIONS_REQUEST,
+    OPENAI_RESPONSES_WITH_TOOLS_REQUEST,
 )
-
 
 # =============================================================================
 # OpenAI Chat -> OpenAI Responses Tests
 # =============================================================================
+
 
 class TestOpenAIChatToOpenAIResponses:
     """Tests for OpenAI Chat -> OpenAI Responses conversion."""
@@ -86,7 +86,9 @@ class TestOpenAIChatToOpenAIResponses:
 
     def test_request_with_system(self):
         """Test request with system prompt conversion."""
-        result = openai_chat_to_openai_responses_request(OPENAI_CHAT_WITH_SYSTEM_REQUEST)
+        result = openai_chat_to_openai_responses_request(
+            OPENAI_CHAT_WITH_SYSTEM_REQUEST
+        )
 
         assert result["model"] == "gpt-4o"
         assert result["instructions"] == "You are a helpful assistant."
@@ -116,7 +118,9 @@ class TestOpenAIChatToOpenAIResponses:
 
     def test_tool_call_response(self):
         """Test tool call response conversion."""
-        result = openai_chat_to_openai_responses_response(OPENAI_CHAT_TOOL_CALL_RESPONSE)
+        result = openai_chat_to_openai_responses_response(
+            OPENAI_CHAT_TOOL_CALL_RESPONSE
+        )
 
         assert "output" in result
         # Should have function_call in output
@@ -128,6 +132,7 @@ class TestOpenAIChatToOpenAIResponses:
 # =============================================================================
 # OpenAI Chat -> Anthropic Messages Tests
 # =============================================================================
+
 
 class TestOpenAIChatToAnthropicMessages:
     """Tests for OpenAI Chat -> Anthropic Messages conversion."""
@@ -143,7 +148,9 @@ class TestOpenAIChatToAnthropicMessages:
 
     def test_request_with_system(self):
         """Test request with system prompt conversion."""
-        result = openai_chat_to_anthropic_messages_request(OPENAI_CHAT_WITH_SYSTEM_REQUEST)
+        result = openai_chat_to_anthropic_messages_request(
+            OPENAI_CHAT_WITH_SYSTEM_REQUEST
+        )
 
         assert result["system"] == "You are a helpful assistant."
         # System message should be extracted, not in messages
@@ -151,7 +158,9 @@ class TestOpenAIChatToAnthropicMessages:
 
     def test_request_with_tools(self):
         """Test request with tools conversion."""
-        result = openai_chat_to_anthropic_messages_request(OPENAI_CHAT_WITH_TOOLS_REQUEST)
+        result = openai_chat_to_anthropic_messages_request(
+            OPENAI_CHAT_WITH_TOOLS_REQUEST
+        )
 
         assert "tools" in result
         assert len(result["tools"]) == 1
@@ -162,7 +171,9 @@ class TestOpenAIChatToAnthropicMessages:
 
     def test_multimodal_request(self):
         """Test multimodal (image) request conversion."""
-        result = openai_chat_to_anthropic_messages_request(OPENAI_CHAT_MULTIMODAL_REQUEST)
+        result = openai_chat_to_anthropic_messages_request(
+            OPENAI_CHAT_MULTIMODAL_REQUEST
+        )
 
         content = result["messages"][0]["content"]
         assert isinstance(content, list)
@@ -183,7 +194,9 @@ class TestOpenAIChatToAnthropicMessages:
 
     def test_tool_call_response(self):
         """Test tool call response conversion."""
-        result = openai_chat_to_anthropic_messages_response(OPENAI_CHAT_TOOL_CALL_RESPONSE)
+        result = openai_chat_to_anthropic_messages_response(
+            OPENAI_CHAT_TOOL_CALL_RESPONSE
+        )
 
         assert result["stop_reason"] == "tool_use"
         tool_uses = [c for c in result["content"] if c["type"] == "tool_use"]
@@ -209,20 +222,25 @@ class TestOpenAIChatToAnthropicMessages:
 # OpenAI Responses -> OpenAI Chat Tests
 # =============================================================================
 
+
 class TestOpenAIResponsesToOpenAIChat:
     """Tests for OpenAI Responses -> OpenAI Chat conversion."""
 
     def test_simple_request(self):
         """Test simple text request conversion."""
-        result = openai_responses_to_openai_chat_request(OPENAI_RESPONSES_SIMPLE_REQUEST)
+        result = openai_responses_to_openai_chat_request(
+            OPENAI_RESPONSES_SIMPLE_REQUEST
+        )
 
         assert result["model"] == "gpt-4o"
-        assert result["max_tokens"] == 100
+        assert result["max_completion_tokens"] == 100
         assert "messages" in result
 
     def test_request_with_instructions(self):
         """Test request with instructions conversion."""
-        result = openai_responses_to_openai_chat_request(OPENAI_RESPONSES_WITH_INSTRUCTIONS_REQUEST)
+        result = openai_responses_to_openai_chat_request(
+            OPENAI_RESPONSES_WITH_INSTRUCTIONS_REQUEST
+        )
 
         # Instructions should become system message
         system_messages = [m for m in result["messages"] if m["role"] == "system"]
@@ -231,7 +249,9 @@ class TestOpenAIResponsesToOpenAIChat:
 
     def test_request_with_tools(self):
         """Test request with tools conversion."""
-        result = openai_responses_to_openai_chat_request(OPENAI_RESPONSES_WITH_TOOLS_REQUEST)
+        result = openai_responses_to_openai_chat_request(
+            OPENAI_RESPONSES_WITH_TOOLS_REQUEST
+        )
 
         assert "tools" in result
         tool = result["tools"][0]
@@ -242,7 +262,9 @@ class TestOpenAIResponsesToOpenAIChat:
 
     def test_simple_response(self):
         """Test simple response conversion."""
-        result = openai_responses_to_openai_chat_response(OPENAI_RESPONSES_SIMPLE_RESPONSE)
+        result = openai_responses_to_openai_chat_response(
+            OPENAI_RESPONSES_SIMPLE_RESPONSE
+        )
 
         assert result["object"] == "chat.completion"
         assert "choices" in result
@@ -251,7 +273,9 @@ class TestOpenAIResponsesToOpenAIChat:
 
     def test_tool_call_response(self):
         """Test tool call response conversion."""
-        result = openai_responses_to_openai_chat_response(OPENAI_RESPONSES_TOOL_CALL_RESPONSE)
+        result = openai_responses_to_openai_chat_response(
+            OPENAI_RESPONSES_TOOL_CALL_RESPONSE
+        )
 
         message = result["choices"][0]["message"]
         assert "tool_calls" in message
@@ -263,12 +287,15 @@ class TestOpenAIResponsesToOpenAIChat:
 # OpenAI Responses -> Anthropic Messages Tests
 # =============================================================================
 
+
 class TestOpenAIResponsesToAnthropicMessages:
     """Tests for OpenAI Responses -> Anthropic Messages conversion."""
 
     def test_simple_request(self):
         """Test simple text request conversion."""
-        result = openai_responses_to_anthropic_messages_request(OPENAI_RESPONSES_SIMPLE_REQUEST)
+        result = openai_responses_to_anthropic_messages_request(
+            OPENAI_RESPONSES_SIMPLE_REQUEST
+        )
 
         assert result["model"] == "gpt-4o"
         assert result["max_tokens"] == 100
@@ -284,7 +311,9 @@ class TestOpenAIResponsesToAnthropicMessages:
 
     def test_simple_response(self):
         """Test simple response conversion."""
-        result = openai_responses_to_anthropic_messages_response(OPENAI_RESPONSES_SIMPLE_RESPONSE)
+        result = openai_responses_to_anthropic_messages_response(
+            OPENAI_RESPONSES_SIMPLE_RESPONSE
+        )
 
         assert result["type"] == "message"
         assert result["stop_reason"] == "end_turn"
@@ -294,6 +323,7 @@ class TestOpenAIResponsesToAnthropicMessages:
 # Anthropic Messages -> OpenAI Chat Tests
 # =============================================================================
 
+
 class TestAnthropicMessagesToOpenAIChat:
     """Tests for Anthropic Messages -> OpenAI Chat conversion."""
 
@@ -302,12 +332,14 @@ class TestAnthropicMessagesToOpenAIChat:
         result = anthropic_messages_to_openai_chat_request(ANTHROPIC_SIMPLE_REQUEST)
 
         assert result["model"] == "claude-3-5-sonnet-20241022"
-        assert result["max_tokens"] == 100
+        assert result["max_completion_tokens"] == 100
         assert len(result["messages"]) == 1
 
     def test_request_with_system(self):
         """Test request with system prompt conversion."""
-        result = anthropic_messages_to_openai_chat_request(ANTHROPIC_WITH_SYSTEM_REQUEST)
+        result = anthropic_messages_to_openai_chat_request(
+            ANTHROPIC_WITH_SYSTEM_REQUEST
+        )
 
         system_messages = [m for m in result["messages"] if m["role"] == "system"]
         assert len(system_messages) == 1
@@ -356,25 +388,32 @@ class TestAnthropicMessagesToOpenAIChat:
 # Anthropic Messages -> OpenAI Responses Tests
 # =============================================================================
 
+
 class TestAnthropicMessagesToOpenAIResponses:
     """Tests for Anthropic Messages -> OpenAI Responses conversion."""
 
     def test_simple_request(self):
         """Test simple text request conversion."""
-        result = anthropic_messages_to_openai_responses_request(ANTHROPIC_SIMPLE_REQUEST)
+        result = anthropic_messages_to_openai_responses_request(
+            ANTHROPIC_SIMPLE_REQUEST
+        )
 
         assert result["model"] == "claude-3-5-sonnet-20241022"
         assert result["max_output_tokens"] == 100
 
     def test_request_with_system(self):
         """Test request with system prompt conversion."""
-        result = anthropic_messages_to_openai_responses_request(ANTHROPIC_WITH_SYSTEM_REQUEST)
+        result = anthropic_messages_to_openai_responses_request(
+            ANTHROPIC_WITH_SYSTEM_REQUEST
+        )
 
         assert result["instructions"] == "You are a helpful assistant."
 
     def test_simple_response(self):
         """Test simple response conversion."""
-        result = anthropic_messages_to_openai_responses_response(ANTHROPIC_SIMPLE_RESPONSE)
+        result = anthropic_messages_to_openai_responses_response(
+            ANTHROPIC_SIMPLE_RESPONSE
+        )
 
         assert result["object"] == "response"
         assert result["status"] == "completed"
@@ -383,6 +422,7 @@ class TestAnthropicMessagesToOpenAIResponses:
 # =============================================================================
 # Generic Converter Tests
 # =============================================================================
+
 
 class TestGenericConverters:
     """Tests for generic convert_request/convert_response functions."""
@@ -419,16 +459,19 @@ class TestGenericConverters:
 # Streaming Tests
 # =============================================================================
 
+
 class TestStreamConversion:
     """Tests for stream conversion."""
 
     def test_openai_chat_to_anthropic_stream(self):
         """Test OpenAI Chat stream to Anthropic stream conversion."""
-        result = list(convert_stream(
-            Protocol.OPENAI_CHAT,
-            Protocol.ANTHROPIC_MESSAGES,
-            iter(OPENAI_CHAT_STREAM_CHUNKS),
-        ))
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_CHUNKS),
+            )
+        )
 
         # Should have message_start, content blocks, and message_stop
         event_types = [e.get("type") for e in result if isinstance(e, dict)]
@@ -437,18 +480,20 @@ class TestStreamConversion:
 
     def test_anthropic_to_openai_chat_stream(self):
         """Test Anthropic stream to OpenAI Chat stream conversion."""
-        result = list(convert_stream(
-            Protocol.ANTHROPIC_MESSAGES,
-            Protocol.OPENAI_CHAT,
-            iter(ANTHROPIC_STREAM_EVENTS),
-        ))
+        result = list(
+            convert_stream(
+                Protocol.ANTHROPIC_MESSAGES,
+                Protocol.OPENAI_CHAT,
+                iter(ANTHROPIC_STREAM_EVENTS),
+            )
+        )
 
         # Should have chunks with delta content
         assert len(result) > 0
         # Check for content deltas
         has_content = any(
-            isinstance(e, dict) and
-            e.get("choices", [{}])[0].get("delta", {}).get("content")
+            isinstance(e, dict)
+            and e.get("choices", [{}])[0].get("delta", {}).get("content")
             for e in result
         )
         assert has_content
@@ -457,6 +502,7 @@ class TestStreamConversion:
 # =============================================================================
 # Edge Cases and Error Handling Tests
 # =============================================================================
+
 
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
@@ -518,7 +564,9 @@ class TestEdgeCases:
             content = msg.get("content", [])
             if isinstance(content, list):
                 tool_results.extend(
-                    c for c in content if isinstance(c, dict) and c.get("type") == "tool_result"
+                    c
+                    for c in content
+                    if isinstance(c, dict) and c.get("type") == "tool_result"
                 )
 
         assert len(tool_results) == 1
@@ -528,6 +576,7 @@ class TestEdgeCases:
 # =============================================================================
 # Round-Trip Tests
 # =============================================================================
+
 
 class TestRoundTrip:
     """Tests for round-trip conversions (A -> B -> A)."""
@@ -544,7 +593,10 @@ class TestRoundTrip:
 
         # Key fields should be preserved
         assert result["model"] == OPENAI_CHAT_WITH_SYSTEM_REQUEST["model"]
-        assert result["max_tokens"] == OPENAI_CHAT_WITH_SYSTEM_REQUEST["max_tokens"]
+        assert (
+            result["max_completion_tokens"]
+            == OPENAI_CHAT_WITH_SYSTEM_REQUEST["max_tokens"]
+        )
 
         # System prompt should be preserved
         system_messages = [m for m in result["messages"] if m["role"] == "system"]
@@ -553,7 +605,9 @@ class TestRoundTrip:
     def test_anthropic_round_trip_via_openai_chat(self):
         """Test Anthropic -> OpenAI Chat -> Anthropic preserves key fields."""
         # Forward
-        openai = anthropic_messages_to_openai_chat_request(ANTHROPIC_WITH_SYSTEM_REQUEST)
+        openai = anthropic_messages_to_openai_chat_request(
+            ANTHROPIC_WITH_SYSTEM_REQUEST
+        )
 
         # Back
         result = openai_chat_to_anthropic_messages_request(openai)
@@ -566,13 +620,17 @@ class TestRoundTrip:
     def test_response_round_trip(self):
         """Test response round-trip conversion."""
         # Forward
-        anthropic = openai_chat_to_anthropic_messages_response(OPENAI_CHAT_SIMPLE_RESPONSE)
+        anthropic = openai_chat_to_anthropic_messages_response(
+            OPENAI_CHAT_SIMPLE_RESPONSE
+        )
 
         # Back
         result = anthropic_messages_to_openai_chat_response(anthropic)
 
         # Content should be preserved
-        original_content = OPENAI_CHAT_SIMPLE_RESPONSE["choices"][0]["message"]["content"]
+        original_content = OPENAI_CHAT_SIMPLE_RESPONSE["choices"][0]["message"][
+            "content"
+        ]
         result_content = result["choices"][0]["message"]["content"]
         assert original_content == result_content
 
