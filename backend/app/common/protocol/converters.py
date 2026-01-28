@@ -400,6 +400,14 @@ class SDKStreamConverter(IStreamConverter):
                 openai_stream, model, input_tokens=input_tokens
             ):
                 yield chunk
+        elif (
+            self._source == Protocol.OPENAI_RESPONSES
+            and self._target == Protocol.ANTHROPIC
+        ):
+            # Chain: OpenAI Responses -> OpenAI Chat -> Anthropic
+            openai_stream = self._convert_openai_responses_to_openai(upstream, model)
+            async for chunk in self._convert_openai_to_anthropic(openai_stream, model):
+                yield chunk
         else:
             # Generic fallback using SDK
             async for chunk in self._generic_stream_conversion(upstream, model):

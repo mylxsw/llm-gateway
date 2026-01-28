@@ -621,6 +621,11 @@ async def responses_sse_to_chat_completions_sse(
     sent_role = False
     done = False
 
+    # Track tool calls state
+    # item_id -> index
+    tool_call_indices: dict[str, int] = {}
+    next_tool_index = 0
+
     async for chunk in upstream:
         for payload in decoder.feed(chunk):
             if not payload:
@@ -643,10 +648,86 @@ async def responses_sse_to_chat_completions_sse(
                     resp_id = response["id"]
                 continue
 
+            if event_type == "response.output_item.added":
+                item = data.get("item")
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "function_call":
+                    item_id = data.get("item_id") or item.get("id")
+                    if not item_id:
+                        continue
+
+                    tool_index = next_tool_index
+                    next_tool_index += 1
+                    tool_call_indices[item_id] = tool_index
+
+                    call_id = item.get("call_id")
+                    name = item.get("name")
+
+                    delta: dict[str, Any] = {
+                        "tool_calls": [
+                            {
+                                "index": tool_index,
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": name, "arguments": ""},
+                            }
+                        ]
+                    }
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+
+                    payload_obj = {
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
+                continue
+
+                        if event_type == "response.function_call_arguments.delta":
+
+                            item_id = data.get("item_id")
+
+                            delta_args = data.get("delta")
+
+                            if item_id in tool_call_indices and delta_args:
+
+                                tool_index = tool_call_indices[item_id]
+                    delta = {
+                        "tool_calls": [
+                            {"index": tool_index, "function": {"arguments": delta_args}}
+                        ]
+                    }
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+
+                    payload_obj = {
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
+                continue
+
             if event_type == "response.output_text.delta":
                 delta_text = data.get("delta")
                 if isinstance(delta_text, str) and delta_text:
-                    delta: dict[str, Any] = {"content": delta_text}
+                    delta = {"content": delta_text}
                     if not sent_role:
                         delta["role"] = "assistant"
                         sent_role = True
@@ -664,13 +745,32 @@ async def responses_sse_to_chat_completions_sse(
                     )
                 continue
 
+            if event_type == "response.output_item.done":
+                # Check if it was a function call item to send finish_reason="tool_calls"?
+                # But typically OpenAI Chat stream sends finish_reason in a separate chunk or with last delta.
+                # OpenAI Responses `response.completed` is safer for final finish_reason.
+                # However, if we have tool calls, the chat stream usually expects `finish_reason: tool_calls`
+                item = data.get("item")
+                if isinstance(item, dict) and item.get("type") == "function_call":
+                    # We could signal tool_calls finish reason here if we knew this was the last one,
+                    # but response.completed is better for overall finish.
+                    pass
+                continue
+
             if event_type == "response.completed":
+                # Determine finish reason based on usage or context?
+                # Default to "stop" if not tool calls?
+                # If we processed tool calls, it should probably be "tool_calls".
+                finish_reason = "tool_calls" if next_tool_index > 0 else "stop"
+
                 payload_obj = {
                     "id": resp_id,
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "choices": [
+                        {"index": 0, "delta": {}, "finish_reason": finish_reason}
+                    ],
                 }
                 yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
                     "utf-8"
