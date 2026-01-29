@@ -61,10 +61,14 @@ class MockProxyService:
             for chunk in self.response_body:
                 yield chunk
 
-        return ProviderResponse(
-            status_code=self.status_code,
-            headers={"Content-Type": "text/event-stream", **self.headers},
-        ), gen(), {}
+        return (
+            ProviderResponse(
+                status_code=self.status_code,
+                headers={"Content-Type": "text/event-stream", **self.headers},
+            ),
+            gen(),
+            {},
+        )
 
 
 class TestOpenAIChatCompletions:
@@ -111,7 +115,10 @@ class TestOpenAIChatCompletions:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "chatcmpl-123"
-        assert data["choices"][0]["message"]["content"] == "Hello! How can I help you today?"
+        assert (
+            data["choices"][0]["message"]["content"]
+            == "Hello! How can I help you today?"
+        )
         assert service.calls[0]["path"] == "/v1/chat/completions"
         assert service.calls[0]["body"]["model"] == "gpt-4o-mini"
 
@@ -128,7 +135,10 @@ class TestOpenAIChatCompletions:
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": "I am a helpful assistant."},
+                    "message": {
+                        "role": "assistant",
+                        "content": "I am a helpful assistant.",
+                    },
                     "finish_reason": "stop",
                 }
             ],
@@ -251,7 +261,9 @@ class TestOpenAIChatCompletions:
                 "/v1/chat/completions",
                 json={
                     "model": "gpt-4o",
-                    "messages": [{"role": "user", "content": "What's the weather in New York?"}],
+                    "messages": [
+                        {"role": "user", "content": "What's the weather in New York?"}
+                    ],
                     "tools": [
                         {
                             "type": "function",
@@ -261,7 +273,10 @@ class TestOpenAIChatCompletions:
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
-                                        "location": {"type": "string", "description": "City name"}
+                                        "location": {
+                                            "type": "string",
+                                            "description": "City name",
+                                        }
                                     },
                                     "required": ["location"],
                                 },
@@ -320,11 +335,18 @@ class TestOpenAIChatCompletions:
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": "I see a cat in the image."},
+                    "message": {
+                        "role": "assistant",
+                        "content": "I see a cat in the image.",
+                    },
                     "finish_reason": "stop",
                 }
             ],
-            "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+            },
         }
         service = MockProxyService(response_body=response_body)
         app.dependency_overrides[get_proxy_service] = lambda: service
@@ -389,7 +411,9 @@ class TestOpenAIChatCompletions:
                 "/v1/chat/completions",
                 json={
                     "model": "gpt-4o-mini",
-                    "messages": [{"role": "user", "content": "Return JSON: {name, age}"}],
+                    "messages": [
+                        {"role": "user", "content": "Return JSON: {name, age}"}
+                    ],
                     "response_format": {"type": "json_object"},
                 },
             )
@@ -648,9 +672,7 @@ class TestOpenAIAudio:
     @pytest.mark.asyncio
     async def test_audio_transcription(self):
         """Test speech-to-text transcription (multipart)."""
-        response_body = {
-            "text": "Hello, this is a transcription test."
-        }
+        response_body = {"text": "Hello, this is a transcription test."}
         service = MockProxyService(response_body=response_body)
         app.dependency_overrides[get_proxy_service] = lambda: service
         app.dependency_overrides[get_current_api_key] = _make_api_key
@@ -779,8 +801,14 @@ class TestOpenAIImages:
         response_body = {
             "created": 1677652288,
             "data": [
-                {"url": "https://example.com/img1.png", "revised_prompt": "A cute white cat"},
-                {"url": "https://example.com/img2.png", "revised_prompt": "A cute white cat"},
+                {
+                    "url": "https://example.com/img1.png",
+                    "revised_prompt": "A cute white cat",
+                },
+                {
+                    "url": "https://example.com/img2.png",
+                    "revised_prompt": "A cute white cat",
+                },
             ],
         }
         service = MockProxyService(response_body=response_body)
@@ -851,22 +879,24 @@ class TestOpenAIResponses:
     @pytest.mark.asyncio
     async def test_responses_basic(self):
         """Test basic Responses API request."""
-        # The /v1/responses endpoint internally converts to chat completions
-        chat_response = {
-            "id": "chatcmpl-resp-1",
-            "object": "chat.completion",
-            "created": 1677652288,
+        # The /v1/responses endpoint uses openai_responses protocol directly
+        # MockProxyService returns the response as-is (simulating same-protocol scenario)
+        responses_response = {
+            "id": "resp-1",
+            "object": "response",
+            "created_at": 1677652288,
             "model": "gpt-4o-mini",
-            "choices": [
+            "output": [
                 {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "Hello there!"},
-                    "finish_reason": "stop",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello there!"}],
                 }
             ],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            "status": "completed",
+            "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
         }
-        service = MockProxyService(response_body=chat_response)
+        service = MockProxyService(response_body=responses_response)
         app.dependency_overrides[get_proxy_service] = lambda: service
         app.dependency_overrides[get_current_api_key] = _make_api_key
 
@@ -882,30 +912,38 @@ class TestOpenAIResponses:
 
         assert response.status_code == 200
         data = response.json()
-        # Response should be converted to Responses API format
+        # Response should be in Responses API format
         assert data["object"] == "response"
         assert "output" in data
+        # Verify request_protocol is openai_responses
+        assert service.calls[0]["request_protocol"] == "openai_responses"
 
         app.dependency_overrides = {}
 
     @pytest.mark.asyncio
     async def test_responses_with_instructions(self):
         """Test Responses API with instructions (system message)."""
-        chat_response = {
-            "id": "chatcmpl-resp-2",
-            "object": "chat.completion",
-            "created": 1677652288,
+        responses_response = {
+            "id": "resp-2",
+            "object": "response",
+            "created_at": 1677652288,
             "model": "gpt-4o",
-            "choices": [
+            "output": [
                 {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "I am a pirate assistant! Arrr!"},
-                    "finish_reason": "stop",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": "I am a pirate assistant! Arrr!",
+                        }
+                    ],
                 }
             ],
-            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+            "status": "completed",
+            "usage": {"input_tokens": 20, "output_tokens": 10, "total_tokens": 30},
         }
-        service = MockProxyService(response_body=chat_response)
+        service = MockProxyService(response_body=responses_response)
         app.dependency_overrides[get_proxy_service] = lambda: service
         app.dependency_overrides[get_current_api_key] = _make_api_key
 
@@ -921,21 +959,25 @@ class TestOpenAIResponses:
             )
 
         assert response.status_code == 200
-        # Verify the internal conversion includes system message
+        # Verify the request body is passed as openai_responses format
         body = service.calls[0]["body"]
-        assert body["messages"][0]["role"] == "system"
-        assert "pirate" in body["messages"][0]["content"].lower()
+        assert body.get("instructions") == "You are a pirate. Respond like a pirate."
+        assert body.get("input") == "Hello, who are you?"
+        assert service.calls[0]["request_protocol"] == "openai_responses"
 
         app.dependency_overrides = {}
 
     @pytest.mark.asyncio
     async def test_responses_streaming(self):
         """Test Responses API streaming."""
+        # OpenAI Responses API streaming format
         chunks = [
-            b'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}],"model":"gpt-4o-mini"}\n\n',
-            b'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}],"model":"gpt-4o-mini"}\n\n',
-            b'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-4o-mini"}\n\n',
-            b"data: [DONE]\n\n",
+            b'data: {"type":"response.created","response":{"id":"resp-stream","object":"response","status":"in_progress","model":"gpt-4o-mini"}}\n\n',
+            b'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","role":"assistant","content":[]}}\n\n',
+            b'data: {"type":"response.content_part.added","output_index":0,"content_index":0,"part":{"type":"output_text","text":""}}\n\n',
+            b'data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"Hi"}\n\n',
+            b'data: {"type":"response.output_text.done","output_index":0,"content_index":0,"text":"Hi"}\n\n',
+            b'data: {"type":"response.completed","response":{"id":"resp-stream","object":"response","status":"completed","model":"gpt-4o-mini"}}\n\n',
         ]
         service = MockProxyService(response_body=chunks)
         app.dependency_overrides[get_proxy_service] = lambda: service
@@ -954,6 +996,7 @@ class TestOpenAIResponses:
 
         assert response.status_code == 200
         assert service.calls[0]["body"]["stream"] is True
+        assert service.calls[0]["request_protocol"] == "openai_responses"
 
         app.dependency_overrides = {}
 

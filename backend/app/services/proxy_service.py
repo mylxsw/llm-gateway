@@ -2,18 +2,17 @@
 
 Implements core business logic for request proxying."""
 
-import json
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 import anyio
 
+from app.common.costs import calculate_cost_from_billing, resolve_billing
 from app.common.errors import NotFoundError, ServiceError
-from app.common.sanitizer import sanitize_headers
-from app.common.stream_usage import StreamUsageAccumulator
 from app.common.protocol_conversion import (
     convert_request_for_supplier,
     convert_response_for_user,
@@ -21,22 +20,28 @@ from app.common.protocol_conversion import (
     normalize_protocol,
 )
 from app.common.provider_protocols import resolve_implementation_protocol
-from app.common.token_counter import get_token_counter
-from app.common.costs import calculate_cost_from_billing, resolve_billing
-from app.common.utils import generate_trace_id
-from app.common.time import utc_now
-from app.common.usage_extractor import extract_usage_details
 from app.common.proxy import build_proxy_config
+from app.common.sanitizer import sanitize_headers
+from app.common.stream_usage import StreamUsageAccumulator
+from app.common.time import utc_now
+from app.common.token_counter import get_token_counter
+from app.common.usage_extractor import extract_usage_details
+from app.common.utils import generate_trace_id
 from app.domain.log import RequestLogCreate
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
-from app.providers import get_provider_client, ProviderResponse
+from app.providers import ProviderResponse, get_provider_client
+from app.repositories.log_repo import LogRepository
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
-from app.repositories.log_repo import LogRepository
-from app.rules import RuleEngine, RuleContext, TokenUsage, CandidateProvider
-from app.services.retry_handler import RetryHandler, AttemptRecord
-from app.services.strategy import RoundRobinStrategy, CostFirstStrategy, PriorityStrategy, SelectionStrategy
+from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
+from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.strategy import (
+    CostFirstStrategy,
+    PriorityStrategy,
+    RoundRobinStrategy,
+    SelectionStrategy,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,28 +60,28 @@ def _smart_truncate(data: Any, max_list: int = 20, max_str: int = 1000) -> Any:
     """
     if isinstance(data, dict):
         return {k: _smart_truncate(v, max_list, max_str) for k, v in data.items()}
-    
+
     if isinstance(data, list):
         if len(data) > max_list:
             # Check if it's a list of numbers (likely embedding vector)
             if data and isinstance(data[0], (int, float)):
-                 return data[:5] + [f"...({len(data)-5} items)..."]
-            
+                return data[:5] + [f"...({len(data) - 5} items)..."]
+
             truncated = [_smart_truncate(x, max_list, max_str) for x in data[:max_list]]
-            truncated.append(f"...({len(data)-max_list} more items)...")
+            truncated.append(f"...({len(data) - max_list} more items)...")
             return truncated
         return [_smart_truncate(x, max_list, max_str) for x in data]
-    
+
     if isinstance(data, str) and len(data) > max_str:
         return data[:max_str] + "...[truncated]"
-    
+
     return data
 
 
 class ProxyService:
     """
     Proxy Core Service
-    
+
     Handles the complete flow of proxy requests:
     1. Parse request, extract requested_model
     2. Calculate input Token
@@ -88,7 +93,7 @@ class ProxyService:
     8. Record log
     9. Return response
     """
-    
+
     def __init__(
         self,
         model_repo: ModelRepository,
@@ -143,7 +148,7 @@ class ProxyService:
     def _serialize_response_body(body: Any) -> str | None:
         if body is None:
             return None
-            
+
         data = body
         if isinstance(body, (bytes, bytearray)):
             if b"\x00" in body:
@@ -166,7 +171,7 @@ class ProxyService:
             except Exception:
                 # Fallback
                 return _truncate_log_text(str(data))
-        
+
         return _truncate_log_text(str(data))
 
     @staticmethod
@@ -197,7 +202,13 @@ class ProxyService:
         request_protocol: str,
         headers: dict[str, str],
         body: dict[str, Any],
-    ) -> tuple[ModelMapping, list[CandidateProvider], int, str, dict[int, ModelMappingProviderResponse]]:
+    ) -> tuple[
+        ModelMapping,
+        list[CandidateProvider],
+        int,
+        str,
+        dict[int, ModelMappingProviderResponse],
+    ]:
         """
         Resolve model and provider candidate list
 
@@ -242,9 +253,13 @@ class ProxyService:
         eligible_providers = {pid: p for pid, p in providers.items()}
 
         if not eligible_provider_mappings:
-            raise ServiceError(message="No available providers", code="no_available_provider")
+            raise ServiceError(
+                message="No available providers", code="no_available_provider"
+            )
 
-        provider_mapping_by_id = {pm.provider_id: pm for pm in eligible_provider_mappings}
+        provider_mapping_by_id = {
+            pm.provider_id: pm for pm in eligible_provider_mappings
+        }
 
         token_counter = get_token_counter(request_protocol)
         input_tokens = token_counter.count_request(body, requested_model)
@@ -269,8 +284,14 @@ class ProxyService:
                 code="no_available_provider",
             )
 
-        return model_mapping, candidates, input_tokens, request_protocol, provider_mapping_by_id
-    
+        return (
+            model_mapping,
+            candidates,
+            input_tokens,
+            request_protocol,
+            provider_mapping_by_id,
+        )
+
     async def process_request(
         self,
         api_key_id: Optional[int],
@@ -285,7 +306,7 @@ class ProxyService:
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
         Process Proxy Request
-        
+
         Args:
             api_key_id: API Key ID
             api_key_name: API Key Name
@@ -293,10 +314,10 @@ class ProxyService:
             method: HTTP method
             headers: Request headers
             body: Request body
-        
+
         Returns:
             tuple[ProviderResponse, dict]: (Provider response, Log info)
-        
+
         Raises:
             NotFoundError: Model not configured
             ServiceError: No available provider
@@ -304,7 +325,7 @@ class ProxyService:
         trace_id = generate_trace_id()
         request_time = utc_now()
         sanitized_body = self._sanitize_request_body_for_log(body)
-        
+
         # 1. Extract requested_model
         requested_model = body.get("model")
         if not requested_model:
@@ -312,9 +333,15 @@ class ProxyService:
                 message="Model is required in request body",
                 code="missing_model",
             )
-        
+
         # 2. Get model mapping
-        model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id = await self._resolve_candidates(
+        (
+            model_mapping,
+            candidates,
+            input_tokens,
+            protocol,
+            provider_mapping_by_id,
+        ) = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
             headers=headers,
@@ -328,11 +355,13 @@ class ProxyService:
                 "id": c.provider_id,
                 "name": c.provider_name,
                 "priority": c.priority,
-                "weight": c.weight
+                "weight": c.weight,
             }
             for c in candidates
         ]
-        logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
+        logger.debug(
+            f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}"
+        )
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
@@ -354,11 +383,21 @@ class ProxyService:
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
                 model_output_price=model_mapping.output_price,
-                provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
-                provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
-                provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
-                provider_input_price=provider_mapping.input_price if provider_mapping else None,
-                provider_output_price=provider_mapping.output_price if provider_mapping else None,
+                provider_billing_mode=provider_mapping.billing_mode
+                if provider_mapping
+                else None,
+                provider_per_request_price=provider_mapping.per_request_price
+                if provider_mapping
+                else None,
+                provider_tiered_pricing=provider_mapping.tiered_pricing
+                if provider_mapping
+                else None,
+                provider_input_price=provider_mapping.input_price
+                if provider_mapping
+                else None,
+                provider_output_price=provider_mapping.output_price
+                if provider_mapping
+                else None,
             )
             attempt_log = RequestLogCreate(
                 request_time=attempt.request_time,
@@ -388,9 +427,15 @@ class ProxyService:
                 is_stream=False,
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(attempt.provider.protocol),
-                converted_request_body=_smart_truncate(conversion_data.get("converted_request_body")),
-                upstream_response_body=self._serialize_response_body(attempt.response.body),
+                supplier_protocol=resolve_implementation_protocol(
+                    attempt.provider.protocol
+                ),
+                converted_request_body=_smart_truncate(
+                    conversion_data.get("converted_request_body")
+                ),
+                upstream_response_body=self._serialize_response_body(
+                    attempt.response.body
+                ),
             )
             try:
                 await self._write_log(attempt_log)
@@ -419,7 +464,9 @@ class ProxyService:
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
-                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
+                same_protocol = normalize_protocol(
+                    request_protocol
+                ) == normalize_protocol(supplier_protocol)
                 proxy_config = build_proxy_config(
                     candidate.proxy_enabled,
                     candidate.proxy_url,
@@ -432,7 +479,9 @@ class ProxyService:
                     headers=headers,
                     body=supplier_body,
                     target_model=candidate.target_model,
-                    response_mode="parsed" if force_parse_response else ("raw" if same_protocol else "parsed"),
+                    response_mode="parsed"
+                    if force_parse_response
+                    else ("raw" if same_protocol else "parsed"),
                     extra_headers=candidate.extra_headers,
                     proxy_config=proxy_config,
                 )
@@ -461,8 +510,12 @@ class ProxyService:
             # Capture upstream response before protocol conversion
             conversion_data["upstream_response_body"] = result.response.body
             try:
-                supplier_protocol = resolve_implementation_protocol(result.final_provider.protocol)
-                same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
+                supplier_protocol = resolve_implementation_protocol(
+                    result.final_provider.protocol
+                )
+                same_protocol = normalize_protocol(
+                    request_protocol
+                ) == normalize_protocol(supplier_protocol)
                 if not same_protocol:
                     result.response.body = convert_response_for_user(
                         request_protocol=request_protocol,
@@ -488,7 +541,7 @@ class ProxyService:
                     first_byte_delay_ms=result.response.first_byte_delay_ms,
                     total_time_ms=result.response.total_time_ms,
                 )
-        
+
         # 9. Calculate Output Token and usage details
         output_tokens = 0
         usage_details: Optional[dict[str, Any]] = None
@@ -496,48 +549,72 @@ class ProxyService:
             upstream_body = conversion_data.get("upstream_response_body")
             details = None
             try:
-                details = extract_usage_details(upstream_body) or extract_usage_details(result.response.body)
+                details = extract_usage_details(upstream_body) or extract_usage_details(
+                    result.response.body
+                )
             except Exception:
                 details = None
 
             if details:
                 usage_details = dict(details.__dict__)
-                if details.input_tokens is not None:
+                if details.input_tokens:
                     input_tokens = details.input_tokens
-                if details.output_tokens is not None:
+                if details.output_tokens:
                     output_tokens = details.output_tokens
                 else:
-                    output_tokens = token_counter.count_output_body(result.response.body, requested_model)
+                    output_tokens = token_counter.count_output_body(
+                        result.response.body, requested_model
+                    )
                     usage_details["output_tokens"] = output_tokens
                     usage_details["source"] = "mixed"
-                if usage_details.get("input_tokens") is None:
+                if not usage_details.get("input_tokens"):
                     usage_details["input_tokens"] = input_tokens
                     usage_details["source"] = "mixed"
-                if usage_details.get("total_tokens") is None and usage_details.get("input_tokens") is not None:
-                    usage_details["total_tokens"] = usage_details["input_tokens"] + (usage_details.get("output_tokens") or 0)
+                if not usage_details.get("total_tokens") and usage_details.get(
+                    "input_tokens"
+                ):
+                    usage_details["total_tokens"] = usage_details["input_tokens"] + (
+                        usage_details.get("output_tokens") or 0
+                    )
             else:
-                output_tokens = token_counter.count_output_body(result.response.body, requested_model)
+                output_tokens = token_counter.count_output_body(
+                    result.response.body, requested_model
+                )
                 usage_details = {
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "total_tokens": (input_tokens or 0) + (output_tokens or 0),
                     "source": "estimated",
                 }
-        
+
         # 10. Record log
-        final_provider_id = result.final_provider.provider_id if result.final_provider else None
+        final_provider_id = (
+            result.final_provider.provider_id if result.final_provider else None
+        )
         provider_mapping = (
-            provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
+            provider_mapping_by_id.get(final_provider_id)
+            if final_provider_id is not None
+            else None
         )
         billing = resolve_billing(
             input_tokens=input_tokens,
             model_input_price=model_mapping.input_price,
             model_output_price=model_mapping.output_price,
-            provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
-            provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
-            provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
-            provider_input_price=provider_mapping.input_price if provider_mapping else None,
-            provider_output_price=provider_mapping.output_price if provider_mapping else None,
+            provider_billing_mode=provider_mapping.billing_mode
+            if provider_mapping
+            else None,
+            provider_per_request_price=provider_mapping.per_request_price
+            if provider_mapping
+            else None,
+            provider_tiered_pricing=provider_mapping.tiered_pricing
+            if provider_mapping
+            else None,
+            provider_input_price=provider_mapping.input_price
+            if provider_mapping
+            else None,
+            provider_output_price=provider_mapping.output_price
+            if provider_mapping
+            else None,
         )
         cost = calculate_cost_from_billing(
             billing=billing,
@@ -549,9 +626,15 @@ class ProxyService:
             api_key_id=api_key_id,
             api_key_name=api_key_name,
             requested_model=requested_model,
-            target_model=result.final_provider.target_model if result.final_provider else None,
-            provider_id=result.final_provider.provider_id if result.final_provider else None,
-            provider_name=result.final_provider.provider_name if result.final_provider else None,
+            target_model=result.final_provider.target_model
+            if result.final_provider
+            else None,
+            provider_id=result.final_provider.provider_id
+            if result.final_provider
+            else None,
+            provider_name=result.final_provider.provider_name
+            if result.final_provider
+            else None,
             retry_count=result.retry_count,
             matched_provider_count=len(candidates),
             first_byte_delay_ms=result.response.first_byte_delay_ms,
@@ -574,10 +657,14 @@ class ProxyService:
             # Protocol conversion fields
             request_protocol=conversion_data.get("request_protocol"),
             supplier_protocol=conversion_data.get("supplier_protocol"),
-            converted_request_body=_smart_truncate(conversion_data.get("converted_request_body")),
-            upstream_response_body=self._serialize_response_body(conversion_data.get("upstream_response_body")),
+            converted_request_body=_smart_truncate(
+                conversion_data.get("converted_request_body")
+            ),
+            upstream_response_body=self._serialize_response_body(
+                conversion_data.get("upstream_response_body")
+            ),
         )
-        
+
         # DEBUG: Log request details
         try:
             logger.debug(f"Request Log: {log_data.model_dump_json()}")
@@ -587,12 +674,16 @@ class ProxyService:
 
         if result.success or not failed_attempt_logged:
             await self._write_log(log_data)
-        
+
         return result.response, {
             "trace_id": trace_id,
             "retry_count": result.retry_count,
-            "target_model": result.final_provider.target_model if result.final_provider else None,
-            "provider_name": result.final_provider.provider_name if result.final_provider else None,
+            "target_model": result.final_provider.target_model
+            if result.final_provider
+            else None,
+            "provider_name": result.final_provider.provider_name
+            if result.final_provider
+            else None,
         }
 
     async def process_request_stream(
@@ -607,7 +698,7 @@ class ProxyService:
     ) -> tuple[ProviderResponse, AsyncGenerator[bytes, None], dict[str, Any]]:
         """
         Process Streaming Proxy Request
-        
+
         Args:
             api_key_id: API Key ID
             api_key_name: API Key Name
@@ -615,7 +706,7 @@ class ProxyService:
             method: HTTP method
             headers: Request headers
             body: Request body
-        
+
         Returns:
             tuple: (Initial response, Stream generator, Log info)
         """
@@ -623,13 +714,19 @@ class ProxyService:
         request_time = utc_now()
         start_monotonic = time.monotonic()
         sanitized_body = self._sanitize_request_body_for_log(body)
-        
+
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
         if not requested_model:
             raise ServiceError(message="Model is required", code="missing_model")
 
-        model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id = await self._resolve_candidates(
+        (
+            model_mapping,
+            candidates,
+            input_tokens,
+            protocol,
+            provider_mapping_by_id,
+        ) = await self._resolve_candidates(
             requested_model=requested_model,
             request_protocol=request_protocol,
             headers=headers,
@@ -642,11 +739,13 @@ class ProxyService:
                 "id": c.provider_id,
                 "name": c.provider_name,
                 "priority": c.priority,
-                "weight": c.weight
+                "weight": c.weight,
             }
             for c in candidates
         ]
-        logger.debug(f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}")
+        logger.debug(
+            f"Matched Providers: {json.dumps(candidates_info, ensure_ascii=False)}"
+        )
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
@@ -723,7 +822,7 @@ class ProxyService:
                 async def upstream_bytes() -> AsyncGenerator[bytes, None]:
                     # Reset upstream chunks for the current attempt
                     stream_conversion_data["upstream_chunks"] = []
-                    
+
                     stream_conversion_data["upstream_chunks"].append(first_chunk)
                     yield first_chunk
                     async for chunk, _ in upstream_gen:
@@ -731,7 +830,9 @@ class ProxyService:
                         yield chunk
 
                 try:
-                    same_protocol = normalize_protocol(request_protocol) == normalize_protocol(supplier_protocol)
+                    same_protocol = normalize_protocol(
+                        request_protocol
+                    ) == normalize_protocol(supplier_protocol)
                     if same_protocol:
                         async for chunk in upstream_bytes():
                             yield chunk, first_resp
@@ -741,6 +842,7 @@ class ProxyService:
                             supplier_protocol=supplier_protocol,
                             upstream=upstream_bytes(),
                             model=candidate.target_model,
+                            input_tokens=input_tokens,
                         ):
                             yield out_chunk, first_resp
                 except Exception as e:
@@ -756,13 +858,13 @@ class ProxyService:
                     )
                     if (request_protocol or "openai").lower() == "anthropic":
                         yield (
-                            f"data: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
+                            f"event: error\ndata: {json.dumps({'type': 'error', 'error': {'message': err}}, ensure_ascii=False)}\n\n".encode(
                                 "utf-8"
                             ),
                             first_resp,
                         )
                         yield (
-                            f"data: {json.dumps({'type': 'message_stop'}, ensure_ascii=False)}\n\n".encode(
+                            f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'}, ensure_ascii=False)}\n\n".encode(
                                 "utf-8"
                             ),
                             first_resp,
@@ -778,18 +880,28 @@ class ProxyService:
                     return
 
             return wrapped()
-            
+
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
             provider_mapping = provider_mapping_by_id.get(attempt.provider.provider_id)
             billing = resolve_billing(
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
                 model_output_price=model_mapping.output_price,
-                provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
-                provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
-                provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
-                provider_input_price=provider_mapping.input_price if provider_mapping else None,
-                provider_output_price=provider_mapping.output_price if provider_mapping else None,
+                provider_billing_mode=provider_mapping.billing_mode
+                if provider_mapping
+                else None,
+                provider_per_request_price=provider_mapping.per_request_price
+                if provider_mapping
+                else None,
+                provider_tiered_pricing=provider_mapping.tiered_pricing
+                if provider_mapping
+                else None,
+                provider_input_price=provider_mapping.input_price
+                if provider_mapping
+                else None,
+                provider_output_price=provider_mapping.output_price
+                if provider_mapping
+                else None,
             )
             attempt_log = RequestLogCreate(
                 request_time=attempt.request_time,
@@ -819,9 +931,15 @@ class ProxyService:
                 is_stream=True,
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(attempt.provider.protocol),
-                converted_request_body=_smart_truncate(stream_conversion_data.get("converted_request_body")),
-                upstream_response_body=self._serialize_response_body(attempt.response.body),
+                supplier_protocol=resolve_implementation_protocol(
+                    attempt.provider.protocol
+                ),
+                converted_request_body=_smart_truncate(
+                    stream_conversion_data.get("converted_request_body")
+                ),
+                upstream_response_body=self._serialize_response_body(
+                    attempt.response.body
+                ),
             )
             try:
                 with anyio.CancelScope(shield=True):
@@ -836,14 +954,18 @@ class ProxyService:
             input_tokens=input_tokens,
             on_failure_attempt=log_failed_attempt,
         )
-        
+
         # Get first chunk to determine status
         try:
-            first_chunk, initial_response, final_provider, retry_count = await anext(stream_gen)
+            first_chunk, initial_response, final_provider, retry_count = await anext(
+                stream_gen
+            )
         except StopAsyncIteration:
             raise ServiceError(message="Stream ended unexpectedly", code="stream_error")
         except Exception as e:
-            raise ServiceError(message=f"Stream connection error: {str(e)}", code="stream_error")
+            raise ServiceError(
+                message=f"Stream connection error: {str(e)}", code="stream_error"
+            )
 
         # Wrap generator to handle logging
         async def wrapped_generator():
@@ -881,42 +1003,61 @@ class ProxyService:
             finally:
                 usage_result = usage_acc.finalize()
                 usage_details = usage_result.usage_details
-                if usage_result.input_tokens is not None:
+                if usage_result.input_tokens:
                     input_tokens = usage_result.input_tokens
                 if usage_details is None:
                     usage_details = {
                         "input_tokens": input_tokens,
                         "output_tokens": usage_result.output_tokens,
-                        "total_tokens": (input_tokens or 0) + (usage_result.output_tokens or 0),
+                        "total_tokens": (input_tokens or 0)
+                        + (usage_result.output_tokens or 0),
                         "source": "estimated",
                     }
-                elif usage_details.get("input_tokens") is None:
+                elif not usage_details.get("input_tokens"):
                     usage_details["input_tokens"] = input_tokens
                     usage_details["source"] = "mixed"
-                if usage_details.get("output_tokens") is None:
+                if not usage_details.get("output_tokens"):
                     usage_details["output_tokens"] = usage_result.output_tokens
                     usage_details["source"] = "mixed"
-                if usage_details.get("total_tokens") is None and usage_details.get("input_tokens") is not None:
-                    usage_details["total_tokens"] = usage_details["input_tokens"] + (usage_details.get("output_tokens") or 0)
+                if not usage_details.get("total_tokens") and usage_details.get(
+                    "input_tokens"
+                ):
+                    usage_details["total_tokens"] = usage_details["input_tokens"] + (
+                        usage_details.get("output_tokens") or 0
+                    )
                 total_time_ms = initial_response.total_time_ms
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
 
                 # 10. Record log (after stream ends)
                 # Record the raw stream response (SSE) plus a reconstructed summary in one field.
-                final_provider_id = final_provider.provider_id if final_provider else None
+                final_provider_id = (
+                    final_provider.provider_id if final_provider else None
+                )
                 provider_mapping = (
-                    provider_mapping_by_id.get(final_provider_id) if final_provider_id is not None else None
+                    provider_mapping_by_id.get(final_provider_id)
+                    if final_provider_id is not None
+                    else None
                 )
                 billing = resolve_billing(
                     input_tokens=input_tokens,
                     model_input_price=model_mapping.input_price,
                     model_output_price=model_mapping.output_price,
-                    provider_billing_mode=provider_mapping.billing_mode if provider_mapping else None,
-                    provider_per_request_price=provider_mapping.per_request_price if provider_mapping else None,
-                    provider_tiered_pricing=provider_mapping.tiered_pricing if provider_mapping else None,
-                    provider_input_price=provider_mapping.input_price if provider_mapping else None,
-                    provider_output_price=provider_mapping.output_price if provider_mapping else None,
+                    provider_billing_mode=provider_mapping.billing_mode
+                    if provider_mapping
+                    else None,
+                    provider_per_request_price=provider_mapping.per_request_price
+                    if provider_mapping
+                    else None,
+                    provider_tiered_pricing=provider_mapping.tiered_pricing
+                    if provider_mapping
+                    else None,
+                    provider_input_price=provider_mapping.input_price
+                    if provider_mapping
+                    else None,
+                    provider_output_price=provider_mapping.output_price
+                    if provider_mapping
+                    else None,
                 )
                 cost = calculate_cost_from_billing(
                     billing=billing,
@@ -944,9 +1085,13 @@ class ProxyService:
                     api_key_id=api_key_id,
                     api_key_name=api_key_name,
                     requested_model=requested_model,
-                    target_model=final_provider.target_model if final_provider else None,
+                    target_model=final_provider.target_model
+                    if final_provider
+                    else None,
                     provider_id=final_provider.provider_id if final_provider else None,
-                    provider_name=final_provider.provider_name if final_provider else None,
+                    provider_name=final_provider.provider_name
+                    if final_provider
+                    else None,
                     retry_count=retry_count,
                     matched_provider_count=len(candidates),
                     first_byte_delay_ms=initial_response.first_byte_delay_ms,
@@ -960,7 +1105,9 @@ class ProxyService:
                     request_headers=sanitize_headers(headers),
                     response_headers=sanitize_headers(initial_response.headers),
                     request_body=sanitized_body,
-                    response_body=combined_body if raw_stream_text or reconstructed_body else None,
+                    response_body=combined_body
+                    if raw_stream_text or reconstructed_body
+                    else None,
                     response_status=initial_response.status_code,
                     usage_details=usage_details,
                     error_info=initial_response.error or stream_error,
@@ -969,15 +1116,19 @@ class ProxyService:
                     # Protocol conversion fields
                     request_protocol=stream_conversion_data.get("request_protocol"),
                     supplier_protocol=stream_conversion_data.get("supplier_protocol"),
-                    converted_request_body=_smart_truncate(stream_conversion_data.get("converted_request_body")),
+                    converted_request_body=_smart_truncate(
+                        stream_conversion_data.get("converted_request_body")
+                    ),
                     # For stream, upstream_response_body is the raw stream captured from upstream
                     upstream_response_body=(
-                        b"".join(stream_conversion_data["upstream_chunks"]).decode("utf-8", errors="replace")
+                        b"".join(stream_conversion_data["upstream_chunks"]).decode(
+                            "utf-8", errors="replace"
+                        )
                         if stream_conversion_data.get("upstream_chunks")
                         else (raw_stream_text if raw_stream_text else None)
                     ),
                 )
-                
+
                 # DEBUG: Log request details
                 try:
                     logger.debug(f"Request Log: {log_data.model_dump_json()}")
@@ -993,9 +1144,15 @@ class ProxyService:
                     # Log writing failure does not affect main flow
                     pass
 
-        return initial_response, wrapped_generator(), {
-            "trace_id": trace_id,
-            "retry_count": retry_count,
-            "target_model": final_provider.target_model if final_provider else None,
-            "provider_name": final_provider.provider_name if final_provider else None,
-        }
+        return (
+            initial_response,
+            wrapped_generator(),
+            {
+                "trace_id": trace_id,
+                "retry_count": retry_count,
+                "target_model": final_provider.target_model if final_provider else None,
+                "provider_name": final_provider.provider_name
+                if final_provider
+                else None,
+            },
+        )
