@@ -57,6 +57,9 @@ export interface LogQueryParams {
 
   // Trend bucketing hint for stats (hour/day)
   bucket?: 'hour' | 'day';
+
+  // Group by dimension for model stats
+  group_by?: 'request_model' | 'provider_model';
   
   // Model filter
   requested_model?: string;

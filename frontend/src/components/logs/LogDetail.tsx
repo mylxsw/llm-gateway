@@ -57,6 +57,37 @@ export function LogDetail({ log }: LogDetailProps) {
     return `${requestedModel || '-'} → ${targetModel || '-'}`;
   }, [log?.requested_model, log?.target_model]);
 
+  // Token usage details - only show fields with non-zero values
+  const tokenUsageItems = useMemo(() => {
+    const details = log?.usage_details;
+    if (!details) return [];
+
+    const labelMap: Record<string, string> = {
+      cached_tokens: 'Cached Tokens',
+      cache_creation_input_tokens: 'Cache Creation',
+      cache_read_input_tokens: 'Cache Read',
+      input_audio_tokens: 'Input Audio',
+      output_audio_tokens: 'Output Audio',
+      input_image_tokens: 'Input Image',
+      output_image_tokens: 'Output Image',
+      input_video_tokens: 'Input Video',
+      output_video_tokens: 'Output Video',
+      reasoning_tokens: 'Reasoning',
+      tool_tokens: 'Tool Tokens',
+    };
+
+    return Object.entries(labelMap)
+      .filter(([key]) => {
+        const value = details[key];
+        return typeof value === 'number' && value > 0;
+      })
+      .map(([key, label]) => ({
+        key,
+        label,
+        value: details[key] as number,
+      }));
+  }, [log?.usage_details]);
+
   const handleCopyTraceId = async () => {
     const traceId = log?.trace_id;
     if (!traceId) return;
@@ -212,6 +243,20 @@ export function LogDetail({ log }: LogDetailProps) {
               </div>
             </div>
           </div>
+
+          {tokenUsageItems.length > 0 && (
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="mb-2 text-sm font-medium">Token Usage Details</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-6">
+                {tokenUsageItems.map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-medium">{item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="rounded-lg border bg-muted/30 p-3">
             <div className="mb-2 text-sm font-medium">Request Flow</div>

@@ -26,6 +26,9 @@ WORKDIR /app
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir --prefer-binary -r /app/backend/requirements.txt
 
+COPY llm_api_converter /app/llm_api_converter
+RUN pip install --no-cache-dir /app/llm_api_converter
+
 COPY backend/app /app/backend/app
 
 COPY --from=frontend-builder /build/frontend/out /app/static

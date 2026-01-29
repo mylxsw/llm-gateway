@@ -346,6 +346,7 @@ export function CostStats({
   rangeEnd,
   bucket = 'day',
   maxBars = 30,
+  modelStatsControls,
 }: CostStatsProps) {
   const modelMax = useMemo(() => {
     const values = stats?.by_model?.map((p) => Number(p.total_cost) || 0) ?? [];
@@ -607,7 +608,10 @@ export function CostStats({
 
             <div className="grid gap-4">
               <div className="rounded-lg border bg-muted/10 p-3">
-                <div className="mb-2 text-sm font-medium">By Model (Top 10)</div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">By Model (Top 10)</div>
+                  {modelStatsControls}
+                </div>
                 <div className="space-y-2">
                   {stats.by_model.length === 0 ? (
                     <div className="text-sm text-muted-foreground">No data</div>
