@@ -116,6 +116,7 @@ function loadRangeStateFromStorage() {
 
 export function HomeCostStats() {
   const [{ preset, customStart, customEnd }, setRangeState] = useState(getDefaultRangeState);
+  const [statsMode, setStatsMode] = useState<'request_model' | 'provider_model'>('request_model');
   const restoredRef = useRef(false);
 
   useEffect(() => {
@@ -203,8 +204,8 @@ export function HomeCostStats() {
   }, [preset, customStart, customEnd]);
 
   const queryKey = useMemo(
-    () => ['logs', 'home-cost-stats', preset, customStart, customEnd] as const,
-    [preset, customStart, customEnd]
+    () => ['logs', 'home-cost-stats', preset, customStart, customEnd, statsMode] as const,
+    [preset, customStart, customEnd, statsMode]
   );
 
   const { data, isLoading, isFetching, refetch } = useQuery({
@@ -221,6 +222,7 @@ export function HomeCostStats() {
           end_time: customRange.endAt.toISOString(),
           tz_offset_minutes: tzOffsetMinutes,
           bucket,
+          group_by: statsMode,
         };
         return getLogCostStats(params);
       }
@@ -235,6 +237,7 @@ export function HomeCostStats() {
         start_time: start.toISOString(),
         tz_offset_minutes: tzOffsetMinutes,
         bucket,
+        group_by: statsMode,
       };
       return getLogCostStats(params);
     },
@@ -254,6 +257,22 @@ export function HomeCostStats() {
       rangeEnd={displayRange.end_time}
       bucket={displayRange.bucket}
       maxBars={MAX_TREND_BARS}
+      modelStatsControls={
+        <div className="flex items-center gap-2">
+           <Select
+            value={statsMode}
+            onValueChange={(v) => setStatsMode(v as 'request_model' | 'provider_model')}
+          >
+            <SelectTrigger className="h-6 w-[130px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="request_model">Request Model</SelectItem>
+              <SelectItem value="provider_model">Provider Model</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      }
       headerActions={
         <div className="flex items-center justify-end">
           <Select

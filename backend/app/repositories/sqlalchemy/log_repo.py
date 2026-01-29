@@ -392,13 +392,20 @@ class SQLAlchemyLogRepository(LogRepository):
             for r in trend_rows
         ]
 
+        # Determine grouping column based on query.group_by
+        # If group_by="provider_model", we group by target_model (the actual model used)
+        # Otherwise default to requested_model
+        group_column = RequestLogORM.requested_model
+        if getattr(query, "group_by", "request_model") == "provider_model":
+            group_column = RequestLogORM.target_model
+
         by_model_stmt = (
             select(
-                func.coalesce(RequestLogORM.requested_model, "").label("requested_model"),
+                func.coalesce(group_column, "").label("requested_model"),
                 func.count().label("request_count"),
                 sum_total.label("total_cost"),
             )
-            .group_by(RequestLogORM.requested_model)
+            .group_by(group_column)
             .order_by(sum_total.desc())
             .limit(50)
         )

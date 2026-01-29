@@ -190,6 +190,12 @@ class LogCostStatsQuery(BaseModel):
         le=14 * 60,
         description="Timezone offset minutes for bucketing (UTC to local)",
     )
+    # Group by dimension for model stats: request_model (default) or provider_model
+    group_by: str = Field(
+        "request_model",
+        pattern="^(request_model|provider_model)$",
+        description="Group by dimension for model stats",
+    )
 
     @field_validator("start_time", "end_time", mode="after")
     @classmethod
