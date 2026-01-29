@@ -14,11 +14,6 @@ from starlette.datastructures import UploadFile
 from app.api.deps import CurrentApiKey, ModelServiceDep, ProxyServiceDep
 from app.common.errors import AppError
 from app.common.proxy_headers import sanitize_upstream_response_headers
-from app.common.openai_responses import (
-    chat_completion_to_responses_response,
-    chat_completions_sse_to_responses_sse,
-    responses_request_to_chat_completions,
-)
 
 router = APIRouter(tags=["Proxy - OpenAI"])
 
@@ -34,7 +29,9 @@ async def list_models(
     Returns active requested models configured in the gateway.
     """
     try:
-        items, _total = await service.get_all_mappings(is_active=True, page=1, page_size=1000)
+        items, _total = await service.get_all_mappings(
+            is_active=True, page=1, page_size=1000
+        )
         return {
             "object": "list",
             "data": [
@@ -67,7 +64,11 @@ async def _handle_proxy_request_with_body(
         is_stream = body.get("stream", False)
 
         if is_stream:
-            initial_response, stream_gen, log_info = await service.process_request_stream(
+            (
+                initial_response,
+                stream_gen,
+                log_info,
+            ) = await service.process_request_stream(
                 api_key_id=api_key.id,
                 api_key_name=api_key.key_name,
                 request_protocol="openai",
@@ -84,12 +85,16 @@ async def _handle_proxy_request_with_body(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=sanitize_upstream_response_headers(initial_response.headers),
+                        headers=sanitize_upstream_response_headers(
+                            initial_response.headers
+                        ),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=sanitize_upstream_response_headers(initial_response.headers),
+                    headers=sanitize_upstream_response_headers(
+                        initial_response.headers
+                    ),
                 )
 
             return StreamingResponse(
@@ -200,7 +205,9 @@ async def chat_completions(
     """
     OpenAI Chat Completions API Proxy
     """
-    return await _handle_proxy_request(request, api_key, service, "/v1/chat/completions")
+    return await _handle_proxy_request(
+        request, api_key, service, "/v1/chat/completions"
+    )
 
 
 @router.post("/v1/completions")
@@ -276,7 +283,9 @@ async def images_generations(
     """
     OpenAI Images Generations API Proxy
     """
-    return await _handle_proxy_request(request, api_key, service, "/v1/images/generations")
+    return await _handle_proxy_request(
+        request, api_key, service, "/v1/images/generations"
+    )
 
 
 @router.post("/v1/responses")
@@ -288,24 +297,42 @@ async def responses(
     """
     OpenAI Responses API Proxy
 
-    Best-effort compatibility: translates Responses requests into Chat Completions internally.
+    Uses openai_responses protocol directly, letting the protocol conversion
+    system handle any necessary transformations based on the target provider.
+    """
+    return await _handle_proxy_request_openai_responses(
+        request, api_key, service, "/v1/responses"
+    )
+
+
+async def _handle_proxy_request_openai_responses(
+    request: Request,
+    api_key: CurrentApiKey,
+    service: ProxyServiceDep,
+    path: str,
+):
+    """
+    Handle proxy request with openai_responses protocol.
     """
     try:
         body = await request.json()
         headers = dict(request.headers)
 
-        chat_body = responses_request_to_chat_completions(body)
-        is_stream = bool(chat_body.get("stream", False))
+        is_stream = body.get("stream", False)
 
         if is_stream:
-            initial_response, stream_gen, _log_info = await service.process_request_stream(
+            (
+                initial_response,
+                stream_gen,
+                log_info,
+            ) = await service.process_request_stream(
                 api_key_id=api_key.id,
                 api_key_name=api_key.key_name,
-                request_protocol="openai",
-                path="/v1/chat/completions",
+                request_protocol="openai_responses",
+                path=path,
                 method=request.method,
                 headers=headers,
-                body=chat_body,
+                body=body,
             )
 
             if not initial_response.is_success:
@@ -314,57 +341,42 @@ async def responses(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=sanitize_upstream_response_headers(initial_response.headers),
+                        headers=sanitize_upstream_response_headers(
+                            initial_response.headers
+                        ),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=sanitize_upstream_response_headers(initial_response.headers),
+                    headers=sanitize_upstream_response_headers(
+                        initial_response.headers
+                    ),
                 )
 
-            converted_stream = chat_completions_sse_to_responses_sse(
-                upstream=stream_gen,
-                model=str(body.get("model") or chat_body.get("model") or ""),
-            )
             return StreamingResponse(
-                converted_stream,
+                stream_gen,
                 status_code=initial_response.status_code,
                 headers=sanitize_upstream_response_headers(initial_response.headers),
                 media_type="text/event-stream",
             )
 
-        response, _log_info = await service.process_request(
+        response, log_info = await service.process_request(
             api_key_id=api_key.id,
             api_key_name=api_key.key_name,
-            request_protocol="openai",
-            path="/v1/chat/completions",
+            request_protocol="openai_responses",
+            path=path,
             method=request.method,
             headers=headers,
-            body=chat_body,
-            force_parse_response=True,
+            body=body,
         )
 
         content = response.body
-        if isinstance(content, (bytes, bytearray)):
-            try:
-                content = json.loads(content.decode("utf-8", errors="ignore"))
-            except Exception:
-                pass
-        elif isinstance(content, str):
-            try:
-                content = json.loads(content)
-            except Exception:
-                pass
-
         if isinstance(content, (dict, list)):
-            if isinstance(content, dict) and response.is_success:
-                content = chat_completion_to_responses_response(content)
             return JSONResponse(
                 content=content,
                 status_code=response.status_code,
                 headers=sanitize_upstream_response_headers(response.headers),
             )
-
         return Response(
             content=content,
             status_code=response.status_code,

@@ -49,8 +49,8 @@ ensure_data_dir
 case "$cmd" in
   up)
     compose up -d --build "$@"
-    echo "LLM Gateway is starting..."
-    echo "Dashboard/API: http://localhost:8000"
+    echo "Squirrel LLM Gateway is starting..."
+    echo "Dashboard/API: http://127.0.0.1:8000"
     ;;
   down)
     compose down "$@"

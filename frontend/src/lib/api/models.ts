@@ -18,6 +18,8 @@ import {
   ModelProviderStats,
   ModelMatchRequest,
   ModelMatchProvider,
+  ModelTestRequest,
+  ModelTestResponse,
   PaginatedResponse,
 } from '@/types';
 
@@ -154,6 +156,16 @@ export async function matchModelProviders(
 ): Promise<ModelMatchProvider[]> {
   return post<ModelMatchProvider[]>(
     `${MODELS_URL}/${encodeURIComponent(requestedModel)}/match`,
+    data
+  );
+}
+
+export async function testModel(
+  requestedModel: string,
+  data: ModelTestRequest
+): Promise<ModelTestResponse> {
+  return post<ModelTestResponse>(
+    `${MODELS_URL}/${encodeURIComponent(requestedModel)}/test`,
     data
   );
 }

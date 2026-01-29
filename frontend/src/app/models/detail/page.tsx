@@ -20,7 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
-import { ModelProviderForm, ModelMatchDialog } from '@/components/models';
+import { ModelProviderForm, ModelMatchDialog, ModelTestDialog } from '@/components/models';
 import { ConfirmDialog, LoadingSpinner, ErrorState } from '@/components/common';
 import {
   useModel,
@@ -137,6 +137,7 @@ function ModelDetailContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingMapping, setEditingMapping] = useState<ModelMappingProvider | null>(null);
   const [matchDialogOpen, setMatchDialogOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingMapping, setDeletingMapping] = useState<ModelMappingProvider | null>(null);
@@ -330,9 +331,16 @@ function ModelDetailContent() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setTestDialogOpen(true)}
+            >
+              Model Test
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setMatchDialogOpen(true)}
             >
-              Test
+              Match Test
             </Button>
             <Button onClick={handleAddProvider} size="sm">
               <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
@@ -500,6 +508,12 @@ function ModelDetailContent() {
         modelType={modelType}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <ModelTestDialog
+        open={testDialogOpen}
+        onOpenChange={setTestDialogOpen}
+        requestedModel={requestedModel}
       />
 
       <ModelMatchDialog

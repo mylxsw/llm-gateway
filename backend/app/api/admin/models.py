@@ -4,14 +4,22 @@ Model Management API
 Provides CRUD endpoints for Model Mappings and Model-Provider Mappings.
 """
 
-from typing import Optional
+from typing import Any, Optional
+import json
+import time
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import LogServiceDep, ModelServiceDep, require_admin_auth
+from app.api.deps import LogServiceDep, ModelServiceDep, ProxyServiceDep, require_admin_auth
 from app.common.errors import AppError
+from app.common.provider_protocols import (
+    ANTHROPIC_PROTOCOL,
+    OPENAI_RESPONSES_PROTOCOL,
+    resolve_implementation_protocol,
+)
+from app.common.stream_usage import SSEDecoder, StreamUsageAccumulator
 from app.domain.model import (
     ModelMappingCreate,
     ModelMappingUpdate,
@@ -51,6 +59,193 @@ class ImportModelResponse(BaseModel):
     success: int
     skipped: int
     errors: list[str]
+
+
+class ModelTestRequest(BaseModel):
+    """Model test request"""
+    protocol: str
+    stream: bool = False
+
+
+class ModelTestResponse(BaseModel):
+    """Model test response"""
+    content: str
+    response_status: int
+    total_time_ms: Optional[int] = None
+    first_byte_delay_ms: Optional[int] = None
+    provider_name: Optional[str] = None
+    target_model: Optional[str] = None
+
+
+def _build_test_payload(
+    requested_model: str,
+    protocol: str,
+    stream: bool,
+) -> tuple[str, dict[str, Any], str]:
+    implementation = resolve_implementation_protocol(protocol)
+    if implementation == ANTHROPIC_PROTOCOL:
+        return (
+            "/v1/messages",
+            {
+                "model": requested_model,
+                "messages": [{"role": "user", "content": "hello"}],
+                "max_tokens": 16,
+                "stream": stream,
+            },
+            implementation,
+        )
+
+    if implementation == OPENAI_RESPONSES_PROTOCOL:
+        return (
+            "/v1/responses",
+            {
+                "model": requested_model,
+                "input": "hello",
+                "max_output_tokens": 16,
+                "stream": stream,
+            },
+            implementation,
+        )
+
+    return (
+        "/v1/chat/completions",
+        {
+            "model": requested_model,
+            "messages": [{"role": "user", "content": "hello"}],
+            "max_tokens": 16,
+            "stream": stream,
+        },
+        implementation,
+    )
+
+
+def _normalize_response_body(body: Any) -> Any:
+    if body is None:
+        return None
+    if isinstance(body, (bytes, bytearray)):
+        try:
+            decoded = body.decode("utf-8", errors="ignore")
+        except Exception:
+            return body
+        try:
+            return json.loads(decoded)
+        except Exception:
+            return decoded
+    if isinstance(body, str):
+        try:
+            return json.loads(body)
+        except Exception:
+            return body
+    return body
+
+
+def _extract_text_from_response(body: Any, implementation: str) -> str:
+    if not isinstance(body, dict):
+        return "" if body is None else str(body)
+
+    error = body.get("error")
+    if isinstance(error, dict):
+        message = error.get("message")
+        if isinstance(message, str) and message:
+            return message
+
+    if implementation == ANTHROPIC_PROTOCOL:
+        content = body.get("content")
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str) and text:
+                        parts.append(text)
+            if parts:
+                return "".join(parts)
+        text = body.get("text")
+        if isinstance(text, str):
+            return text
+
+    if implementation == OPENAI_RESPONSES_PROTOCOL:
+        output = body.get("output")
+        if isinstance(output, list):
+            parts: list[str] = []
+            for item in output:
+                if not isinstance(item, dict) or item.get("type") != "message":
+                    continue
+                content = item.get("content")
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict):
+                            text = block.get("text")
+                            if isinstance(text, str) and text:
+                                parts.append(text)
+            if parts:
+                return "".join(parts)
+        text = body.get("output_text")
+        if isinstance(text, str):
+            return text
+
+    choices = body.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    parts: list[str] = []
+                    for block in content:
+                        if isinstance(block, dict):
+                            text = block.get("text")
+                            if isinstance(text, str) and text:
+                                parts.append(text)
+                    if parts:
+                        return "".join(parts)
+            text = first.get("text")
+            if isinstance(text, str):
+                return text
+
+    return json.dumps(body, ensure_ascii=False)
+
+
+async def _collect_stream_text(
+    stream,
+    implementation: str,
+    requested_model: str,
+) -> str:
+    if implementation == OPENAI_RESPONSES_PROTOCOL:
+        decoder = SSEDecoder()
+        parts: list[str] = []
+        completed_text: Optional[str] = None
+
+        async for chunk in stream:
+            for payload in decoder.feed(chunk):
+                stripped = payload.strip()
+                if not stripped or stripped == "[DONE]":
+                    continue
+                try:
+                    data = json.loads(payload)
+                except Exception:
+                    continue
+                event_type = data.get("type")
+                if event_type == "response.output_text.delta":
+                    delta = data.get("delta")
+                    if isinstance(delta, str) and delta:
+                        parts.append(delta)
+                elif event_type == "response.completed":
+                    response = data.get("response")
+                    if isinstance(response, dict):
+                        completed_text = _extract_text_from_response(response, implementation)
+
+        if parts:
+            return "".join(parts)
+        return completed_text or ""
+
+    usage_acc = StreamUsageAccumulator(protocol=implementation, model=requested_model)
+    async for chunk in stream:
+        usage_acc.feed(chunk)
+    return usage_acc.finalize().output_text
 
 
 # ============ Model Mapping Endpoints ============
@@ -168,6 +363,81 @@ async def match_model_providers(
     """
     try:
         return await service.match_providers(requested_model, data)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.post("/models/{requested_model:path}/test", response_model=ModelTestResponse)
+async def test_model(
+    requested_model: str,
+    data: ModelTestRequest,
+    service: ProxyServiceDep,
+):
+    """
+    Simulate a chat request for the specified model and protocol.
+    """
+    try:
+        path, body, implementation = _build_test_payload(
+            requested_model=requested_model,
+            protocol=data.protocol,
+            stream=data.stream,
+        )
+        headers: dict[str, str] = {}
+
+        if data.stream:
+            start = time.monotonic()
+            initial_response, stream_gen, _log_info = await service.process_request_stream(
+                api_key_id=None,
+                api_key_name=None,
+                request_protocol=data.protocol,
+                path=path,
+                method="POST",
+                headers=headers,
+                body=body,
+            )
+            content = await _collect_stream_text(
+                stream=stream_gen,
+                implementation=implementation,
+                requested_model=requested_model,
+            )
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            if not content and initial_response.error:
+                content = initial_response.error
+
+            return ModelTestResponse(
+                content=content,
+                response_status=initial_response.status_code,
+                total_time_ms=initial_response.total_time_ms or elapsed_ms,
+                first_byte_delay_ms=initial_response.first_byte_delay_ms,
+                provider_name=_log_info.get("provider_name") if _log_info else None,
+                target_model=_log_info.get("target_model") if _log_info else None,
+            )
+
+        start = time.monotonic()
+        response, _log_info = await service.process_request(
+            api_key_id=None,
+            api_key_name=None,
+            request_protocol=data.protocol,
+            path=path,
+            method="POST",
+            headers=headers,
+            body=body,
+            force_parse_response=True,
+        )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        normalized = _normalize_response_body(response.body)
+        content = _extract_text_from_response(normalized, implementation)
+        if not content and response.error:
+            content = response.error
+
+        return ModelTestResponse(
+            content=content,
+            response_status=response.status_code,
+            total_time_ms=response.total_time_ms or elapsed_ms,
+            first_byte_delay_ms=response.first_byte_delay_ms,
+            provider_name=_log_info.get("provider_name") if _log_info else None,
+            target_model=_log_info.get("target_model") if _log_info else None,
+        )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 

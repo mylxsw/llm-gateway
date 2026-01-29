@@ -18,6 +18,7 @@ import {
   getModelStats,
   getModelProviderStats,
   matchModelProviders,
+  testModel,
 } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/api/error';
 import {
@@ -30,6 +31,7 @@ import {
   ModelListParams,
   ModelProviderListParams,
   ModelMatchRequest,
+  ModelTestRequest,
 } from '@/types';
 
 /** Query Keys */
@@ -246,6 +248,21 @@ export function useMatchModelProviders() {
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Match failed'));
+    },
+  });
+}
+
+export function useTestModel() {
+  return useMutation({
+    mutationFn: ({
+      requestedModel,
+      data,
+    }: {
+      requestedModel: string;
+      data: ModelTestRequest;
+    }) => testModel(requestedModel, data),
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Test failed'));
     },
   });
 }

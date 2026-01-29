@@ -9,7 +9,13 @@ import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Download, Upload } from 'lucide-react';
-import { ModelFilters, ModelFiltersState, ModelForm, ModelList } from '@/components/models';
+import {
+  ModelFilters,
+  ModelFiltersState,
+  ModelForm,
+  ModelList,
+  ModelTestDialog,
+} from '@/components/models';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useModels,
@@ -43,6 +49,8 @@ export default function ModelsPage() {
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingModel, setDeletingModel] = useState<ModelMapping | null>(null);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testingModel, setTestingModel] = useState<ModelMapping | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ModelFiltersState>({
@@ -87,6 +95,11 @@ export default function ModelsPage() {
   const handleDelete = (model: ModelMapping) => {
     setDeletingModel(model);
     setDeleteDialogOpen(true);
+  };
+
+  const handleTest = (model: ModelMapping) => {
+    setTestingModel(model);
+    setTestDialogOpen(true);
   };
 
   // Submit form
@@ -240,6 +253,7 @@ export default function ModelsPage() {
                 )}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onTest={handleTest}
               />
               <Pagination
                 page={page}
@@ -272,6 +286,12 @@ export default function ModelsPage() {
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}
+      />
+
+      <ModelTestDialog
+        open={testDialogOpen}
+        onOpenChange={setTestDialogOpen}
+        requestedModel={testingModel?.requested_model ?? ''}
       />
     </div>
   );

@@ -14,6 +14,7 @@ import uuid
 from typing import Any, AsyncGenerator, Optional
 
 from app.common.stream_usage import SSEDecoder
+from app.common.token_counter import get_token_counter
 
 
 def _coerce_openai_content_to_responses(content: Any) -> list[dict[str, Any]]:
@@ -41,7 +42,9 @@ def _coerce_openai_content_to_responses(content: Any) -> list[dict[str, Any]]:
             if block_type in ("image_url", "input_image"):
                 url: Optional[str] = None
                 image_url = item.get("image_url")
-                if isinstance(image_url, dict) and isinstance(image_url.get("url"), str):
+                if isinstance(image_url, dict) and isinstance(
+                    image_url.get("url"), str
+                ):
                     url = image_url["url"]
                 elif isinstance(image_url, str):
                     url = image_url
@@ -81,13 +84,21 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
         content = _coerce_openai_content_to_responses(item.get("content"))
         if role == "system":
             if content:
-                instructions.append("".join(block.get("text", "") for block in content if block.get("type") == "input_text"))
+                instructions.append(
+                    "".join(
+                        block.get("text", "")
+                        for block in content
+                        if block.get("type") == "input_text"
+                    )
+                )
             continue
         input_messages.append({"role": role, "content": content})
 
     responses_body: dict[str, Any] = {"model": body.get("model")}
     if instructions:
-        responses_body["instructions"] = "\n".join([text for text in instructions if text])
+        responses_body["instructions"] = "\n".join(
+            [text for text in instructions if text]
+        )
 
     if input_messages:
         responses_body["input"] = input_messages
@@ -103,7 +114,6 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
         "n",
         "stop",
         "stream",
-        "stream_options",
         "tools",
         "tool_choice",
         "parallel_tool_calls",
@@ -143,7 +153,10 @@ def _coerce_input_to_messages(input_value: Any) -> list[dict[str, Any]]:
     # Some clients send OpenAI "messages" style directly in `input`.
     if isinstance(input_value, list):
         # If it looks like a list of message objects with roles, treat it as messages.
-        if all(isinstance(x, dict) and ("role" in x or x.get("type") == "message") for x in input_value):
+        if all(
+            isinstance(x, dict) and ("role" in x or x.get("type") == "message")
+            for x in input_value
+        ):
             out_messages: list[dict[str, Any]] = []
             for item in input_value:
                 if not isinstance(item, dict):
@@ -170,11 +183,19 @@ def _coerce_input_to_messages(input_value: Any) -> list[dict[str, Any]]:
 
     if isinstance(input_value, dict):
         # Single message-like object.
-        role = input_value.get("role") if isinstance(input_value.get("role"), str) else "user"
+        role = (
+            input_value.get("role")
+            if isinstance(input_value.get("role"), str)
+            else "user"
+        )
         content = (
             _coerce_content_blocks(input_value.get("content"))
             if "content" in input_value
-            else (input_value.get("text") if isinstance(input_value.get("text"), str) else "")
+            else (
+                input_value.get("text")
+                if isinstance(input_value.get("text"), str)
+                else ""
+            )
         )
         return [{"role": role, "content": content}]
 
@@ -212,7 +233,9 @@ def _coerce_content_blocks(content: Any) -> Any:
 
         if block_type in ("input_image", "image_url"):
             url: Optional[str] = None
-            if isinstance(block.get("image_url"), dict) and isinstance(block["image_url"].get("url"), str):
+            if isinstance(block.get("image_url"), dict) and isinstance(
+                block["image_url"].get("url"), str
+            ):
                 url = block["image_url"]["url"]
             elif isinstance(block.get("url"), str):
                 url = block["url"]
@@ -267,7 +290,6 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
         "n",
         "stop",
         "stream",
-        "stream_options",
         "tools",
         "tool_choice",
         "parallel_tool_calls",
@@ -283,7 +305,11 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
         if key in body:
             chat_body[key] = body[key]
 
-    if "max_output_tokens" in body and "max_tokens" not in chat_body and "max_completion_tokens" not in chat_body:
+    if (
+        "max_output_tokens" in body
+        and "max_tokens" not in chat_body
+        and "max_completion_tokens" not in chat_body
+    ):
         chat_body["max_completion_tokens"] = body.get("max_output_tokens")
 
     return chat_body
@@ -302,7 +328,11 @@ def _extract_assistant_text_from_chat_completion(chat_body: dict[str, Any]) -> s
     if isinstance(content, list):
         parts: list[str] = []
         for item in content:
-            if isinstance(item, dict) and item.get("type") in ("text", "output_text") and isinstance(item.get("text"), str):
+            if (
+                isinstance(item, dict)
+                and item.get("type") in ("text", "output_text")
+                and isinstance(item.get("text"), str)
+            ):
                 parts.append(item["text"])
         return "".join(parts)
     return ""
@@ -339,7 +369,9 @@ def chat_completion_to_responses_response(chat_body: dict[str, Any]) -> dict[str
         created_at = int(time.time())
 
     chat_id = chat_body.get("id")
-    resp_id = f"resp_{chat_id}" if isinstance(chat_id, str) and chat_id else _new_id("resp")
+    resp_id = (
+        f"resp_{chat_id}" if isinstance(chat_id, str) and chat_id else _new_id("resp")
+    )
     msg_id = _new_id("msg")
 
     usage = chat_body.get("usage") if isinstance(chat_body.get("usage"), dict) else {}
@@ -380,7 +412,11 @@ def responses_response_to_chat_completion(resp_body: dict[str, Any]) -> dict[str
         created_at = int(time.time())
 
     resp_id = resp_body.get("id")
-    chat_id = f"chatcmpl_{resp_id}" if isinstance(resp_id, str) and resp_id else _new_id("chatcmpl")
+    chat_id = (
+        f"chatcmpl_{resp_id}"
+        if isinstance(resp_id, str) and resp_id
+        else _new_id("chatcmpl")
+    )
 
     usage = resp_body.get("usage") if isinstance(resp_body.get("usage"), dict) else {}
     prompt_tokens = int(usage.get("input_tokens") or 0)
@@ -414,14 +450,26 @@ async def chat_completions_sse_to_responses_sse(
     upstream: AsyncGenerator[bytes, None],
     model: str,
     response_id: Optional[str] = None,
+    input_tokens: Optional[int] = None,
 ) -> AsyncGenerator[bytes, None]:
     """
+
+
     Convert OpenAI Chat Completions SSE stream to Responses SSE stream.
 
+
+
+
+
     This is a best-effort compatibility layer focused on text output deltas.
+
+
     """
+
     decoder = SSEDecoder()
+
     resp_id = response_id or _new_id("resp")
+
     msg_id = _new_id("msg")
 
     created = {
@@ -433,39 +481,65 @@ async def chat_completions_sse_to_responses_sse(
             "model": model,
             "status": "in_progress",
             "output": [
-                {"id": msg_id, "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": ""}]}
+                {
+                    "id": msg_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": ""}],
+                }
             ],
         },
     }
-    yield f"data: {json.dumps(created, ensure_ascii=False)}\n\n".encode("utf-8")
+
+    yield f"event: response.created\ndata: {json.dumps(created, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
 
     text_parts: list[str] = []
+
     saw_done = False
+
+    final_usage = None
 
     async for chunk in upstream:
         for payload in decoder.feed(chunk):
             if not payload:
                 continue
+
             if payload.strip() == "[DONE]":
                 saw_done = True
+
                 break
 
             try:
                 data = json.loads(payload)
+
             except Exception:
                 continue
 
+            # Try to extract usage from upstream if available (e.g. stream_options: {include_usage: true})
+
+            if "usage" in data and data["usage"]:
+                final_usage = data["usage"]
+
             choices = data.get("choices")
+
             if not isinstance(choices, list):
                 continue
 
             for choice in choices:
                 if not isinstance(choice, dict):
                     continue
-                delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+
+                delta = (
+                    choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+                )
+
                 content = delta.get("content")
+
                 if isinstance(content, str) and content:
                     text_parts.append(content)
+
                     evt = {
                         "type": "response.output_text.delta",
                         "delta": content,
@@ -473,12 +547,41 @@ async def chat_completions_sse_to_responses_sse(
                         "content_index": 0,
                         "item_id": msg_id,
                     }
-                    yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n".encode("utf-8")
+
+                    yield f"event: response.output_text.delta\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
 
         if saw_done:
             break
 
     final_text = "".join(text_parts)
+
+    # Calculate usage if not provided by upstream
+
+    if not final_usage:
+        token_counter = get_token_counter("openai")
+
+        output_tokens = token_counter.count_tokens(final_text, model)
+
+        total_input = input_tokens or 0
+
+        final_usage = {
+            "input_tokens": total_input,
+            "output_tokens": output_tokens,
+            "total_tokens": total_input + output_tokens,
+        }
+
+    else:
+        # Normalize usage keys
+
+        if "prompt_tokens" in final_usage:
+            final_usage = {
+                "input_tokens": final_usage.get("prompt_tokens", 0),
+                "output_tokens": final_usage.get("completion_tokens", 0),
+                "total_tokens": final_usage.get("total_tokens", 0),
+            }
+
     completed = {
         "type": "response.completed",
         "response": {
@@ -495,11 +598,13 @@ async def chat_completions_sse_to_responses_sse(
                     "content": [{"type": "output_text", "text": final_text}],
                 }
             ],
-            "usage": None,
+            "usage": final_usage,
         },
     }
-    yield f"data: {json.dumps(completed, ensure_ascii=False)}\n\n".encode("utf-8")
-    yield b"data: [DONE]\n\n"
+
+    yield f"event: response.completed\ndata: {json.dumps(completed, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
 
 
 async def responses_sse_to_chat_completions_sse(
@@ -515,6 +620,11 @@ async def responses_sse_to_chat_completions_sse(
     resp_id = response_id or _new_id("chatcmpl")
     sent_role = False
     done = False
+
+    # Track tool calls state
+    # item_id -> index
+    tool_call_indices: dict[str, int] = {}
+    next_tool_index = 0
 
     async for chunk in upstream:
         for payload in decoder.feed(chunk):
@@ -538,10 +648,82 @@ async def responses_sse_to_chat_completions_sse(
                     resp_id = response["id"]
                 continue
 
+            if event_type == "response.output_item.added":
+                item = data.get("item")
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "function_call":
+                    item_id = data.get("item_id") or item.get("id")
+                    if not item_id:
+                        continue
+
+                    tool_index = next_tool_index
+                    next_tool_index += 1
+                    tool_call_indices[item_id] = tool_index
+
+                    call_id = item.get("call_id")
+                    name = item.get("name")
+
+                    delta: dict[str, Any] = {
+                        "tool_calls": [
+                            {
+                                "index": tool_index,
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": name, "arguments": ""},
+                            }
+                        ]
+                    }
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+
+                    payload_obj = {
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
+                continue
+
+            if event_type == "response.function_call_arguments.delta":
+                item_id = data.get("item_id")
+                delta_args = data.get("delta")
+                if item_id in tool_call_indices and delta_args:
+                    tool_index = tool_call_indices[item_id]
+                    delta = {
+                        "tool_calls": [
+                            {"index": tool_index, "function": {"arguments": delta_args}}
+                        ]
+                    }
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
+
+                    payload_obj = {
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
+                continue
+
             if event_type == "response.output_text.delta":
                 delta_text = data.get("delta")
                 if isinstance(delta_text, str) and delta_text:
-                    delta: dict[str, Any] = {"content": delta_text}
+                    delta = {"content": delta_text}
                     if not sent_role:
                         delta["role"] = "assistant"
                         sent_role = True
@@ -550,20 +732,45 @@ async def responses_sse_to_chat_completions_sse(
                         "object": "chat.completion.chunk",
                         "created": int(time.time()),
                         "model": model,
-                        "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": None}
+                        ],
                     }
-                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                    yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                        "utf-8"
+                    )
+                continue
+
+            if event_type == "response.output_item.done":
+                # Check if it was a function call item to send finish_reason="tool_calls"?
+                # But typically OpenAI Chat stream sends finish_reason in a separate chunk or with last delta.
+                # OpenAI Responses `response.completed` is safer for final finish_reason.
+                # However, if we have tool calls, the chat stream usually expects `finish_reason: tool_calls`
+                item = data.get("item")
+                if isinstance(item, dict) and item.get("type") == "function_call":
+                    # We could signal tool_calls finish reason here if we knew this was the last one,
+                    # but response.completed is better for overall finish.
+                    pass
                 continue
 
             if event_type == "response.completed":
+                # Determine finish reason based on usage or context?
+                # Default to "stop" if not tool calls?
+                # If we processed tool calls, it should probably be "tool_calls".
+                finish_reason = "tool_calls" if next_tool_index > 0 else "stop"
+
                 payload_obj = {
                     "id": resp_id,
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "choices": [
+                        {"index": 0, "delta": {}, "finish_reason": finish_reason}
+                    ],
                 }
-                yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode("utf-8")
+                yield f"data: {json.dumps(payload_obj, ensure_ascii=False)}\n\n".encode(
+                    "utf-8"
+                )
                 if not done:
                     yield b"data: [DONE]\n\n"
                     done = True

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Server, Trash2 } from 'lucide-react';
+import { Pencil, Play, Server, Trash2 } from 'lucide-react';
 import { ModelMapping, ModelStats } from '@/types';
 import { getActiveStatus, formatDuration } from '@/lib/utils';
 
@@ -28,6 +28,8 @@ interface ModelListProps {
   onEdit: (model: ModelMapping) => void;
   /** Delete callback */
   onDelete: (model: ModelMapping) => void;
+  /** Test callback */
+  onTest: (model: ModelMapping) => void;
 }
 
 /**
@@ -38,6 +40,7 @@ export function ModelList({
   statsByModel,
   onEdit,
   onDelete,
+  onTest,
 }: ModelListProps) {
   return (
     <Table>
@@ -101,6 +104,14 @@ export function ModelList({
                       <Server className="h-4 w-4" suppressHydrationWarning />
                     </Button>
                   </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onTest(model)}
+                    title="Test Model"
+                  >
+                    <Play className="h-4 w-4" suppressHydrationWarning />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"

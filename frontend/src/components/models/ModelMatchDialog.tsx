@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useMatchModelProviders } from '@/lib/hooks';
+import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 import { getApiErrorMessage } from '@/lib/api/error';
 import { ModelMatchProvider } from '@/types';
 
@@ -87,6 +88,7 @@ export function ModelMatchDialog({
   const [matchError, setMatchError] = useState<string | null>(null);
 
   const matchMutation = useMatchModelProviders();
+  const { configs: protocolConfigs } = useProviderProtocolConfigs();
 
   const handleMatch = async () => {
     const tokensValue = Number(inputTokens);
@@ -189,7 +191,8 @@ export function ModelMatchDialog({
                 <TableRow>
                   <TableHead>Order</TableHead>
                   <TableHead>Provider</TableHead>
-                  <TableHead>Model</TableHead>
+                  <TableHead>Target Model</TableHead>
+                  <TableHead>Protocol</TableHead>
                   <TableHead>Cost</TableHead>
                 </TableRow>
               </TableHeader>
@@ -200,6 +203,9 @@ export function ModelMatchDialog({
                     <TableCell>{item.provider_name}</TableCell>
                     <TableCell>
                       <code className="text-sm">{item.target_model_name}</code>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {getProviderProtocolLabel(item.protocol, protocolConfigs)}
                     </TableCell>
                     <TableCell className="text-sm">
                       <span className="font-mono">

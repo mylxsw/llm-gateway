@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 try:
     import tiktoken
+
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     TIKTOKEN_AVAILABLE = False
@@ -20,33 +21,33 @@ except ImportError:
 class TokenCounter(ABC):
     """
     Token Counter Abstract Base Class
-    
+
     Defines the standard interface for Token counting, with concrete implementations provided by subclasses.
     """
-    
+
     @abstractmethod
     def count_tokens(self, text: str, model: str = "") -> int:
         """
         Count tokens in text
-        
+
         Args:
             text: Text to count
             model: Model name (different models may use different tokenizers)
-        
+
         Returns:
             int: Token count
         """
         pass
-    
+
     @abstractmethod
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
         Count tokens in a message list
-        
+
         Args:
             messages: Message list, e.g., [{"role": "user", "content": "Hello"}]
             model: Model name
-        
+
         Returns:
             int: Token count
         """
@@ -65,7 +66,7 @@ class TokenCounter(ABC):
         """
         if isinstance(input_data, str):
             return self.count_tokens(input_data, model)
-        
+
         if isinstance(input_data, list):
             total = 0
             for item in input_data:
@@ -88,7 +89,7 @@ class TokenCounter(ABC):
                     # So if item is int, it counts as 1 token.
                     total += 1
             return total
-        
+
         return 0
 
     def count_request(self, body: dict[str, Any], model: str = "") -> int:
@@ -98,7 +99,16 @@ class TokenCounter(ABC):
         if not isinstance(body, dict):
             return 0
         if "input" in body:
-            return self.count_input(body.get("input"), model)
+            input_val = body.get("input")
+            # OpenAI Responses API: input can be a list of messages
+            if (
+                isinstance(input_val, list)
+                and input_val
+                and isinstance(input_val[0], dict)
+                and "role" in input_val[0]
+            ):
+                return self.count_messages(input_val, model)
+            return self.count_input(input_val, model)
         messages = body.get("messages")
         if isinstance(messages, list):
             return self.count_messages(messages, model)
@@ -167,14 +177,14 @@ class TokenCounter(ABC):
 class OpenAITokenCounter(TokenCounter):
     """
     OpenAI Token Counter
-    
+
     Uses tiktoken library for precise Token counting.
     Supports models like GPT-3.5, GPT-4.
     """
-    
+
     # Default encoding
     DEFAULT_ENCODING = "cl100k_base"
-    
+
     # Map models to encodings
     MODEL_ENCODING_MAP = {
         "gpt-4": "cl100k_base",
@@ -184,81 +194,81 @@ class OpenAITokenCounter(TokenCounter):
         "text-embedding-ada-002": "cl100k_base",
         "text-davinci-003": "p50k_base",
     }
-    
+
     def __init__(self):
         """Initialize Counter"""
         self._encodings: dict[str, Any] = {}
-    
+
     def _get_encoding(self, model: str) -> Any:
         """
         Get encoder for model
-        
+
         Args:
             model: Model name
-        
+
         Returns:
             tiktoken encoder instance
         """
         if not TIKTOKEN_AVAILABLE:
             return None
-        
+
         # Find encoding for model
         encoding_name = self.DEFAULT_ENCODING
         for model_prefix, enc_name in self.MODEL_ENCODING_MAP.items():
             if model.startswith(model_prefix):
                 encoding_name = enc_name
                 break
-        
+
         # Cache encoder
         if encoding_name not in self._encodings:
             self._encodings[encoding_name] = tiktoken.get_encoding(encoding_name)
-        
+
         return self._encodings[encoding_name]
-    
+
     def count_tokens(self, text: str, model: str = "") -> int:
         """
         Count tokens in text
-        
+
         Uses tiktoken for precise calculation. If tiktoken is unavailable,
         uses estimation (approx. 4 chars per token).
-        
+
         Args:
             text: Text to count
             model: Model name
-        
+
         Returns:
             int: Token count
         """
         if not text:
             return 0
-        
+
         encoding = self._get_encoding(model)
         if encoding:
             return len(encoding.encode(text))
-        
+
         # Fallback estimation: average 4 chars per token
         return len(text) // 4
-    
+
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
         Count tokens in a message list
-        
+
         Calculates based on OpenAI message format, including role and content overhead.
-        
+
         Args:
             messages: Message list
             model: Model name
-        
+
         Returns:
             int: Token count
         """
         if not messages:
             return 0
-        
+
         # Overhead per message
         tokens_per_message = 4  # <|start|>role<|separator|>content<|end|>
         tokens_per_name = -1  # If there's a name field
-        
+
         total_tokens = 0
         for message in messages:
             total_tokens += tokens_per_message
@@ -268,7 +278,9 @@ class OpenAITokenCounter(TokenCounter):
                     continue
                 if key in ("tool_calls", "function_call") and value is not None:
                     try:
-                        total_tokens += self.count_tokens(json.dumps(value, ensure_ascii=False), model)
+                        total_tokens += self.count_tokens(
+                            json.dumps(value, ensure_ascii=False), model
+                        )
                     except Exception:
                         pass
                     continue
@@ -278,7 +290,7 @@ class OpenAITokenCounter(TokenCounter):
                     total_tokens += _count_openai_list(value, model, self)
                 if key == "name":
                     total_tokens += tokens_per_name
-        
+
         total_tokens += 3  # Every reply is primed with <|start|>assistant<|message|>
         return total_tokens
 
@@ -290,7 +302,9 @@ class OpenAITokenCounter(TokenCounter):
         tool_choice = body.get("tool_choice")
         if tool_choice is not None:
             try:
-                total += self.count_tokens(json.dumps(tool_choice, ensure_ascii=False), model)
+                total += self.count_tokens(
+                    json.dumps(tool_choice, ensure_ascii=False), model
+                )
             except Exception:
                 pass
         return total
@@ -299,46 +313,46 @@ class OpenAITokenCounter(TokenCounter):
 class AnthropicTokenCounter(TokenCounter):
     """
     Anthropic Token Counter
-    
+
     Anthropic uses its own tokenizer; providing estimation here.
     Ideally, integrate Anthropic's official tokenizer.
     """
-    
+
     def count_tokens(self, text: str, model: str = "") -> int:
         """
         Count tokens in text
-        
+
         Uses estimation method. Anthropic's tokenizer is similar to OpenAI's
         but implementation details may differ.
-        
+
         Args:
             text: Text to count
             model: Model name
-        
+
         Returns:
             int: Token count (Estimated)
         """
         if not text:
             return 0
-        
+
         # Estimation: average 4 chars per token
         # TODO: Integrate Anthropic official tokenizer for precise counting
         return len(text) // 4
-    
+
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
         """
         Count tokens in a message list
-        
+
         Args:
             messages: Message list
             model: Model name
-        
+
         Returns:
             int: Token count (Estimated)
         """
         if not messages:
             return 0
-        
+
         total_tokens = 0
         for message in messages:
             role = message.get("role", "")
@@ -349,7 +363,7 @@ class AnthropicTokenCounter(TokenCounter):
 
             # Message overhead
             total_tokens += 4
-        
+
         return total_tokens
 
     def count_request(self, body: dict[str, Any], model: str = "") -> int:
@@ -377,10 +391,10 @@ class AnthropicTokenCounter(TokenCounter):
 def get_token_counter(protocol: str) -> TokenCounter:
     """
     Get Token Counter for specified protocol
-    
+
     Args:
         protocol: Protocol type, "openai", "openai_responses", or "anthropic"
-    
+
     Returns:
         TokenCounter: Corresponding counter instance
     """
@@ -399,9 +413,13 @@ def _extract_text_from_content(content: Any) -> str:
                 text = item.get("text") or item.get("content")
                 if isinstance(text, str):
                     parts.append(text)
-                elif item.get("type") == "input_text" and isinstance(item.get("text"), str):
+                elif item.get("type") == "input_text" and isinstance(
+                    item.get("text"), str
+                ):
                     parts.append(item["text"])
-                elif item.get("type") == "output_text" and isinstance(item.get("text"), str):
+                elif item.get("type") == "output_text" and isinstance(
+                    item.get("text"), str
+                ):
                     parts.append(item["text"])
         return "".join(parts)
     if isinstance(content, dict) and isinstance(content.get("text"), str):
@@ -458,7 +476,9 @@ def _count_anthropic_content(content: Any, model: str, counter: TokenCounter) ->
             if item_type == "text" and isinstance(item.get("text"), str):
                 total += counter.count_tokens(item["text"], model)
             elif item_type == "tool_use":
-                total += counter.count_tokens(json.dumps(item, ensure_ascii=False), model)
+                total += counter.count_tokens(
+                    json.dumps(item, ensure_ascii=False), model
+                )
             elif item_type == "image":
                 total += _estimate_image_tokens(item, protocol="anthropic")
         return total
@@ -592,7 +612,21 @@ def _extract_jpeg_size(data: bytes) -> Optional[tuple[int, int]]:
             continue
         marker = data[idx + 1] if idx + 1 < size else None
         idx += 2
-        if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+        if marker in (
+            0xC0,
+            0xC1,
+            0xC2,
+            0xC3,
+            0xC5,
+            0xC6,
+            0xC7,
+            0xC9,
+            0xCA,
+            0xCB,
+            0xCD,
+            0xCE,
+            0xCF,
+        ):
             if idx + 7 <= size:
                 height = int.from_bytes(data[idx + 3 : idx + 5], "big")
                 width = int.from_bytes(data[idx + 5 : idx + 7], "big")
