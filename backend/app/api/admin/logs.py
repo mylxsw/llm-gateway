@@ -64,6 +64,11 @@ async def get_log_cost_stats(
         le=14 * 60,
         description="Timezone offset minutes for bucketing (UTC to local). Example: UTC+8 => 480",
     ),
+    group_by: str = Query(
+        "request_model",
+        pattern="^(request_model|provider_model)$",
+        description="Group by dimension for model stats",
+    ),
 ):
     """
     Aggregated cost stats for logs.
@@ -88,6 +93,7 @@ async def get_log_cost_stats(
             api_key_name=api_key_name,
             bucket=resolved_bucket,
             tz_offset_minutes=tz_offset_minutes,
+            group_by=group_by,
         )
         return await service.get_cost_stats(query)
     except AppError as e:
