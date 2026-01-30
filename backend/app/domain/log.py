@@ -241,6 +241,8 @@ class LogCostByModel(BaseModel):
     requested_model: str
     request_count: int = 0
     total_cost: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class LogCostStatsResponse(BaseModel):
@@ -249,6 +251,7 @@ class LogCostStatsResponse(BaseModel):
     summary: LogCostSummary
     trend: list[LogCostTrendPoint]
     by_model: list[LogCostByModel]
+    by_model_tokens: list[LogCostByModel] = []
 
 
 class ModelStats(BaseModel):

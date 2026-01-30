@@ -123,10 +123,13 @@ export interface LogCostByModel {
   requested_model: string;
   request_count: number;
   total_cost: number;
+  input_tokens: number;
+  output_tokens: number;
 }
 
 export interface LogCostStatsResponse {
   summary: LogCostSummary;
   trend: LogCostTrendPoint[];
   by_model: LogCostByModel[];
+  by_model_tokens: LogCostByModel[];
 }

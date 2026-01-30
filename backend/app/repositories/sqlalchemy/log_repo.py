@@ -404,6 +404,8 @@ class SQLAlchemyLogRepository(LogRepository):
                 func.coalesce(group_column, "").label("requested_model"),
                 func.count().label("request_count"),
                 sum_total.label("total_cost"),
+                sum_in_tokens.label("input_tokens"),
+                sum_out_tokens.label("output_tokens"),
             )
             .group_by(group_column)
             .order_by(sum_total.desc())
@@ -417,11 +419,45 @@ class SQLAlchemyLogRepository(LogRepository):
                 requested_model=r["requested_model"] or "-",
                 request_count=int(r["request_count"] or 0),
                 total_cost=float(r["total_cost"] or 0),
+                input_tokens=int(r["input_tokens"] or 0),
+                output_tokens=int(r["output_tokens"] or 0),
             )
             for r in model_rows
         ]
 
-        return LogCostStatsResponse(summary=summary, trend=trend, by_model=by_model)
+        # By Model Tokens (Top 50 by usage)
+        by_model_tokens_stmt = (
+            select(
+                func.coalesce(group_column, "").label("requested_model"),
+                func.count().label("request_count"),
+                sum_total.label("total_cost"),
+                sum_in_tokens.label("input_tokens"),
+                sum_out_tokens.label("output_tokens"),
+            )
+            .group_by(group_column)
+            .order_by((sum_in_tokens + sum_out_tokens).desc())
+            .limit(50)
+        )
+        if where_clause is not None:
+            by_model_tokens_stmt = by_model_tokens_stmt.where(where_clause)
+        model_tokens_rows = (await self.session.execute(by_model_tokens_stmt)).mappings().all()
+        by_model_tokens = [
+            LogCostByModel(
+                requested_model=r["requested_model"] or "-",
+                request_count=int(r["request_count"] or 0),
+                total_cost=float(r["total_cost"] or 0),
+                input_tokens=int(r["input_tokens"] or 0),
+                output_tokens=int(r["output_tokens"] or 0),
+            )
+            for r in model_tokens_rows
+        ]
+
+        return LogCostStatsResponse(
+            summary=summary,
+            trend=trend,
+            by_model=by_model,
+            by_model_tokens=by_model_tokens
+        )
 
     async def get_model_stats(self, requested_model: str | None = None) -> list[ModelStats]:
         cutoff_time = to_utc_naive(utc_now() - timedelta(days=7))
