@@ -7,6 +7,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:8000}"
+
 # PostgreSQL 镜像版本（与 docker-compose.yml 保持一致）
 PG_IMAGE="postgres:16-alpine"
 
@@ -297,9 +299,9 @@ ensure_data_dir
 
 case "$cmd" in
   up)
-    compose up -d --build $compose_args
+    compose up -d --force-recreate --build $compose_args
     echo "Squirrel LLM Gateway is starting..."
-    echo "Dashboard/API: http://127.0.0.1:8000"
+    echo "Dashboard/API: $RUNNING_URL"
 
     if [ "$SYNC_DB" = true ]; then
         echo ""
