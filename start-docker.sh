@@ -7,8 +7,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:8000}"
-
 # PostgreSQL image version (must match docker-compose.yml)
 PG_IMAGE="postgres:16-alpine"
 
@@ -77,6 +75,14 @@ EOF
 
 ensure_data_dir() {
   mkdir -p ./data
+}
+
+load_env() {
+  if [ -f ".env" ]; then
+    set -a
+    . ./.env
+    set +a
+  fi
 }
 
 # Wait for PostgreSQL container to be ready
@@ -296,11 +302,13 @@ cmd="${cmd:-up}"
 
 ensure_env
 ensure_data_dir
+load_env
 
 case "$cmd" in
   up)
     compose up -d --force-recreate --build $compose_args
     echo "Squirrel LLM Gateway is starting..."
+    RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:${LLM_GATEWAY_PORT:-8000}}"
     echo "Dashboard/API: $RUNNING_URL"
 
     if [ "$SYNC_DB" = true ]; then

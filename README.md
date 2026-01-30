@@ -137,7 +137,7 @@ cd llm-gateway
 
 # Configure environment
 cp .env.example .env
-# Edit .env if needed (optional: set ADMIN_USERNAME and ADMIN_PASSWORD)
+# Edit .env if needed (optional: set ADMIN_USERNAME, ADMIN_PASSWORD, LLM_GATEWAY_PORT)
 
 # Start services
 ./start-docker.sh
@@ -146,7 +146,7 @@ cp .env.example .env
 ./stop-docker.sh
 ```
 
-Access the dashboard at **http://localhost:8000**
+Access the dashboard at **http://localhost:8000** (or the port you set in `LLM_GATEWAY_PORT`)
 
 ### Docker (Single Container)
 
@@ -287,6 +287,7 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 | `ADMIN_TOKEN_TTL_SECONDS` | 86400 | Admin session TTL (24 hours) |
 | `LOG_RETENTION_DAYS` | 7 | Log retention period |
 | `LOG_CLEANUP_HOUR` | 4 | Log cleanup time (UTC hour) |
+| `LLM_GATEWAY_PORT` | 8000 | Host port for Docker Compose |
 
 ### Database Configuration
 

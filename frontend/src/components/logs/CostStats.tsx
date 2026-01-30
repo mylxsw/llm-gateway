@@ -22,6 +22,7 @@ interface CostStatsProps {
   refreshing?: boolean;
   headerActions?: React.ReactNode;
   headerExtras?: React.ReactNode;
+  modelStatsControls?: React.ReactNode;
   rangeLabel?: string;
   rangeDays?: number;
   rangeStart?: string;

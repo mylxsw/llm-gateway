@@ -25,7 +25,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${LLM_GATEWAY_PORT:-8000}:8000"
     environment:
       DEBUG: ${DEBUG:-false}
       DATABASE_TYPE: ${DATABASE_TYPE:-postgresql}
