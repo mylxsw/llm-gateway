@@ -296,6 +296,7 @@ async def list_models(
     service: ModelServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     requested_model: Optional[str] = Query(None, description="Filter by model name"),
+    target_model_name: Optional[str] = Query(None, description="Filter by supplier model name"),
     model_type: Optional[str] = Query(None, description="Filter by model type"),
     strategy: Optional[str] = Query(None, description="Filter by strategy"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -310,6 +311,7 @@ async def list_models(
             page=page,
             page_size=page_size,
             requested_model=requested_model,
+            target_model_name=target_model_name,
             model_type=model_type,
             strategy=strategy,
         )
