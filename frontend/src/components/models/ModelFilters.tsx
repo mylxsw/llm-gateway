@@ -17,6 +17,7 @@ import { ModelType, SelectionStrategy } from '@/types';
 
 export interface ModelFiltersState {
   requested_model?: string;
+  target_model_name?: string;
   model_type?: ModelType | 'all';
   strategy?: SelectionStrategy | 'all';
   is_active?: string; // 'all' | 'active' | 'inactive'
@@ -31,6 +32,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
   const defaultValues = useMemo(
     () => ({
       requested_model: filters.requested_model,
+      target_model_name: filters.target_model_name,
       model_type: filters.model_type || 'all',
       strategy: filters.strategy || 'all',
       is_active: filters.is_active || 'all',
@@ -49,6 +51,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
   const onReset = () => {
     const cleared: ModelFiltersState = {
       requested_model: '',
+      target_model_name: '',
       model_type: 'all',
       strategy: 'all',
       is_active: 'all',
@@ -67,12 +70,20 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
       className="mb-6 rounded-lg border bg-card p-4 shadow-sm"
     >
       <div className="flex flex-col gap-4">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-2">
             <Label>Model Name</Label>
             <Input
               placeholder="Fuzzy match"
               {...register('requested_model')}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Supplier Model Name</Label>
+            <Input
+              placeholder="Target model name"
+              {...register('target_model_name')}
             />
           </div>
 

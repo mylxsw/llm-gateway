@@ -482,14 +482,6 @@ export function CostStats({
     []
   );
 
-  const modelColorMap = useMemo(() => {
-    const entries = (stats?.by_model ?? []).slice(0, 10).map((m) => {
-      const key = m.requested_model || '-';
-      return [key, getModelColorClass(key)] as const;
-    });
-    return new Map(entries);
-  }, [stats?.by_model]);
-
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -608,10 +600,10 @@ export function CostStats({
               </div>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border bg-muted/10 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">By Model (Top 10)</div>
+                  <div className="text-sm font-medium">Price-based Model Ranking</div>
                   {modelStatsControls}
                 </div>
                 <div className="space-y-2">
@@ -621,8 +613,7 @@ export function CostStats({
                     stats.by_model.slice(0, 10).map((m) => {
                       const widthPct =
                         modelMax > 0 ? Math.max(2, Math.round((m.total_cost / modelMax) * 100)) : 0;
-                      const colorClassName =
-                        modelColorMap.get(m.requested_model || '-') ?? 'bg-primary/70';
+                      const colorClassName = getModelColorClass(m.requested_model || '-');
                       return (
                         <div key={m.requested_model} className="space-y-1">
                           <div className="flex items-center justify-between gap-2 text-sm">
@@ -636,6 +627,44 @@ export function CostStats({
                               </span>
                             </span>
                             <span className="shrink-0 font-mono text-xs">{formatUsd(m.total_cost)}</span>
+                          </div>
+                          <div className="h-2 w-full rounded bg-muted">
+                            <div className={`h-2 rounded ${colorClassName}`} style={{ width: `${widthPct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/10 p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">Token Usage-based Model Ranking</div>
+                </div>
+                <div className="space-y-2">
+                  {(stats.by_model_tokens || []).length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No data</div>
+                  ) : (
+                    (stats.by_model_tokens || []).slice(0, 10).map((m) => {
+                      const totalTokens = (m.input_tokens || 0) + (m.output_tokens || 0);
+                      const maxTokens = Math.max(0, ...((stats.by_model_tokens || []).map(x => (x.input_tokens || 0) + (x.output_tokens || 0))));
+                      const widthPct =
+                        maxTokens > 0 ? Math.max(2, Math.round((totalTokens / maxTokens) * 100)) : 0;
+                      const colorClassName = getModelColorClass(m.requested_model || '-');
+                      return (
+                        <div key={m.requested_model} className="space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                className={`h-2 w-2 shrink-0 rounded-sm ${colorClassName}`}
+                                aria-hidden="true"
+                              />
+                              <span className="truncate" title={m.requested_model}>
+                                {m.requested_model || '-'}
+                              </span>
+                            </span>
+                            <span className="shrink-0 font-mono text-xs">{formatCompactNumber(totalTokens)}</span>
                           </div>
                           <div className="h-2 w-full rounded bg-muted">
                             <div className={`h-2 rounded ${colorClassName}`} style={{ width: `${widthPct}%` }} />

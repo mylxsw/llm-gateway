@@ -123,6 +123,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         page: int = 1,
         page_size: int = 20,
         requested_model: Optional[str] = None,
+        target_model_name: Optional[str] = None,
         model_type: Optional[str] = None,
         strategy: Optional[str] = None,
     ) -> tuple[list[ModelMapping], int]:
@@ -130,26 +131,36 @@ class SQLAlchemyModelRepository(ModelRepository):
         query = select(ModelMappingORM)
         count_query = select(func.count()).select_from(ModelMappingORM)
         
+        conditions = []
+        
         if is_active is not None:
-            query = query.where(ModelMappingORM.is_active == is_active)
-            count_query = count_query.where(ModelMappingORM.is_active == is_active)
+            conditions.append(ModelMappingORM.is_active == is_active)
             
         if requested_model:
-            query = query.where(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))
-            count_query = count_query.where(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))
+            conditions.append(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))
             
         if model_type:
             if model_type == 'chat':
-                query = query.where(or_(ModelMappingORM.model_type == model_type, ModelMappingORM.model_type.is_(None)))
-                count_query = count_query.where(or_(ModelMappingORM.model_type == model_type, ModelMappingORM.model_type.is_(None)))
+                conditions.append(or_(ModelMappingORM.model_type == model_type, ModelMappingORM.model_type.is_(None)))
             else:
-                query = query.where(ModelMappingORM.model_type == model_type)
-                count_query = count_query.where(ModelMappingORM.model_type == model_type)
+                conditions.append(ModelMappingORM.model_type == model_type)
             
         if strategy:
-            query = query.where(ModelMappingORM.strategy == strategy)
-            count_query = count_query.where(ModelMappingORM.strategy == strategy)
-        
+            conditions.append(ModelMappingORM.strategy == strategy)
+            
+        if target_model_name:
+            # Use EXISTS clause to avoid join duplication and distinct equality issues on JSON columns
+            conditions.append(
+                ModelMappingORM.providers.any(
+                    ModelMappingProviderORM.target_model_name.ilike(f"%{target_model_name}%")
+                )
+            )
+
+        # Apply conditions
+        if conditions:
+            query = query.where(*conditions)
+            count_query = count_query.where(*conditions)
+
         # Get total count
         total_result = await self.session.execute(count_query)
         total = total_result.scalar() or 0

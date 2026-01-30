@@ -55,6 +55,7 @@ export default function ModelsPage() {
   // Filter state
   const [filters, setFilters] = useState<ModelFiltersState>({
     requested_model: '',
+    target_model_name: '',
     model_type: 'all',
     strategy: 'all',
     is_active: 'all',
@@ -65,6 +66,7 @@ export default function ModelsPage() {
     page,
     page_size: pageSize,
     requested_model: filters.requested_model || undefined,
+    target_model_name: filters.target_model_name || undefined,
     model_type: filters.model_type === 'all' ? undefined : (filters.model_type as ModelType),
     strategy: filters.strategy === 'all' ? undefined : (filters.strategy as SelectionStrategy),
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',

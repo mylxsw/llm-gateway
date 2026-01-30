@@ -120,6 +120,7 @@ export interface ModelListParams {
   page?: number;
   page_size?: number;
   requested_model?: string;
+  target_model_name?: string;
   model_type?: ModelType;
   strategy?: SelectionStrategy;
 }

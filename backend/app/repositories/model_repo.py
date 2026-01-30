@@ -40,6 +40,7 @@ class ModelRepository(ABC):
         page: int = 1,
         page_size: int = 20,
         requested_model: Optional[str] = None,
+        target_model_name: Optional[str] = None,
         model_type: Optional[str] = None,
         strategy: Optional[str] = None
     ) -> Tuple[List[ModelMapping], int]:

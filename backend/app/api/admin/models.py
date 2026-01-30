@@ -4,15 +4,20 @@ Model Management API
 Provides CRUD endpoints for Model Mappings and Model-Provider Mappings.
 """
 
-from typing import Any, Optional
 import json
 import time
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import LogServiceDep, ModelServiceDep, ProxyServiceDep, require_admin_auth
+from app.api.deps import (
+    LogServiceDep,
+    ModelServiceDep,
+    ProxyServiceDep,
+    require_admin_auth,
+)
 from app.common.errors import AppError
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
@@ -20,18 +25,18 @@ from app.common.provider_protocols import (
     resolve_implementation_protocol,
 )
 from app.common.stream_usage import SSEDecoder, StreamUsageAccumulator
+from app.domain.log import ModelProviderStats, ModelStats
 from app.domain.model import (
-    ModelMappingCreate,
-    ModelMappingUpdate,
-    ModelMappingResponse,
-    ModelMappingProviderCreate,
-    ModelMappingProviderUpdate,
-    ModelMappingProviderResponse,
-    ModelMatchRequest,
-    ModelMatchProviderResponse,
     ModelExport,
+    ModelMappingCreate,
+    ModelMappingProviderCreate,
+    ModelMappingProviderResponse,
+    ModelMappingProviderUpdate,
+    ModelMappingResponse,
+    ModelMappingUpdate,
+    ModelMatchProviderResponse,
+    ModelMatchRequest,
 )
-from app.domain.log import ModelStats, ModelProviderStats
 
 router = APIRouter(
     prefix="/admin",
@@ -42,6 +47,7 @@ router = APIRouter(
 
 class PaginatedModelResponse(BaseModel):
     """Model Mapping Pagination Response"""
+
     items: list[ModelMappingResponse]
     total: int
     page: int
@@ -50,12 +56,14 @@ class PaginatedModelResponse(BaseModel):
 
 class ModelProviderListResponse(BaseModel):
     """Model-Provider Mapping List Response"""
+
     items: list[ModelMappingProviderResponse]
     total: int
 
 
 class ImportModelResponse(BaseModel):
     """Import Model Response"""
+
     success: int
     skipped: int
     errors: list[str]
@@ -63,12 +71,14 @@ class ImportModelResponse(BaseModel):
 
 class ModelTestRequest(BaseModel):
     """Model test request"""
+
     protocol: str
     stream: bool = False
 
 
 class ModelTestResponse(BaseModel):
     """Model test response"""
+
     content: str
     response_status: int
     total_time_ms: Optional[int] = None
@@ -89,7 +99,7 @@ def _build_test_payload(
             {
                 "model": requested_model,
                 "messages": [{"role": "user", "content": "hello"}],
-                "max_tokens": 16,
+                "max_tokens": 1024,
                 "stream": stream,
             },
             implementation,
@@ -101,7 +111,7 @@ def _build_test_payload(
             {
                 "model": requested_model,
                 "input": "hello",
-                "max_output_tokens": 16,
+                "max_output_tokens": 1024,
                 "stream": stream,
             },
             implementation,
@@ -112,7 +122,7 @@ def _build_test_payload(
         {
             "model": requested_model,
             "messages": [{"role": "user", "content": "hello"}],
-            "max_tokens": 16,
+            "max_tokens": 1024,
             "stream": stream,
         },
         implementation,
@@ -236,7 +246,9 @@ async def _collect_stream_text(
                 elif event_type == "response.completed":
                     response = data.get("response")
                     if isinstance(response, dict):
-                        completed_text = _extract_text_from_response(response, implementation)
+                        completed_text = _extract_text_from_response(
+                            response, implementation
+                        )
 
         if parts:
             return "".join(parts)
@@ -249,6 +261,7 @@ async def _collect_stream_text(
 
 
 # ============ Model Mapping Endpoints ============
+
 
 @router.get("/models/export", response_model=list[ModelExport])
 async def export_models(
@@ -283,6 +296,7 @@ async def list_models(
     service: ModelServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     requested_model: Optional[str] = Query(None, description="Filter by model name"),
+    target_model_name: Optional[str] = Query(None, description="Filter by supplier model name"),
     model_type: Optional[str] = Query(None, description="Filter by model type"),
     strategy: Optional[str] = Query(None, description="Filter by strategy"),
     page: int = Query(1, ge=1, description="Page number"),
@@ -293,12 +307,13 @@ async def list_models(
     """
     try:
         items, total = await service.get_all_mappings(
-            is_active=is_active, 
-            page=page, 
+            is_active=is_active,
+            page=page,
             page_size=page_size,
             requested_model=requested_model,
+            target_model_name=target_model_name,
             model_type=model_type,
-            strategy=strategy
+            strategy=strategy,
         )
         return PaginatedModelResponse(
             items=items,
@@ -352,7 +367,10 @@ async def get_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.post("/models/{requested_model:path}/match", response_model=list[ModelMatchProviderResponse])
+@router.post(
+    "/models/{requested_model:path}/match",
+    response_model=list[ModelMatchProviderResponse],
+)
 async def match_model_providers(
     requested_model: str,
     data: ModelMatchRequest,
@@ -386,7 +404,11 @@ async def test_model(
 
         if data.stream:
             start = time.monotonic()
-            initial_response, stream_gen, _log_info = await service.process_request_stream(
+            (
+                initial_response,
+                stream_gen,
+                _log_info,
+            ) = await service.process_request_stream(
                 api_key_id=None,
                 api_key_name=None,
                 request_protocol=data.protocol,
@@ -442,7 +464,9 @@ async def test_model(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.post("/models", response_model=ModelMappingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/models", response_model=ModelMappingResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_model(
     data: ModelMappingCreate,
     service: ModelServiceDep,
@@ -487,6 +511,7 @@ async def delete_model(
 
 # ============ Model-Provider Mapping Endpoints ============
 
+
 @router.get("/model-providers", response_model=ModelProviderListResponse)
 async def list_model_providers(
     service: ModelServiceDep,
@@ -527,7 +552,9 @@ async def create_model_provider(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
-@router.put("/model-providers/{mapping_id}", response_model=ModelMappingProviderResponse)
+@router.put(
+    "/model-providers/{mapping_id}", response_model=ModelMappingProviderResponse
+)
 async def update_model_provider(
     mapping_id: int,
     data: ModelMappingProviderUpdate,
