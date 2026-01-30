@@ -28,6 +28,7 @@ interface CostStatsProps {
   rangeEnd?: string;
   bucket?: 'hour' | 'day';
   maxBars?: number;
+  modelStatsControls?: React.ReactNode;
 }
 
 type Segment = {
