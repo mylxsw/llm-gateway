@@ -25,6 +25,7 @@ import {
 import { RequestLogDetail } from '@/types';
 import { copyToClipboard, formatDateTime, formatDuration, formatUsd } from '@/lib/utils';
 import { JsonViewer } from '@/components/common/JsonViewer';
+import { StreamJsonViewer, isStreamPayload } from '@/components/common/StreamJsonViewer';
 
 interface LogDetailProps {
   /** Log data */
@@ -104,6 +105,13 @@ export function LogDetail({ log }: LogDetailProps) {
         : 'text-muted-foreground hover:text-foreground'
     }`
   );
+
+  const renderPayloadViewer = (payload: unknown, maxHeight: string) => {
+    if (isStreamPayload(payload)) {
+      return <StreamJsonViewer data={payload} maxHeight={maxHeight} />;
+    }
+    return <JsonViewer data={payload} maxHeight={maxHeight} />;
+  };
 
   if (!log) return null;
 
@@ -405,7 +413,10 @@ export function LogDetail({ log }: LogDetailProps) {
                       </Badge>
                     )}
                   </div>
-                  <JsonViewer data={log.upstream_response_body} maxHeight={layout === 'horizontal' ? '65vh' : '45vh'} />
+                  {renderPayloadViewer(
+                    log.upstream_response_body,
+                    layout === 'horizontal' ? '65vh' : '45vh'
+                  )}
                 </div>
               )}
 
@@ -418,7 +429,10 @@ export function LogDetail({ log }: LogDetailProps) {
                     </Badge>
                   )}
                 </div>
-                <JsonViewer data={log.response_body || {}} maxHeight={layout === 'horizontal' ? '65vh' : '45vh'} />
+                {renderPayloadViewer(
+                  log.response_body || {},
+                  layout === 'horizontal' ? '65vh' : '45vh'
+                )}
               </div>
             </div>
           )}
