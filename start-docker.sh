@@ -25,6 +25,7 @@ SYNC_DB_PASSWORD="${SYNC_DB_PASSWORD:-}"
 # Sync mode flags
 SYNC_DB=false
 SYNC_DB_CLEAN=false
+INIT_STACK=false
 
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -243,6 +244,7 @@ Commands:
   ps|status View service status
 
 Options:
+  --init          Rebuild images and reset local data (including PG volume)
   --sync-db       Sync data from remote database after startup
   --sync-clean    Clean local database data before sync (requires --sync-db)
   --help          Show this help message
@@ -256,6 +258,7 @@ Database sync environment variables:
 
 Examples:
   $0 up
+  $0 up --init
   $0 up --sync-db
   $0 up --sync-db --sync-clean
   SYNC_DB_HOST=db.example.com SYNC_DB_USER=admin SYNC_DB_PASSWORD=secret $0 up --sync-db
@@ -270,6 +273,10 @@ compose_args=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --init)
+            INIT_STACK=true
+            shift
+            ;;
         --sync-db)
             SYNC_DB=true
             shift
@@ -304,8 +311,17 @@ ensure_env
 ensure_data_dir
 load_env
 
+init_stack() {
+  log_warn "Init mode enabled: rebuilding images and resetting local data."
+  compose down --volumes --remove-orphans
+  compose build
+}
+
 case "$cmd" in
   up)
+    if [ "$INIT_STACK" = true ]; then
+      init_stack
+    fi
     compose up -d --force-recreate --build $compose_args
     echo "Squirrel LLM Gateway is starting..."
     RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:${LLM_GATEWAY_PORT:-8000}}"
@@ -320,7 +336,11 @@ case "$cmd" in
     compose down $compose_args
     ;;
   restart)
-    compose down
+    if [ "$INIT_STACK" = true ]; then
+      init_stack
+    else
+      compose down
+    fi
     compose up -d --build $compose_args
 
     if [ "$SYNC_DB" = true ]; then
