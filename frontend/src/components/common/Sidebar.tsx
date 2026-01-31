@@ -160,7 +160,7 @@ export function Sidebar() {
       </nav>
 
       {/* Footer Info */}
-      <div className={cn('border-t border-border py-4', collapsed ? 'px-4' : 'px-6')}>
+      <div className={cn('border-t border-border py-4', collapsed ? 'px-3' : 'px-4')}>
         <p
           className={cn(
             'overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-[max-width,opacity] duration-200',

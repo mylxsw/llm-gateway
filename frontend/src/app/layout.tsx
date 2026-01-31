@@ -7,12 +7,13 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale } from "next-intl/server";
+import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
 import { AuthGate } from "@/components/auth";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
 
 // Configure Sans-serif Font
 const geistSans = Geist({
@@ -42,6 +43,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
+  const messages = await getMessages();
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -68,7 +70,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <NextIntlClientProvider>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>
             <AuthGate />
             <div className="flex min-h-screen">
@@ -79,7 +81,10 @@ export default async function RootLayout({
                 {children}
               </main>
             </div>
-            <ThemeToggle />
+            <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+              <LanguageSwitcher compact />
+              <ThemeToggle inline />
+            </div>
           </Providers>
         </NextIntlClientProvider>
       </body>

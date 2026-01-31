@@ -9,3 +9,4 @@ export * from './StreamJsonViewer';
 export * from './LoadingState';
 export * from './Sidebar';
 export * from './RuleBuilder';
+export * from './LanguageSwitcher';
