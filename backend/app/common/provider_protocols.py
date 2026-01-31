@@ -25,19 +25,19 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
     "openai": ProtocolConfig(
         frontend="openai",
         implementation=OPENAI_PROTOCOL,
-        base_url="https://api.openai.com",
+        base_url="https://api.openai.com/v1",
         label="OpenAI",
     ),
     "openai_responses": ProtocolConfig(
         frontend="openai_responses",
         implementation=OPENAI_RESPONSES_PROTOCOL,
-        base_url="https://api.openai.com",
+        base_url="https://api.openai.com/v1",
         label="OpenAI Responses",
     ),
     "anthropic": ProtocolConfig(
         frontend="anthropic",
         implementation=ANTHROPIC_PROTOCOL,
-        base_url="https://api.anthropic.com",
+        base_url="https://api.anthropic.com/v1",
         label="Anthropic",
     ),
     "zhipu": ProtocolConfig(

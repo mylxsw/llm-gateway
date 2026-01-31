@@ -57,6 +57,13 @@ interface FormData {
   proxy_url: string;
 }
 
+const DEFAULT_PARAMETER_OPTIONS = [
+  { value: 'temperature', label: 'temperature' },
+  { value: 'top_p', label: 'top_p' },
+  { value: 'top_k', label: 'top_k' },
+  { value: 'max_tokens', label: 'max_tokens' },
+];
+
 
 /**
  * Provider Form Component
@@ -101,6 +108,9 @@ export function ProviderForm({
   
   // Extra headers state
   const [extraHeaders, setExtraHeaders] = useState<{ key: string; value: string }[]>([]);
+  const [defaultParameters, setDefaultParameters] = useState<
+    { key: string; value: string }[]
+  >([]);
   const lastAutoBaseUrl = useRef<string | null>(null);
 
   // Add header
@@ -120,6 +130,52 @@ export function ProviderForm({
     const newHeaders = [...extraHeaders];
     newHeaders[index][field] = value;
     setExtraHeaders(newHeaders);
+  };
+
+  const addDefaultParameter = () => {
+    setDefaultParameters([
+      ...defaultParameters,
+      { key: DEFAULT_PARAMETER_OPTIONS[0].value, value: '' },
+    ]);
+  };
+
+  const removeDefaultParameter = (index: number) => {
+    const nextParams = [...defaultParameters];
+    nextParams.splice(index, 1);
+    setDefaultParameters(nextParams);
+  };
+
+  const updateDefaultParameter = (
+    index: number,
+    field: 'key' | 'value',
+    value: string
+  ) => {
+    const nextParams = [...defaultParameters];
+    nextParams[index][field] = value;
+    setDefaultParameters(nextParams);
+  };
+
+  const formatParameterValue = (value: unknown) => {
+    if (typeof value === 'string') {
+      return value;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const parseParameterValue = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    if (/^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
+      const num = Number(trimmed);
+      if (!Number.isNaN(num)) {
+        return num;
+      }
+    }
+    return value;
   };
 
   // Fill form data in edit mode
@@ -148,6 +204,22 @@ export function ProviderForm({
       } else {
         setExtraHeaders([]);
       }
+
+      if (provider.provider_options?.default_parameters) {
+        const allowedKeys = new Set(
+          DEFAULT_PARAMETER_OPTIONS.map((option) => option.value)
+        );
+        setDefaultParameters(
+          Object.entries(provider.provider_options.default_parameters)
+            .filter(([key]) => allowedKeys.has(key))
+            .map(([key, value]) => ({
+              key,
+              value: formatParameterValue(value),
+            }))
+        );
+      } else {
+        setDefaultParameters([]);
+      }
     } else {
       reset({
         name: '',
@@ -160,8 +232,20 @@ export function ProviderForm({
       });
       lastAutoBaseUrl.current = getProviderProtocolConfig('openai', protocolConfigs)?.base_url ?? null;
       setExtraHeaders([]);
+      setDefaultParameters(
+        protocol === 'anthropic'
+          ? [{ key: 'max_tokens', value: '4096' }]
+          : []
+      );
     }
   }, [provider, reset]);
+
+  useEffect(() => {
+    if (provider) return;
+    if (defaultParameters.length > 0) return;
+    if (protocol !== 'anthropic') return;
+    setDefaultParameters([{ key: 'max_tokens', value: '4096' }]);
+  }, [provider, protocol, defaultParameters.length]);
 
   useEffect(() => {
     if (!protocolConfig) return;
@@ -186,6 +270,16 @@ export function ProviderForm({
       }
     });
 
+    const params: Record<string, unknown> = {};
+    defaultParameters.forEach(({ key, value }) => {
+      if (key && value) {
+        const parsed = parseParameterValue(value);
+        if (typeof parsed === 'number' && !Number.isNaN(parsed)) {
+          params[key] = parsed;
+        }
+      }
+    });
+
     // Filter out empty strings
     const submitData: ProviderCreate | ProviderUpdate = {
       name: data.name,
@@ -193,6 +287,10 @@ export function ProviderForm({
       protocol: data.protocol,
       is_active: data.is_active,
       extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
+      provider_options:
+        Object.keys(params).length > 0
+          ? { default_parameters: params }
+          : undefined,
       proxy_enabled: data.proxy_enabled,
     };
     
@@ -328,6 +426,77 @@ export function ProviderForm({
                     variant="ghost"
                     size="icon"
                     onClick={() => removeHeader(index)}
+                    className="h-9 w-9 text-destructive hover:text-destructive/90"
+                  >
+                    <Trash2 className="h-4 w-4" suppressHydrationWarning />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Default Parameters */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Default Parameters</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addDefaultParameter}
+                className="h-8 px-2"
+              >
+                <Plus className="mr-1 h-3 w-3" suppressHydrationWarning />
+                Add
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Applies when the request does not provide the parameter.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Values only support numeric format.
+            </p>
+
+            {defaultParameters.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No default parameters, click button above to add.
+              </p>
+            )}
+
+            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+              {defaultParameters.map((param, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Select
+                    value={param.key}
+                    onValueChange={(value: string) =>
+                      updateDefaultParameter(index, 'key', value)
+                    }
+                  >
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select key" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEFAULT_PARAMETER_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    placeholder="Number"
+                    value={param.value}
+                    onChange={(e) =>
+                      updateDefaultParameter(index, 'value', e.target.value)
+                    }
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeDefaultParameter(index)}
                     className="h-9 w-9 text-destructive hover:text-destructive/90"
                   >
                     <Trash2 className="h-4 w-4" suppressHydrationWarning />

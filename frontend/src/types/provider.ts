@@ -7,6 +7,10 @@
 export type ImplementationProtocolType = string;
 export type ProtocolType = string;
 
+export interface ProviderOptions {
+  default_parameters?: Record<string, unknown>;
+}
+
 /** Provider Entity */
 export interface Provider {
   id: number;
@@ -15,6 +19,7 @@ export interface Provider {
   protocol: ProtocolType;
   api_key?: string;          // Sanitized display
   extra_headers?: Record<string, string>;
+  provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string; // Sanitized display
   is_active: boolean;
@@ -29,6 +34,7 @@ export interface ProviderCreate {
   protocol: ProtocolType;
   api_key?: string;
   extra_headers?: Record<string, string>;
+  provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string;
   is_active?: boolean;
@@ -41,6 +47,7 @@ export interface ProviderUpdate {
   protocol?: ProtocolType;
   api_key?: string;
   extra_headers?: Record<string, string>;
+  provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string;
   is_active?: boolean;

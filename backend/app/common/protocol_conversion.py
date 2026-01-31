@@ -89,6 +89,7 @@ def convert_request_for_supplier(
     path: str,
     body: dict[str, Any],
     target_model: str,
+    options: Optional[dict[str, Any]] = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Convert user request protocol to supplier protocol request body/path.
@@ -123,6 +124,7 @@ def convert_request_for_supplier(
             path=path,
             body=body,
             target_model=target_model,
+            options=options,
         )
 
         return result.path, result.body

@@ -5,7 +5,7 @@ Defines Provider related Data Transfer Objects (DTOs).
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
@@ -25,6 +25,10 @@ class ProviderBase(BaseModel):
     api_type: str = Field("chat", description="API Type (deprecated)")
     # Extra Headers
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    # Provider Options (JSON format)
+    provider_options: Optional[dict[str, Any]] = Field(
+        None, description="Provider Options"
+    )
     # Proxy Enabled
     proxy_enabled: bool = Field(False, description="Proxy Enabled")
     # Proxy URL (schema://auth@host:port)
@@ -49,6 +53,7 @@ class ProviderUpdate(BaseModel):
     api_type: Optional[str] = None
     api_key: Optional[str] = None
     extra_headers: Optional[dict[str, str]] = None
+    provider_options: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
     proxy_enabled: Optional[bool] = None
     proxy_url: Optional[str] = None
@@ -60,6 +65,9 @@ class Provider(ProviderBase):
     id: int = Field(..., description="Provider ID")
     api_key: Optional[str] = Field(None, description="Provider API Key")
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    provider_options: Optional[dict[str, Any]] = Field(
+        None, description="Provider Options"
+    )
     is_active: bool = Field(True, description="Is Active")
     created_at: datetime = Field(..., description="Creation Time")
     updated_at: datetime = Field(..., description="Update Time")
@@ -74,6 +82,9 @@ class ProviderResponse(ProviderBase):
     # API Key Sanitized Display
     api_key: Optional[str] = Field(None, description="Provider API Key (Sanitized)")
     extra_headers: Optional[dict[str, str]] = Field(None, description="Extra Headers")
+    provider_options: Optional[dict[str, Any]] = Field(
+        None, description="Provider Options"
+    )
     proxy_url: Optional[str] = Field(None, description="Proxy URL (Sanitized)")
     is_active: bool = Field(True, description="Is Active")
     created_at: datetime = Field(..., description="Creation Time")
