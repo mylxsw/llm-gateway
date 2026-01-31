@@ -134,5 +134,6 @@ def _run_migrations(sync_conn) -> None:
         {
             "proxy_enabled": "proxy_enabled BOOLEAN DEFAULT FALSE",
             "proxy_url": "proxy_url TEXT",
+            "provider_options": "provider_options JSON",
         },
     )

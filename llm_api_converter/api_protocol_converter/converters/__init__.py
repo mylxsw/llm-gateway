@@ -42,6 +42,27 @@ _DECODERS = {
     Protocol.ANTHROPIC_MESSAGES: AnthropicMessagesDecoder(),
 }
 
+def _apply_default_parameters(
+    ir_request: IRRequest, options: Dict[str, Any]
+) -> None:
+    default_params = options.get("default_parameters")
+    if not isinstance(default_params, dict):
+        return
+
+    config = ir_request.generation_config
+    mapping = {
+        "temperature": "temperature",
+        "top_p": "top_p",
+        "top_k": "top_k",
+        "max_tokens": "max_tokens",
+    }
+    for key, attr in mapping.items():
+        if key not in default_params:
+            continue
+        if getattr(config, attr) is not None:
+            continue
+        setattr(config, attr, default_params[key])
+
 
 def _get_protocol(protocol: Union[Protocol, str]) -> Protocol:
     """Convert string to Protocol enum if needed."""
@@ -96,6 +117,7 @@ def convert_request(
 
     # Set stream flag
     ir_request.stream = stream
+    _apply_default_parameters(ir_request, options)
 
     # Encode to target
     encoder = _ENCODERS[target]

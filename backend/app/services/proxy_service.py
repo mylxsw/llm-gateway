@@ -196,6 +196,19 @@ class ProxyService:
         sanitized["_files"] = safe_files
         return sanitized
 
+    @staticmethod
+    def _build_conversion_options(
+        provider_options: Optional[dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
+        if not provider_options:
+            return None
+        if not isinstance(provider_options, dict):
+            return None
+        default_params = provider_options.get("default_parameters")
+        if not isinstance(default_params, dict) or not default_params:
+            return None
+        return {"default_parameters": default_params}
+
     async def _resolve_candidates(
         self,
         requested_model: str,
@@ -454,12 +467,16 @@ class ProxyService:
             try:
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
                 client = get_provider_client(supplier_protocol)
+                conversion_options = self._build_conversion_options(
+                    candidate.provider_options
+                )
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
                     path=path,
                     body=body,
                     target_model=candidate.target_model,
+                    options=conversion_options,
                 )
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
@@ -768,12 +785,16 @@ class ProxyService:
             try:
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
                 client = get_provider_client(supplier_protocol)
+                conversion_options = self._build_conversion_options(
+                    candidate.provider_options
+                )
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
                     path=path,
                     body=body,
                     target_model=candidate.target_model,
+                    options=conversion_options,
                 )
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
