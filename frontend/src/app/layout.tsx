@@ -6,6 +6,8 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
@@ -34,13 +36,15 @@ export const metadata: Metadata = {
  * Root Layout Component
  * Contains sidebar navigation and main content area
  */
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <Script
           id="theme-init"
@@ -64,18 +68,20 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <Providers>
-          <AuthGate />
-          <div className="flex min-h-screen">
-            {/* Sidebar Navigation */}
-            <Sidebar />
-            {/* Main Content Area */}
-            <main className="flex-1 overflow-auto bg-muted/30 p-6">
-              {children}
-            </main>
-          </div>
-          <ThemeToggle />
-        </Providers>
+        <NextIntlClientProvider>
+          <Providers>
+            <AuthGate />
+            <div className="flex min-h-screen">
+              {/* Sidebar Navigation */}
+              <Sidebar />
+              {/* Main Content Area */}
+              <main className="flex-1 overflow-auto bg-muted/30 p-6">
+                {children}
+              </main>
+            </div>
+            <ThemeToggle />
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );
