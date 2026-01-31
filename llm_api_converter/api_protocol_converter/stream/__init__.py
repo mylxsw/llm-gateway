@@ -226,9 +226,10 @@ def convert_stream_sync(
     Yields:
         Converted events
     """
-    from ..converters import _DECODERS, _ENCODERS
+    from ..converters import _DECODER_CLASSES, _ENCODERS
 
-    decoder = _DECODERS[source_protocol]
+    # Create a fresh decoder instance per stream to isolate per-stream state
+    decoder = _DECODER_CLASSES[source_protocol]()
     encoder = _ENCODERS[target_protocol]
 
     for event in events:
@@ -261,8 +262,9 @@ class StreamConverter:
         self.accumulator = StreamAccumulator()
 
         # Import here to avoid circular imports
-        from ..converters import _DECODERS, _ENCODERS
-        self._decoder = _DECODERS[source_protocol]
+        from ..converters import _DECODER_CLASSES, _ENCODERS
+        # Create a fresh decoder instance per stream to isolate per-stream state
+        self._decoder = _DECODER_CLASSES[source_protocol]()
         self._encoder = _ENCODERS[target_protocol]
 
     def convert_event(
