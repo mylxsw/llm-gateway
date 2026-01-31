@@ -586,6 +586,162 @@ OPENAI_RESPONSES_MULTIMODAL_REQUEST = {
     "max_output_tokens": 500,
 }
 
+# Streaming chunks: multiple tool calls WITHOUT index field (e.g., Google Gemini OpenAI-compat)
+OPENAI_CHAT_STREAM_MULTI_TOOL_NO_INDEX = [
+    # Chunk 1: role + first tool call (complete arguments in one chunk, no index field)
+    {
+        "id": "zCZ-aeCNCLDDjuMPrMTawQY",
+        "object": "chat.completion.chunk",
+        "created": 1769875148,
+        "model": "gemini-3-pro-preview",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": '{"path":"IDENTITY.md","content":"# Identity"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-1111",
+                            "type": "function",
+                        }
+                    ],
+                },
+                "finish_reason": None,
+            }
+        ],
+    },
+    # Chunk 2: second tool call (different id, no index field)
+    {
+        "id": "zCZ-aeCNCLDDjuMPrMTawQY",
+        "object": "chat.completion.chunk",
+        "created": 1769875149,
+        "model": "gemini-3-pro-preview",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": '{"path":"USER.md","content":"# User"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-2222",
+                            "type": "function",
+                        }
+                    ],
+                },
+                "finish_reason": None,
+            }
+        ],
+    },
+    # Chunk 3: finish
+    {
+        "id": "zCZ-aeCNCLDDjuMPrMTawQY",
+        "object": "chat.completion.chunk",
+        "created": 1769875149,
+        "model": "gemini-3-pro-preview",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {"role": "assistant"},
+                "finish_reason": "stop",
+            }
+        ],
+    },
+]
+
+# Streaming chunks: standard OpenAI multi-tool with index fields
+OPENAI_CHAT_STREAM_MULTI_TOOL_WITH_INDEX = [
+    # Chunk 1: role + first tool call start
+    {
+        "id": "chatcmpl-toolstream",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gpt-4o",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_aaa",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": '{"location":',
+                            },
+                        }
+                    ],
+                },
+                "finish_reason": None,
+            }
+        ],
+    },
+    # Chunk 2: first tool call arguments continuation
+    {
+        "id": "chatcmpl-toolstream",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gpt-4o",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "function": {"arguments": '"Paris"}'},
+                        }
+                    ]
+                },
+                "finish_reason": None,
+            }
+        ],
+    },
+    # Chunk 3: second tool call start
+    {
+        "id": "chatcmpl-toolstream",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gpt-4o",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 1,
+                            "id": "call_bbb",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": '{"location":"London"}',
+                            },
+                        }
+                    ]
+                },
+                "finish_reason": None,
+            }
+        ],
+    },
+    # Chunk 4: finish
+    {
+        "id": "chatcmpl-toolstream",
+        "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "model": "gpt-4o",
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+    },
+]
+
 OPENAI_CHAT_WITH_BASE64_IMAGE_REQUEST = {
     "model": "gpt-4o",
     "messages": [

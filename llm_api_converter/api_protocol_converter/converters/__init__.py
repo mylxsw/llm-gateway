@@ -42,6 +42,13 @@ _DECODERS = {
     Protocol.ANTHROPIC_MESSAGES: AnthropicMessagesDecoder(),
 }
 
+# Decoder classes for creating fresh instances (needed for stateful streaming)
+_DECODER_CLASSES = {
+    Protocol.OPENAI_CHAT: OpenAIChatDecoder,
+    Protocol.OPENAI_RESPONSES: OpenAIResponsesDecoder,
+    Protocol.ANTHROPIC_MESSAGES: AnthropicMessagesDecoder,
+}
+
 def _apply_default_parameters(
     ir_request: IRRequest, options: Dict[str, Any]
 ) -> None:
@@ -185,7 +192,9 @@ def convert_stream(
     target = _get_protocol(target_protocol)
     options = options or {}
 
-    decoder = _DECODERS[source]
+    # Create a fresh decoder instance for each stream to isolate per-stream state
+    # (e.g. tool call index tracking for providers that omit the index field)
+    decoder = _DECODER_CLASSES[source]()
     encoder = _ENCODERS[target]
 
     # Convert events through IR

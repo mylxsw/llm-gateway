@@ -54,6 +54,8 @@ from tests.fixtures import (
     OPENAI_CHAT_SIMPLE_REQUEST,
     OPENAI_CHAT_SIMPLE_RESPONSE,
     OPENAI_CHAT_STREAM_CHUNKS,
+    OPENAI_CHAT_STREAM_MULTI_TOOL_NO_INDEX,
+    OPENAI_CHAT_STREAM_MULTI_TOOL_WITH_INDEX,
     OPENAI_CHAT_TOOL_CALL_RESPONSE,
     OPENAI_CHAT_TOOL_CALL_RESPONSE_WRONG_FINISH_REASON,
     OPENAI_CHAT_TOOL_RESULT_REQUEST,
@@ -602,6 +604,167 @@ class TestStreamConversion:
             for e in result
         )
         assert has_content
+
+
+# =============================================================================
+# Streaming Multi-Tool Call Tests
+# =============================================================================
+
+
+class TestStreamingMultiToolCalls:
+    """Tests for streaming responses with multiple tool calls."""
+
+    def test_multi_tool_no_index_produces_separate_blocks(self):
+        """Tool calls without index field (e.g. Gemini) get separate content blocks."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_MULTI_TOOL_NO_INDEX),
+            )
+        )
+
+        event_types = [e.get("type") for e in result if isinstance(e, dict)]
+
+        # Should have exactly one message_start
+        assert event_types.count("message_start") == 1
+
+        # Should have two separate content_block_start events (one per tool call)
+        starts = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_start"]
+        assert len(starts) == 2
+        assert starts[0]["index"] == 0
+        assert starts[1]["index"] == 1
+
+        # Each start should have the correct tool call ID and name
+        assert starts[0]["content_block"]["id"] == "function-call-1111"
+        assert starts[0]["content_block"]["name"] == "write"
+        assert starts[1]["content_block"]["id"] == "function-call-2222"
+        assert starts[1]["content_block"]["name"] == "write"
+
+        # Should have two content_block_delta events with different indices
+        deltas = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_delta"]
+        assert len(deltas) == 2
+        assert deltas[0]["index"] == 0
+        assert deltas[1]["index"] == 1
+
+        # First delta should have IDENTITY.md args, second should have USER.md args
+        assert "IDENTITY.md" in deltas[0]["delta"]["partial_json"]
+        assert "USER.md" in deltas[1]["delta"]["partial_json"]
+
+        # Should have content_block_stop between blocks and at the end
+        stops = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_stop"]
+        assert len(stops) == 2
+        assert stops[0]["index"] == 0
+        assert stops[1]["index"] == 1
+
+        # Should have message_delta with stop_reason
+        msg_delta = [e for e in result if isinstance(e, dict) and e.get("type") == "message_delta"]
+        assert len(msg_delta) == 1
+
+    def test_multi_tool_with_index_produces_separate_blocks(self):
+        """Standard OpenAI tool calls with index field still work correctly."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_MULTI_TOOL_WITH_INDEX),
+            )
+        )
+
+        # Should have two separate content_block_start events
+        starts = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_start"]
+        assert len(starts) == 2
+        assert starts[0]["index"] == 0
+        assert starts[1]["index"] == 1
+
+        # Should have correct tool call IDs
+        assert starts[0]["content_block"]["id"] == "call_aaa"
+        assert starts[1]["content_block"]["id"] == "call_bbb"
+
+        # Should have content_block_delta events at correct indices
+        deltas = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_delta"]
+        # First tool has 2 argument chunks, second has 1
+        assert deltas[0]["index"] == 0
+        assert deltas[1]["index"] == 0
+        assert deltas[2]["index"] == 1
+
+        # Should have content_block_stop for each block
+        stops = [e for e in result if isinstance(e, dict) and e.get("type") == "content_block_stop"]
+        assert len(stops) == 2
+        assert stops[0]["index"] == 0
+        assert stops[1]["index"] == 1
+
+    def test_multi_tool_no_index_event_ordering(self):
+        """Verify correct event ordering: start -> delta -> stop for each block."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_MULTI_TOOL_NO_INDEX),
+            )
+        )
+
+        # Extract content block events in order
+        block_events = [
+            (e.get("type"), e.get("index", e.get("delta", {}).get("index")))
+            for e in result
+            if isinstance(e, dict) and e.get("type", "").startswith("content_block")
+        ]
+
+        # Expected ordering:
+        # content_block_start(0) -> content_block_delta(0) -> content_block_stop(0)
+        # content_block_start(1) -> content_block_delta(1) -> content_block_stop(1)
+        expected = [
+            ("content_block_start", 0),
+            ("content_block_delta", 0),
+            ("content_block_stop", 0),
+            ("content_block_start", 1),
+            ("content_block_delta", 1),
+            ("content_block_stop", 1),
+        ]
+        assert block_events == expected
+
+    def test_no_duplicate_message_start(self):
+        """Multiple chunks with role field should only produce one message_start."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_MULTI_TOOL_NO_INDEX),
+            )
+        )
+
+        msg_starts = [e for e in result if isinstance(e, dict) and e.get("type") == "message_start"]
+        assert len(msg_starts) == 1
+
+    def test_simple_text_stream_still_works(self):
+        """Existing text-only streaming should not be broken by the tool call fix."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_CHAT,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_CHAT_STREAM_CHUNKS),
+            )
+        )
+
+        event_types = [e.get("type") for e in result if isinstance(e, dict)]
+        assert "message_start" in event_types
+        assert "content_block_delta" in event_types
+
+        # Text deltas should be present
+        text_deltas = [
+            e for e in result
+            if isinstance(e, dict)
+            and e.get("type") == "content_block_delta"
+            and e.get("delta", {}).get("type") == "text_delta"
+        ]
+        assert len(text_deltas) == 2
+        assert text_deltas[0]["delta"]["text"] == "Hello"
+        assert text_deltas[1]["delta"]["text"] == " there!"
+
+        # Should have content_block_stop before message_delta
+        assert "content_block_stop" in event_types
+        assert "message_delta" in event_types
 
 
 # =============================================================================
