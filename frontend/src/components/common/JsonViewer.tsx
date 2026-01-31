@@ -5,9 +5,12 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import ReactJsonView from '@uiw/react-json-view';
+import { darkTheme } from '@uiw/react-json-view/dark';
+import { lightTheme } from '@uiw/react-json-view/light';
 import { Button } from '@/components/ui/button';
-import { Copy, Check, ChevronDown, ChevronRight, WrapText } from 'lucide-react';
+import { Copy, Check, ChevronDown, ChevronRight, WrapText, Braces } from 'lucide-react';
 import { copyToClipboard, cn } from '@/lib/utils';
 
 interface JsonViewerProps {
@@ -34,38 +37,65 @@ export function JsonViewer({
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [wrapLines, setWrapLines] = useState(false);
+  const [useRawView, setUseRawView] = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
-  const normalizedData = useMemo(() => {
-    if (typeof data !== 'string') return data;
-    const trimmed = data.trim();
-    if (
-      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-      (trimmed.startsWith('[') && trimmed.endsWith(']'))
-    ) {
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        return data;
-      }
+  const parsedJson = useMemo(() => {
+    if (typeof data !== 'string') {
+      const isJsonValue =
+        data === null || ['object', 'number', 'boolean'].includes(typeof data);
+      return { isValid: isJsonValue, value: data };
     }
-    return data;
+    const trimmed = data.trim();
+    if (!trimmed) return { isValid: false, value: data };
+    try {
+      return { isValid: true, value: JSON.parse(trimmed) };
+    } catch {
+      return { isValid: false, value: data };
+    }
   }, [data]);
 
-  // Format JSON string
+  const isValidJson =
+    parsedJson.isValid && typeof parsedJson.value === 'object' && parsedJson.value !== null;
+  const jsonValue = parsedJson.value;
+  const showJsonView = isValidJson && !useRawView;
+
+  useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Format JSON string for copy fallback
   const jsonString = (() => {
-    if (typeof normalizedData === 'string') {
-      return normalizedData;
+    if (isValidJson) {
+      try {
+        return JSON.stringify(jsonValue, null, 2) ?? String(jsonValue);
+      } catch {
+        return String(jsonValue);
+      }
+    }
+    if (typeof jsonValue === 'string') {
+      return jsonValue;
     }
     try {
-      return JSON.stringify(normalizedData, null, 2) ?? String(normalizedData);
+      return JSON.stringify(jsonValue, null, 2) ?? String(jsonValue);
     } catch {
-      return String(normalizedData);
+      return String(jsonValue);
     }
   })();
 
   type TokenType = 'key' | 'string' | 'number' | 'boolean' | 'null' | 'plain';
 
   const tokens = useMemo(() => {
+    if (showJsonView) return [];
     const tokenRegex = /"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
     const parsedTokens: Array<{ text: string; type: TokenType }> = [];
     let lastIndex = 0;
@@ -106,7 +136,7 @@ export function JsonViewer({
     }
 
     return parsedTokens;
-  }, [jsonString]);
+  }, [showJsonView, jsonString]);
 
   const tokenClassName = (type: TokenType) => {
     switch (type) {
@@ -150,15 +180,17 @@ export function JsonViewer({
           <span>{expanded ? 'Collapse' : 'Expand'}</span>
         </button>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setWrapLines((value) => !value)}
-            className="h-7 gap-1 px-2"
-          >
-            <WrapText className="h-3.5 w-3.5" suppressHydrationWarning />
-            <span>{wrapLines ? 'No wrap' : 'Wrap'}</span>
-          </Button>
+          {!showJsonView && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setWrapLines((value) => !value)}
+              className="h-7 gap-1 px-2"
+            >
+              <WrapText className="h-3.5 w-3.5" suppressHydrationWarning />
+              <span>{wrapLines ? 'No wrap' : 'Wrap'}</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -177,26 +209,48 @@ export function JsonViewer({
               </>
             )}
           </Button>
+          {isValidJson && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setUseRawView((value) => !value)}
+              className="h-7 gap-1 px-2"
+            >
+              <Braces className="h-3.5 w-3.5" suppressHydrationWarning />
+              <span>{useRawView ? 'JSON' : 'Raw'}</span>
+            </Button>
+          )}
         </div>
       </div>
 
       {/* JSON Content */}
       {expanded && (
-        <pre
-          className={cn(
-            'overflow-auto p-3 text-sm font-mono',
-            wrapLines ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+        <>
+          {showJsonView ? (
+            <div className="overflow-auto p-3 text-sm" style={{ maxHeight }}>
+              <ReactJsonView
+                value={jsonValue as Record<string, unknown> | unknown[]}
+                style={isDark ? darkTheme : lightTheme}
+              />
+            </div>
+          ) : (
+            <pre
+              className={cn(
+                'overflow-auto p-3 text-sm font-mono',
+                wrapLines ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+              )}
+              style={{ maxHeight }}
+            >
+              <code>
+                {tokens.map((token, index) => (
+                  <span key={`${token.type}-${index}`} className={tokenClassName(token.type)}>
+                    {token.text}
+                  </span>
+                ))}
+              </code>
+            </pre>
           )}
-          style={{ maxHeight }}
-        >
-          <code>
-            {tokens.map((token, index) => (
-              <span key={`${token.type}-${index}`} className={tokenClassName(token.type)}>
-                {token.text}
-              </span>
-            ))}
-          </code>
-        </pre>
+        </>
       )}
     </div>
   );
