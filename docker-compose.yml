@@ -16,6 +16,17 @@ services:
       retries: 20
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   llm-gateway:
     build:
       context: .
@@ -24,12 +35,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "${LLM_GATEWAY_PORT:-8000}:8000"
     environment:
       DEBUG: ${DEBUG:-false}
       DATABASE_TYPE: ${DATABASE_TYPE:-postgresql}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://llm_gateway:llm_gateway_password@postgres:5432/llm_gateway}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      KV_STORE_TYPE: ${KV_STORE_TYPE:-redis}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
@@ -38,3 +53,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

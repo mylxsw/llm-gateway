@@ -12,8 +12,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import get_settings
 from app.db.session import get_db
-from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
 from app.repositories.sqlalchemy.kv_store_repo import SQLAlchemyKVStoreRepository
+from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
 from app.services.log_service import LogService
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,9 @@ async def cleanup_expired_kv_task():
         async for db in get_db():
             kv_repo = SQLAlchemyKVStoreRepository(db)
             deleted_count = await kv_repo.cleanup_expired()
-            logger.info(f"KV store cleanup task completed: {deleted_count} expired keys deleted")
+            logger.info(
+                f"KV store cleanup task completed: {deleted_count} expired keys deleted"
+            )
             break
 
     except Exception as e:
@@ -97,19 +99,27 @@ def start_scheduler():
     )
 
     # Add KV store cleanup task (Executes daily at 1:00 AM)
-    _scheduler.add_job(
-        cleanup_expired_kv_task,
-        trigger=CronTrigger(hour=1, minute=0),
-        id="cleanup_expired_kv",
-        name="Clean up expired KV pairs",
-        replace_existing=True,
-    )
+    # Skip when using Redis as KV backend since Redis manages TTL natively
+    if settings.KV_STORE_TYPE != "redis":
+        _scheduler.add_job(
+            cleanup_expired_kv_task,
+            trigger=CronTrigger(hour=1, minute=0),
+            id="cleanup_expired_kv",
+            name="Clean up expired KV pairs",
+            replace_existing=True,
+        )
 
     # Start scheduler
     _scheduler.start()
+
+    kv_cleanup_msg = (
+        ", KV store cleanup scheduled daily at 1:00"
+        if settings.KV_STORE_TYPE != "redis"
+        else ", KV store cleanup skipped (using Redis)"
+    )
     logger.info(
-        f"Scheduler started: log cleanup scheduled daily at {settings.LOG_CLEANUP_HOUR}:00, "
-        "KV store cleanup scheduled daily at 1:00"
+        f"Scheduler started: log cleanup scheduled daily at {settings.LOG_CLEANUP_HOUR}:00"
+        + kv_cleanup_msg
     )
 
 

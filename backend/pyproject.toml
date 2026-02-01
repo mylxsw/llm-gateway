@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.6",
     "apscheduler>=3.10.4",
+    "redis[hiredis]>=5.0.0",
 ]
 
 [dependency-groups]

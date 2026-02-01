@@ -9,29 +9,28 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.common.admin_auth import is_admin_auth_enabled, verify_admin_token
+from app.config import get_settings
 from app.db.session import get_db as _get_db
 from app.domain.api_key import ApiKeyModel
 from app.repositories.sqlalchemy import (
-    SQLAlchemyProviderRepository,
-    SQLAlchemyModelRepository,
     SQLAlchemyApiKeyRepository,
-    SQLAlchemyLogRepository,
     SQLAlchemyKVStoreRepository,
+    SQLAlchemyLogRepository,
+    SQLAlchemyModelRepository,
+    SQLAlchemyProviderRepository,
 )
-from app.services.protocol_hooks import ProtocolConversionHooks
 from app.services import (
-    ProviderService,
-    ModelService,
     ApiKeyService,
+    CostFirstStrategy,
     LogService,
+    ModelService,
+    PriorityStrategy,
+    ProviderService,
     ProxyService,
     RoundRobinStrategy,
-    CostFirstStrategy,
-    PriorityStrategy,
 )
-
+from app.services.protocol_hooks import ProtocolConversionHooks
 
 # Singleton strategies
 _round_robin_strategy = RoundRobinStrategy()
@@ -42,7 +41,7 @@ _priority_strategy = PriorityStrategy()
 async def get_db():
     """
     Get database session dependency
-    
+
     Yields:
         AsyncSession: Async database session
     """
@@ -55,6 +54,7 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
 # ============ Repository Dependencies ============
+
 
 def get_provider_repo(db: DbSession) -> SQLAlchemyProviderRepository:
     """Get Provider Repository"""
@@ -77,6 +77,7 @@ def get_log_repo(db: DbSession) -> SQLAlchemyLogRepository:
 
 
 # ============ Service Dependencies ============
+
 
 def get_provider_service(db: DbSession) -> ProviderService:
     """Get Provider Service"""
@@ -103,17 +104,28 @@ def get_log_service(db: DbSession) -> LogService:
     return LogService(repo)
 
 
+def _get_kv_repo(db: AsyncSession):
+    """Get KV Store Repository based on configuration"""
+    settings = get_settings()
+    if settings.KV_STORE_TYPE == "redis":
+        from app.db.redis import get_redis
+        from app.repositories.redis import RedisKVStoreRepository
+
+        return RedisKVStoreRepository(get_redis())
+    return SQLAlchemyKVStoreRepository(db)
+
+
 def get_proxy_service(db: DbSession) -> ProxyService:
     """Get Proxy Service"""
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     log_repo = SQLAlchemyLogRepository(db)
-    kv_repo = SQLAlchemyKVStoreRepository(db)
+    kv_repo = _get_kv_repo(db)
     protocol_hooks = ProtocolConversionHooks(kv_repo=kv_repo)
     return ProxyService(
-        model_repo, 
-        provider_repo, 
-        log_repo, 
+        model_repo,
+        provider_repo,
+        log_repo,
         round_robin_strategy=_round_robin_strategy,
         cost_first_strategy=_cost_first_strategy,
         priority_strategy=_priority_strategy,
@@ -122,6 +134,7 @@ def get_proxy_service(db: DbSession) -> ProxyService:
 
 
 # ============ Auth Dependencies ============
+
 
 def _extract_bearer_token(authorization: str | None) -> str | None:
     if not authorization:
@@ -168,22 +181,24 @@ async def require_admin_auth(
 async def get_current_api_key(
     db: DbSession,
     authorization: str = Header(None, description="Bearer token"),
-    x_api_key: str = Header(None, description="Anthropic style API key", alias="x-api-key"),
+    x_api_key: str = Header(
+        None, description="Anthropic style API key", alias="x-api-key"
+    ),
 ) -> ApiKeyModel:
     """
     Get current request API Key (Authentication)
-    
+
     Extracts API Key from Authorization header or x-api-key header and verifies it.
     Prioritizes x-api-key.
-    
+
     Args:
         db: Database session
         authorization: Authorization header
         x_api_key: x-api-key header
-    
+
     Returns:
         ApiKeyModel: Verified API Key
-    
+
     Raises:
         AuthenticationError: Verification failed
     """
