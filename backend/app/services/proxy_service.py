@@ -891,27 +891,52 @@ class ProxyService:
                     # Reset upstream chunks for the current attempt
                     stream_conversion_data["upstream_chunks"] = []
 
-                    stream_conversion_data["upstream_chunks"].append(first_chunk)
-                    hooked_first_chunk = (
-                        self._protocol_hooks.before_stream_chunk_conversion(
-                            first_chunk,
-                            request_protocol,
-                            supplier_protocol,
-                        )
-                    )
-                    if hooked_first_chunk is None:
-                        hooked_first_chunk = first_chunk
-                    yield hooked_first_chunk
-                    async for chunk, _ in upstream_gen:
+                    # Buffer for complete SSE events (events end with \n\n)
+                    event_buffer = b""
+
+                    async def process_chunk(chunk: bytes) -> AsyncGenerator[bytes, None]:
+                        nonlocal event_buffer
                         stream_conversion_data["upstream_chunks"].append(chunk)
-                        hooked_chunk = self._protocol_hooks.before_stream_chunk_conversion(
-                            chunk,
-                            request_protocol,
-                            supplier_protocol,
+                        event_buffer += chunk
+
+                        # Process complete SSE events (each event ends with \n\n)
+                        while b"\n\n" in event_buffer:
+                            # Find the position of the event delimiter
+                            delimiter_pos = event_buffer.index(b"\n\n")
+                            # Extract the complete event including the delimiter
+                            complete_event = event_buffer[: delimiter_pos + 2]
+                            event_buffer = event_buffer[delimiter_pos + 2 :]
+
+                            # Call hook with complete SSE event
+                            hooked_event = (
+                                self._protocol_hooks.before_stream_chunk_conversion(
+                                    complete_event,
+                                    request_protocol,
+                                    supplier_protocol,
+                                )
+                            )
+                            if hooked_event is None:
+                                hooked_event = complete_event
+                            yield hooked_event
+
+                    async for event in process_chunk(first_chunk):
+                        yield event
+                    async for chunk, _ in upstream_gen:
+                        async for event in process_chunk(chunk):
+                            yield event
+
+                    # Flush any remaining data in buffer (incomplete event)
+                    if event_buffer:
+                        hooked_remaining = (
+                            self._protocol_hooks.before_stream_chunk_conversion(
+                                event_buffer,
+                                request_protocol,
+                                supplier_protocol,
+                            )
                         )
-                        if hooked_chunk is None:
-                            hooked_chunk = chunk
-                        yield hooked_chunk
+                        if hooked_remaining is None:
+                            hooked_remaining = event_buffer
+                        yield hooked_remaining
 
                 try:
                     same_protocol = normalize_protocol(

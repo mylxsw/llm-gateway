@@ -18,12 +18,13 @@ class ProtocolConversionHooks:
     @staticmethod
     def _log_call(name: str, **kwargs: Any) -> None:
         # Convert bytes to string for JSON serialization
-        sanitized_kwargs = {
-            k: v.decode("utf-8", errors="replace") if isinstance(v, bytes) else v
-            for k, v in kwargs.items()
-        }
-        payload = {"hook": name, "args": sanitized_kwargs}
-        logger.info("protocol_hook=%s", json.dumps(payload, ensure_ascii=False))
+        # sanitized_kwargs = {
+        #     k: v.decode("utf-8", errors="replace") if isinstance(v, bytes) else v
+        #     for k, v in kwargs.items()
+        # }
+        # payload = {"hook": name, "args": sanitized_kwargs}
+        # logger.info("protocol_hook=%s", json.dumps(payload, ensure_ascii=False))
+        pass
 
     def before_request_conversion(
         self,
@@ -93,6 +94,26 @@ class ProtocolConversionHooks:
             request_protocol=request_protocol,
             supplier_protocol=supplier_protocol,
         )
+
+        try:
+            chunk_str = chunk.decode("utf-8", errors="replace")
+            for line in chunk_str.split("\n"):
+                if line.startswith("data: ") and line.strip() != "data: [DONE]":
+                    data = json.loads(line[6:])
+                    choices = data.get("choices", [])
+                    for choice in choices:
+                        delta = choice.get("delta", {})
+                        tool_calls = delta.get("tool_calls", [])
+                        for tool_call in tool_calls:
+                            extra_content = tool_call.get("extra_content")
+                            if extra_content:
+                                tool_call_id = tool_call.get("id", "")
+                                print(
+                                    f"tool_calls.extra_content: id={tool_call_id}, {json.dumps(extra_content, ensure_ascii=False)}"
+                                )
+        except Exception:
+            pass
+
         return chunk
 
     def after_stream_chunk_conversion(
