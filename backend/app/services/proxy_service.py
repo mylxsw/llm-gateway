@@ -36,6 +36,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.protocol_hooks import ProtocolConversionHooks
 from app.services.strategy import (
     CostFirstStrategy,
     PriorityStrategy,
@@ -102,6 +103,7 @@ class ProxyService:
         round_robin_strategy: Optional[SelectionStrategy] = None,
         cost_first_strategy: Optional[SelectionStrategy] = None,
         priority_strategy: Optional[SelectionStrategy] = None,
+        protocol_hooks: Optional[ProtocolConversionHooks] = None,
     ):
         """
         Initialize Service
@@ -122,6 +124,7 @@ class ProxyService:
         self._round_robin_strategy = round_robin_strategy or RoundRobinStrategy()
         self._cost_first_strategy = cost_first_strategy or CostFirstStrategy()
         self._priority_strategy = priority_strategy or PriorityStrategy()
+        self._protocol_hooks = protocol_hooks or ProtocolConversionHooks()
 
     async def _write_log(self, log_data: RequestLogCreate) -> None:
         await self.log_repo.create(log_data)
@@ -470,14 +473,28 @@ class ProxyService:
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
+                hooked_body = self._protocol_hooks.before_request_conversion(
+                    body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_body is None:
+                    hooked_body = body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
                     path=path,
-                    body=body,
+                    body=hooked_body,
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
+                hooked_supplier_body = self._protocol_hooks.after_request_conversion(
+                    supplier_body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_supplier_body is not None:
+                    supplier_body = hooked_supplier_body
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
@@ -524,8 +541,6 @@ class ProxyService:
         )
 
         if result.response.body is not None and result.final_provider is not None:
-            # Capture upstream response before protocol conversion
-            conversion_data["upstream_response_body"] = result.response.body
             try:
                 supplier_protocol = resolve_implementation_protocol(
                     result.final_provider.protocol
@@ -533,13 +548,31 @@ class ProxyService:
                 same_protocol = normalize_protocol(
                     request_protocol
                 ) == normalize_protocol(supplier_protocol)
+                hooked_upstream_body = self._protocol_hooks.before_response_conversion(
+                    result.response.body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_upstream_body is None:
+                    hooked_upstream_body = result.response.body
+                # Capture upstream response before protocol conversion
+                conversion_data["upstream_response_body"] = hooked_upstream_body
+                response_body = hooked_upstream_body
                 if not same_protocol:
-                    result.response.body = convert_response_for_user(
+                    response_body = convert_response_for_user(
                         request_protocol=request_protocol,
                         supplier_protocol=supplier_protocol,
-                        body=result.response.body,
+                        body=hooked_upstream_body,
                         target_model=result.final_provider.target_model,
                     )
+                hooked_response_body = self._protocol_hooks.after_response_conversion(
+                    response_body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_response_body is not None:
+                    response_body = hooked_response_body
+                result.response.body = response_body
             except Exception as e:
                 error_msg = str(e)
                 logger.error(
@@ -788,14 +821,28 @@ class ProxyService:
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
+                hooked_body = self._protocol_hooks.before_request_conversion(
+                    body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_body is None:
+                    hooked_body = body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
                     path=path,
-                    body=body,
+                    body=hooked_body,
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
+                hooked_supplier_body = self._protocol_hooks.after_request_conversion(
+                    supplier_body,
+                    request_protocol,
+                    supplier_protocol,
+                )
+                if hooked_supplier_body is not None:
+                    supplier_body = hooked_supplier_body
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
@@ -845,10 +892,26 @@ class ProxyService:
                     stream_conversion_data["upstream_chunks"] = []
 
                     stream_conversion_data["upstream_chunks"].append(first_chunk)
-                    yield first_chunk
+                    hooked_first_chunk = (
+                        self._protocol_hooks.before_stream_chunk_conversion(
+                            first_chunk,
+                            request_protocol,
+                            supplier_protocol,
+                        )
+                    )
+                    if hooked_first_chunk is None:
+                        hooked_first_chunk = first_chunk
+                    yield hooked_first_chunk
                     async for chunk, _ in upstream_gen:
                         stream_conversion_data["upstream_chunks"].append(chunk)
-                        yield chunk
+                        hooked_chunk = self._protocol_hooks.before_stream_chunk_conversion(
+                            chunk,
+                            request_protocol,
+                            supplier_protocol,
+                        )
+                        if hooked_chunk is None:
+                            hooked_chunk = chunk
+                        yield hooked_chunk
 
                 try:
                     same_protocol = normalize_protocol(
@@ -856,7 +919,16 @@ class ProxyService:
                     ) == normalize_protocol(supplier_protocol)
                     if same_protocol:
                         async for chunk in upstream_bytes():
-                            yield chunk, first_resp
+                            hooked_chunk = (
+                                self._protocol_hooks.after_stream_chunk_conversion(
+                                    chunk,
+                                    request_protocol,
+                                    supplier_protocol,
+                                )
+                            )
+                            if hooked_chunk is None:
+                                hooked_chunk = chunk
+                            yield hooked_chunk, first_resp
                     else:
                         async for out_chunk in convert_stream_for_user(
                             request_protocol=request_protocol,
@@ -865,7 +937,16 @@ class ProxyService:
                             model=candidate.target_model,
                             input_tokens=input_tokens,
                         ):
-                            yield out_chunk, first_resp
+                            hooked_out_chunk = (
+                                self._protocol_hooks.after_stream_chunk_conversion(
+                                    out_chunk,
+                                    request_protocol,
+                                    supplier_protocol,
+                                )
+                            )
+                            if hooked_out_chunk is None:
+                                hooked_out_chunk = out_chunk
+                            yield hooked_out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
                     logger.error(
