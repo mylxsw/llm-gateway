@@ -6,3 +6,4 @@
 data/
 .venv/
 backend/.venv/
+*.local.sh

@@ -17,7 +17,12 @@ class ProtocolConversionHooks:
 
     @staticmethod
     def _log_call(name: str, **kwargs: Any) -> None:
-        payload = {"hook": name, "args": kwargs}
+        # Convert bytes to string for JSON serialization
+        sanitized_kwargs = {
+            k: v.decode("utf-8", errors="replace") if isinstance(v, bytes) else v
+            for k, v in kwargs.items()
+        }
+        payload = {"hook": name, "args": sanitized_kwargs}
         logger.info("protocol_hook=%s", json.dumps(payload, ensure_ascii=False))
 
     def before_request_conversion(

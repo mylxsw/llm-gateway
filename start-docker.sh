@@ -26,6 +26,7 @@ SYNC_DB_PASSWORD="${SYNC_DB_PASSWORD:-}"
 SYNC_DB=false
 SYNC_DB_CLEAN=false
 INIT_STACK=false
+DETACHED=true
 
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -179,7 +180,8 @@ sync_remote_database() {
     local dump_error_file="/tmp/pg_dump_error_$$.log"
     # Execute pg_dump directly in docker compose's postgres container
     # This ensures proper network connectivity (avoids --network host issues on macOS)
-    if ! docker exec \
+    # Run pg_dump in background and show progress
+    docker exec \
         -e PGPASSWORD="${SYNC_DB_PASSWORD}" \
         "$postgres_container" \
         pg_dump \
@@ -190,7 +192,27 @@ sync_remote_database() {
         --format=plain \
         --inserts \
         $pg_dump_opts \
-        > "${dump_file}" 2>"${dump_error_file}"; then
+        > "${dump_file}" 2>"${dump_error_file}" &
+    local dump_pid=$!
+
+    # Show progress while pg_dump is running
+    local spinner='|/-\'
+    local spin_idx=0
+    while kill -0 "$dump_pid" 2>/dev/null; do
+        local current_size=""
+        if [ -f "$dump_file" ]; then
+            current_size=$(du -h "$dump_file" 2>/dev/null | cut -f1)
+        fi
+        spin_idx=$(( (spin_idx + 1) % 4 ))
+        printf "\r  ${spinner:$spin_idx:1} Exporting... ${current_size:-0B}  "
+        sleep 0.5
+    done
+    printf "\r                                    \r"
+
+    # Check if pg_dump succeeded
+    wait "$dump_pid"
+    local dump_exit_code=$?
+    if [ $dump_exit_code -ne 0 ]; then
         log_error "Database export failed"
         if [ -s "$dump_error_file" ]; then
             log_error "Error details: $(cat "$dump_error_file")"
@@ -242,9 +264,11 @@ Commands:
   restart   Restart services
   logs      View logs
   ps|status View service status
+  sync-db   Start only PostgreSQL and sync data from remote database
 
 Options:
   --init          Rebuild images and reset local data (including PG volume)
+  --foreground    Run in foreground (default: run in background with -d)
   --sync-db       Sync data from remote database after startup
   --sync-clean    Clean local database data before sync (requires --sync-db)
   --help          Show this help message
@@ -285,11 +309,15 @@ while [ $# -gt 0 ]; do
             SYNC_DB_CLEAN=true
             shift
             ;;
+        --foreground)
+            DETACHED=false
+            shift
+            ;;
         --help)
             usage
             exit 0
             ;;
-        up|down|restart|logs|ps|status)
+        up|down|restart|logs|ps|status|sync-db)
             if [ -z "$cmd" ]; then
                 cmd="$1"
             else
@@ -314,7 +342,6 @@ load_env
 init_stack() {
   log_warn "Init mode enabled: rebuilding images and resetting local data."
   compose down --volumes --remove-orphans
-  compose build
 }
 
 case "$cmd" in
@@ -322,14 +349,21 @@ case "$cmd" in
     if [ "$INIT_STACK" = true ]; then
       init_stack
     fi
-    compose up -d --force-recreate --build $compose_args
-    echo "Squirrel LLM Gateway is starting..."
-    RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:${LLM_GATEWAY_PORT:-8000}}"
-    echo "Dashboard/API: $RUNNING_URL"
-
     if [ "$SYNC_DB" = true ]; then
+        log_info "Starting PostgreSQL first for database sync..."
+        compose up -d postgres
         echo ""
         sync_remote_database
+        echo ""
+        log_info "Starting all services..."
+    fi
+    if [ "$DETACHED" = true ]; then
+      compose up -d --force-recreate --build $compose_args
+      echo "Squirrel LLM Gateway is starting..."
+      RUNNING_URL="${SQUIRREL_RUNNING_URL:-http://127.0.0.1:${LLM_GATEWAY_PORT:-8000}}"
+      echo "Dashboard/API: $RUNNING_URL"
+    else
+      compose up --force-recreate --build $compose_args
     fi
     ;;
   down)
@@ -341,11 +375,18 @@ case "$cmd" in
     else
       compose down
     fi
-    compose up -d --build $compose_args
-
     if [ "$SYNC_DB" = true ]; then
+        log_info "Starting PostgreSQL first for database sync..."
+        compose up -d postgres
         echo ""
         sync_remote_database
+        echo ""
+        log_info "Starting all services..."
+    fi
+    if [ "$DETACHED" = true ]; then
+      compose up -d --build $compose_args
+    else
+      compose up --build $compose_args
     fi
     ;;
   logs)
@@ -353,6 +394,17 @@ case "$cmd" in
     ;;
   ps|status)
     compose ps $compose_args
+    ;;
+  sync-db)
+    log_info "Starting PostgreSQL service only for database sync..."
+    compose up -d postgres $compose_args
+    echo ""
+    if [ "$SYNC_DB_CLEAN" = true ]; then
+        SYNC_DB_CLEAN=true
+    fi
+    sync_remote_database
+    log_info "Database sync completed. PostgreSQL container is still running."
+    log_info "Use '$0 down' to stop the PostgreSQL container when done."
     ;;
   *)
     usage
