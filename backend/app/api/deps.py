@@ -18,7 +18,9 @@ from app.repositories.sqlalchemy import (
     SQLAlchemyModelRepository,
     SQLAlchemyApiKeyRepository,
     SQLAlchemyLogRepository,
+    SQLAlchemyKVStoreRepository,
 )
+from app.services.protocol_hooks import ProtocolConversionHooks
 from app.services import (
     ProviderService,
     ModelService,
@@ -106,6 +108,8 @@ def get_proxy_service(db: DbSession) -> ProxyService:
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
     log_repo = SQLAlchemyLogRepository(db)
+    kv_repo = SQLAlchemyKVStoreRepository(db)
+    protocol_hooks = ProtocolConversionHooks(kv_repo=kv_repo)
     return ProxyService(
         model_repo, 
         provider_repo, 
@@ -113,6 +117,7 @@ def get_proxy_service(db: DbSession) -> ProxyService:
         round_robin_strategy=_round_robin_strategy,
         cost_first_strategy=_cost_first_strategy,
         priority_strategy=_priority_strategy,
+        protocol_hooks=protocol_hooks,
     )
 
 

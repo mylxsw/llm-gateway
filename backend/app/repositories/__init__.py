@@ -7,6 +7,7 @@ from app.repositories.provider_repo import ProviderRepository
 from app.repositories.model_repo import ModelRepository
 from app.repositories.api_key_repo import ApiKeyRepository
 from app.repositories.log_repo import LogRepository
+from app.repositories.kv_store_repo import KVStoreRepository
 
 __all__ = [
     "BaseRepository",
@@ -14,4 +15,5 @@ __all__ = [
     "ModelRepository",
     "ApiKeyRepository",
     "LogRepository",
+    "KVStoreRepository",
 ]

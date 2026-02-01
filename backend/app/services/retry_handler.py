@@ -311,7 +311,12 @@ class RetryHandler:
                 try:
                     # Get generator
                     attempt_time = utc_now()
-                    generator = forward_stream_fn(current_provider)
+                    result = forward_stream_fn(current_provider)
+                    # Handle both sync and async forward_stream_fn
+                    if asyncio.iscoroutine(result):
+                        generator = await result
+                    else:
+                        generator = result
                     # Get first chunk
                     chunk, response = await anext(generator)
                     last_response = response

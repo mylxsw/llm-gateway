@@ -473,7 +473,7 @@ class ProxyService:
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
-                hooked_body = self._protocol_hooks.before_request_conversion(
+                hooked_body = await self._protocol_hooks.before_request_conversion(
                     body,
                     request_protocol,
                     supplier_protocol,
@@ -488,7 +488,7 @@ class ProxyService:
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
-                hooked_supplier_body = self._protocol_hooks.after_request_conversion(
+                hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
                     request_protocol,
                     supplier_protocol,
@@ -548,7 +548,7 @@ class ProxyService:
                 same_protocol = normalize_protocol(
                     request_protocol
                 ) == normalize_protocol(supplier_protocol)
-                hooked_upstream_body = self._protocol_hooks.before_response_conversion(
+                hooked_upstream_body = await self._protocol_hooks.before_response_conversion(
                     result.response.body,
                     request_protocol,
                     supplier_protocol,
@@ -565,7 +565,7 @@ class ProxyService:
                         body=hooked_upstream_body,
                         target_model=result.final_provider.target_model,
                     )
-                hooked_response_body = self._protocol_hooks.after_response_conversion(
+                hooked_response_body = await self._protocol_hooks.after_response_conversion(
                     response_body,
                     request_protocol,
                     supplier_protocol,
@@ -810,7 +810,7 @@ class ProxyService:
         }
 
         # 8. Execute streaming request
-        def forward_stream_fn(candidate: CandidateProvider):
+        async def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
                 yield b"", ProviderResponse(status_code=400, error=msg)
 
@@ -821,7 +821,7 @@ class ProxyService:
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
-                hooked_body = self._protocol_hooks.before_request_conversion(
+                hooked_body = await self._protocol_hooks.before_request_conversion(
                     body,
                     request_protocol,
                     supplier_protocol,
@@ -836,7 +836,7 @@ class ProxyService:
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
-                hooked_supplier_body = self._protocol_hooks.after_request_conversion(
+                hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
                     request_protocol,
                     supplier_protocol,
@@ -909,7 +909,7 @@ class ProxyService:
 
                             # Call hook with complete SSE event
                             hooked_event = (
-                                self._protocol_hooks.before_stream_chunk_conversion(
+                                await self._protocol_hooks.before_stream_chunk_conversion(
                                     complete_event,
                                     request_protocol,
                                     supplier_protocol,
@@ -928,7 +928,7 @@ class ProxyService:
                     # Flush any remaining data in buffer (incomplete event)
                     if event_buffer:
                         hooked_remaining = (
-                            self._protocol_hooks.before_stream_chunk_conversion(
+                            await self._protocol_hooks.before_stream_chunk_conversion(
                                 event_buffer,
                                 request_protocol,
                                 supplier_protocol,
@@ -945,7 +945,7 @@ class ProxyService:
                     if same_protocol:
                         async for chunk in upstream_bytes():
                             hooked_chunk = (
-                                self._protocol_hooks.after_stream_chunk_conversion(
+                                await self._protocol_hooks.after_stream_chunk_conversion(
                                     chunk,
                                     request_protocol,
                                     supplier_protocol,
@@ -963,7 +963,7 @@ class ProxyService:
                             input_tokens=input_tokens,
                         ):
                             hooked_out_chunk = (
-                                self._protocol_hooks.after_stream_chunk_conversion(
+                                await self._protocol_hooks.after_stream_chunk_conversion(
                                     out_chunk,
                                     request_protocol,
                                     supplier_protocol,
