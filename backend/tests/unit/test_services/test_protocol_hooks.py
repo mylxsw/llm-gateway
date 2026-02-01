@@ -471,3 +471,255 @@ async def test_cache_tool_call_extra_content_skipped_without_kv_repo():
     )
 
     assert result == chunk
+
+
+@pytest.mark.asyncio
+async def test_cache_tool_call_extra_content_from_non_stream_response():
+    """Test that extra_content is cached from non-streaming response."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    extra_content = {"google": {"thought_signature": "xxxxxxxxxxxxxxxxxxxxx"}}
+    supplier_body = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "extra_content": extra_content,
+                            "function": {
+                                "arguments": '{"content":"test","path":"test.md"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-8949365993964308019",
+                            "type": "function",
+                        },
+                        {
+                            "function": {
+                                "arguments": '{"content":"test2","path":"test2.md"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-8949365993964308086",
+                            "type": "function",
+                        },
+                    ],
+                },
+            }
+        ],
+        "created": 1769939894,
+        "id": "tiN_abDiFcDcqtsP9Yvq2Qc",
+        "model": "gemini-3-pro-preview",
+        "object": "chat.completion",
+        "usage": {
+            "completion_tokens": 177,
+            "prompt_tokens": 13146,
+            "total_tokens": 13617,
+        },
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    mock_kv_repo.set.assert_called_once()
+    call_args = mock_kv_repo.set.call_args
+    assert call_args[0][0] == "tool_call_extra:function-call-8949365993964308019"
+    assert json.loads(call_args[0][1]) == extra_content
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_tool_call_extra_content_from_non_stream_response_multiple_tool_calls():
+    """Test that extra_content is cached for multiple tool_calls with extra_content."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    extra_content_1 = {"google": {"thought_signature": "signature_1"}}
+    extra_content_2 = {"google": {"thought_signature": "signature_2"}}
+    supplier_body = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "extra_content": extra_content_1,
+                            "function": {"arguments": "{}", "name": "func1"},
+                            "id": "call-id-001",
+                            "type": "function",
+                        },
+                        {
+                            "extra_content": extra_content_2,
+                            "function": {"arguments": "{}", "name": "func2"},
+                            "id": "call-id-002",
+                            "type": "function",
+                        },
+                    ],
+                },
+            }
+        ],
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    assert mock_kv_repo.set.call_count == 2
+    calls = mock_kv_repo.set.call_args_list
+    assert calls[0][0][0] == "tool_call_extra:call-id-001"
+    assert json.loads(calls[0][0][1]) == extra_content_1
+    assert calls[1][0][0] == "tool_call_extra:call-id-002"
+    assert json.loads(calls[1][0][1]) == extra_content_2
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_non_stream_response_skipped_without_kv_repo():
+    """Test that caching is skipped for non-streaming response when kv_repo is None."""
+    hooks = ProtocolConversionHooks(kv_repo=None)
+
+    supplier_body = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "extra_content": {"google": {"thought_signature": "sig"}},
+                            "id": "call-123",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_non_stream_response_skipped_for_non_dict_body():
+    """Test that caching is skipped when supplier_body is not a dict."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    supplier_body = "not a dict"
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    mock_kv_repo.set.assert_not_called()
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_non_stream_response_skips_tool_call_without_id():
+    """Test that tool_calls without id are skipped in non-streaming response."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    supplier_body = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "extra_content": {"google": {"thought_signature": "sig"}},
+                            "type": "function",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    mock_kv_repo.set.assert_not_called()
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_non_stream_response_skips_tool_call_without_extra_content():
+    """Test that tool_calls without extra_content are skipped."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    supplier_body = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "call-123",
+                            "function": {"name": "test"},
+                            "type": "function",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    mock_kv_repo.set.assert_not_called()
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_cache_non_stream_response_handles_kv_error():
+    """Test that KV store errors are handled gracefully in non-streaming response."""
+    mock_kv_repo = AsyncMock()
+    mock_kv_repo.set.side_effect = Exception("KV store error")
+
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    supplier_body = {
+        "choices": [
+            {
+                "message": {
+                    "tool_calls": [
+                        {
+                            "extra_content": {"google": {"thought_signature": "sig"}},
+                            "id": "call-123",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="gemini",
+    )
+
+    mock_kv_repo.set.assert_called_once()
+    assert result == supplier_body

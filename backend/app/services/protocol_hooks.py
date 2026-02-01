@@ -46,12 +46,6 @@ class ProtocolConversionHooks:
         request_protocol: str,
         supplier_protocol: str,
     ) -> dict[str, Any]:
-        # self._log_call(
-        #     "before_request_conversion",
-        #     body=body,
-        #     request_protocol=request_protocol,
-        #     supplier_protocol=supplier_protocol,
-        # )
         return body
 
     async def after_request_conversion(
@@ -60,22 +54,114 @@ class ProtocolConversionHooks:
         request_protocol: str,
         supplier_protocol: str,
     ) -> dict[str, Any]:
-        self._log_call(
-            "after_request_conversion",
-            supplier_body=supplier_body,
-            request_protocol=request_protocol,
-            supplier_protocol=supplier_protocol,
-        )
-
         if supplier_protocol == "openai" and self._kv_repo:
             await self._inject_tool_call_extra_content(supplier_body)
 
-        logger.info(
-            "after_request_conversion: %s",
-            json.dumps(supplier_body, ensure_ascii=False),
-        )
+        return supplier_body
+
+    async def before_response_conversion(
+        self,
+        supplier_body: Any,
+        request_protocol: str,
+        supplier_protocol: str,
+    ) -> Any:
+        if self._kv_repo and isinstance(supplier_body, dict):
+            await self._cache_response_tool_call_extra_content(supplier_body)
 
         return supplier_body
+
+    async def after_response_conversion(
+        self,
+        response_body: Any,
+        request_protocol: str,
+        supplier_protocol: str,
+    ) -> Any:
+        return response_body
+
+    async def before_stream_chunk_conversion(
+        self,
+        chunk: bytes,
+        request_protocol: str,
+        supplier_protocol: str,
+    ) -> bytes:
+        return await self._cache_response_tool_call_extra_content_stream(chunk)
+
+    async def after_stream_chunk_conversion(
+        self,
+        chunk: bytes,
+        request_protocol: str,
+        supplier_protocol: str,
+    ) -> bytes:
+        return chunk
+
+    async def _cache_response_tool_call_extra_content_stream(
+        self, chunk: bytes
+    ) -> bytes:
+        try:
+            chunk_str = chunk.decode("utf-8", errors="replace")
+            for line in chunk_str.split("\n"):
+                if not line.startswith("data: ") or line.strip() == "data: [DONE]":
+                    continue
+
+                for choice in json.loads(line[6:]).get("choices", []):
+                    for tool_call in choice.get("delta", {}).get("tool_calls", []):
+                        # for google: https://ai.google.dev/gemini-api/docs/thought-signatures#openai
+                        extra_content = tool_call.get("extra_content")
+                        if not extra_content:
+                            continue
+
+                        tool_call_id = tool_call.get("id", "")
+                        if not tool_call_id or not self._kv_repo:
+                            continue
+
+                        cache_key = f"tool_call_extra:{tool_call_id}"
+                        await self._kv_repo.set(
+                            cache_key,
+                            json.dumps(extra_content, ensure_ascii=False),
+                            ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL,
+                        )
+                        logger.info(
+                            f"Cached tool_call extra_content: id={tool_call_id}"
+                        )
+        except Exception as e:
+            logger.debug(f"Error processing stream chunk for extra_content: {e}")
+
+        return chunk
+
+    async def _cache_response_tool_call_extra_content(
+        self, supplier_body: dict[str, Any]
+    ) -> None:
+        """
+        Cache extra_content from tool_calls in non-streaming response.
+
+        For non-streaming responses, extract extra_content from tool_calls
+        and store in KV cache for later injection into subsequent requests.
+        """
+        choices = supplier_body.get("choices", [])
+        for choice in choices:
+            for tool_call in choice.get("message", {}).get("tool_calls", []):
+                extra_content = tool_call.get("extra_content")
+                if not extra_content:
+                    continue
+
+                tool_call_id = tool_call.get("id", "")
+                if not tool_call_id:
+                    continue
+
+                cache_key = f"tool_call_extra:{tool_call_id}"
+                try:
+                    await self._kv_repo.set(
+                        cache_key,
+                        json.dumps(extra_content, ensure_ascii=False),
+                        ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL,
+                    )
+                    logger.info(
+                        f"Cached tool_call extra_content (non-stream): id={tool_call_id}"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Error caching extra_content for tool_call {tool_call_id}: {e}"
+                    )
 
     async def _inject_tool_call_extra_content(
         self, supplier_body: dict[str, Any]
@@ -111,87 +197,3 @@ class ProtocolConversionHooks:
                     logger.warning(
                         f"Error retrieving extra_content for tool_call {tool_call_id}: {e}"
                     )
-
-    async def before_response_conversion(
-        self,
-        supplier_body: Any,
-        request_protocol: str,
-        supplier_protocol: str,
-    ) -> Any:
-        # self._log_call(
-        #     "before_response_conversion",
-        #     supplier_body=supplier_body,
-        #     request_protocol=request_protocol,
-        #     supplier_protocol=supplier_protocol,
-        # )
-        return supplier_body
-
-    async def after_response_conversion(
-        self,
-        response_body: Any,
-        request_protocol: str,
-        supplier_protocol: str,
-    ) -> Any:
-        # self._log_call(
-        #     "after_response_conversion",
-        #     response_body=response_body,
-        #     request_protocol=request_protocol,
-        #     supplier_protocol=supplier_protocol,
-        # )
-        return response_body
-
-    async def before_stream_chunk_conversion(
-        self,
-        chunk: bytes,
-        request_protocol: str,
-        supplier_protocol: str,
-    ) -> bytes:
-        # self._log_call(
-        #     "before_stream_chunk_conversion",
-        #     chunk=chunk,
-        #     request_protocol=request_protocol,
-        #     supplier_protocol=supplier_protocol,
-        # )
-
-        try:
-            chunk_str = chunk.decode("utf-8", errors="replace")
-            for line in chunk_str.split("\n"):
-                if line.startswith("data: ") and line.strip() != "data: [DONE]":
-                    data = json.loads(line[6:])
-                    choices = data.get("choices", [])
-                    for choice in choices:
-                        delta = choice.get("delta", {})
-                        tool_calls = delta.get("tool_calls", [])
-                        for tool_call in tool_calls:
-                            # for google: https://ai.google.dev/gemini-api/docs/thought-signatures#openai
-                            extra_content = tool_call.get("extra_content")
-                            if extra_content:
-                                tool_call_id = tool_call.get("id", "")
-                                if tool_call_id and self._kv_repo:
-                                    cache_key = f"tool_call_extra:{tool_call_id}"
-                                    await self._kv_repo.set(
-                                        cache_key,
-                                        json.dumps(extra_content, ensure_ascii=False),
-                                        ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL,
-                                    )
-                                    logger.info(
-                                        f"Cached tool_call extra_content: id={tool_call_id}"
-                                    )
-        except Exception as e:
-            logger.debug(f"Error processing stream chunk for extra_content: {e}")
-
-        return chunk
-
-    async def after_stream_chunk_conversion(
-        self,
-        chunk: bytes,
-        request_protocol: str,
-        supplier_protocol: str,
-    ) -> bytes:
-        # self._log_call(
-        #     "after_stream_chunk_conversion",
-        #     chunk=chunk,
-        #     request_protocol=request_protocol,
-        #     supplier_protocol=supplier_protocol,
-        # )
-        return chunk
