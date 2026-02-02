@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Download, Upload } from 'lucide-react';
@@ -38,6 +39,9 @@ import {
  * Model Management Page Component
  */
 export default function ModelsPage() {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
+
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -151,7 +155,7 @@ export default function ModelsPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed');
+      alert(t('importExport.exportFailed'));
     }
   };
 
@@ -168,22 +172,35 @@ export default function ModelsPage() {
       const text = await file.text();
       const json = JSON.parse(text) as unknown;
       if (!Array.isArray(json)) {
-        throw new Error('Invalid import file: expected a JSON array');
+        throw new Error(t('importExport.invalidFile'));
       }
       const result = await importModels(json as ModelExport[]);
       
-      let message = `Import complete.\nSuccess: ${result.success}\nSkipped: ${result.skipped}`;
       if (result.errors && result.errors.length > 0) {
-        message += `\n\nErrors:\n${result.errors.join('\n')}`;
+        alert(
+          t('importExport.importCompleteWithErrors', {
+            success: result.success,
+            skipped: result.skipped,
+            errors: result.errors.join('\n'),
+          })
+        );
+      } else {
+        alert(
+          t('importExport.importComplete', {
+            success: result.success,
+            skipped: result.skipped,
+          })
+        );
       }
-      alert(message);
       
       refetch();
     } catch (error) {
       console.error('Import failed:', error);
-      const message =
-        error instanceof Error ? error.message : 'Import failed due to an unknown error';
-      alert(`Import failed: ${message}`);
+      if (error instanceof Error) {
+        alert(t('importExport.importFailed', { message: error.message }));
+      } else {
+        alert(t('importExport.importFailedUnknown'));
+      }
     }
     // Reset input
     event.target.value = '';
@@ -194,9 +211,9 @@ export default function ModelsPage() {
       {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Model Management</h1>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            Configure model mapping rules and providers
+            {t('description')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -209,15 +226,15 @@ export default function ModelsPage() {
           />
           <Button variant="outline" onClick={handleImportClick}>
             <Upload className="mr-2 h-4 w-4" />
-            Import
+            {t('actions.import')}
           </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            {t('actions.export')}
           </Button>
           <Button onClick={handleCreate}>
             <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
-            Add Model
+            {t('actions.addModel')}
           </Button>
         </div>
       </div>
@@ -226,22 +243,22 @@ export default function ModelsPage() {
       {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>Model Mapping List</CardTitle>
+          <CardTitle>{t('list.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="Failed to load model list"
+              message={t('list.loadFailed')}
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="No model configurations found"
-              actionText="Add Model"
+              message={t('list.empty')}
+              actionText={t('actions.addModel')}
               onAction={handleCreate}
             />
           )}
@@ -282,9 +299,11 @@ export default function ModelsPage() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Model Mapping"
-        description={`Are you sure you want to delete model "${deletingModel?.requested_model}"? This will also delete all associated provider configurations.`}
-        confirmText="Delete"
+        title={t('dialogs.deleteModelMappingTitle')}
+        description={t('dialogs.deleteModelMappingDescription', {
+          name: deletingModel?.requested_model ?? '',
+        })}
+        confirmText={tCommon('delete')}
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

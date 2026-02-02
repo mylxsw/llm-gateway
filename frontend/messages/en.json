@@ -186,9 +186,14 @@
       "matchTest": "Match Test",
       "addProvider": "Add Provider"
     },
+    "dialogs": {
+      "deleteModelMappingTitle": "Delete Model Mapping",
+      "deleteModelMappingDescription": "Are you sure you want to delete model \"{name}\"? This will also delete all associated provider configurations."
+    },
     "list": {
       "title": "Model Mapping List",
       "empty": "No model configurations found",
+      "loadFailed": "Failed to load model list",
       "columns": {
         "requestedModel": "Requested Model Name",
         "type": "Type",
@@ -241,6 +246,8 @@
       "pricingTitle": "Pricing (USD / 1M tokens)",
       "inputPrice": "Input Price",
       "outputPrice": "Output Price",
+      "inputPricePlaceholder": "e.g. 5",
+      "outputPricePlaceholder": "e.g. 15",
       "pricingHint": "Used as model fallback price when no provider override exists; empty means unconfigured.",
       "selectionStrategy": "Selection Strategy",
       "roundRobinTitle": "Round Robin",
@@ -392,6 +399,7 @@
       "headersHint": "Use JSON or key: value per line.",
       "headersInvalid": "Invalid headers format. Use JSON or key: value per line.",
       "apiKey": "API Key",
+      "apiKeyPlaceholder": "lgw-xxxxxxxxxxxx",
       "matchFailed": "Match failed",
       "results": "Results",
       "order": "Order",

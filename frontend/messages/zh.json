@@ -186,9 +186,14 @@
       "matchTest": "匹配测试",
       "addProvider": "添加供应商"
     },
+    "dialogs": {
+      "deleteModelMappingTitle": "删除模型映射",
+      "deleteModelMappingDescription": "确认删除模型 \"{name}\"？这也会删除所有关联的供应商配置。"
+    },
     "list": {
       "title": "模型映射列表",
       "empty": "未找到模型配置",
+      "loadFailed": "加载模型列表失败",
       "columns": {
         "requestedModel": "请求模型名称",
         "type": "类型",
@@ -241,6 +246,8 @@
       "pricingTitle": "价格（美元/每百万 tokens）",
       "inputPrice": "输入价格",
       "outputPrice": "输出价格",
+      "inputPricePlaceholder": "例如：5",
+      "outputPricePlaceholder": "例如：15",
       "pricingHint": "作为模型兜底价格；留空表示未配置。",
       "selectionStrategy": "选择策略",
       "roundRobinTitle": "轮询",
@@ -392,6 +399,7 @@
       "headersHint": "使用 JSON 或每行 key: value。",
       "headersInvalid": "请求头格式无效，请使用 JSON 或每行 key: value。",
       "apiKey": "API Key",
+      "apiKeyPlaceholder": "lgw-xxxxxxxxxxxx",
       "matchFailed": "匹配失败",
       "results": "结果",
       "order": "顺序",
