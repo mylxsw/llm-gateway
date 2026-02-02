@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus } from 'lucide-react';
@@ -23,6 +24,8 @@ import { ApiKey, ApiKeyCreate, ApiKeyUpdate } from '@/types';
  * API Key Management Page Component
  */
 export default function ApiKeysPage() {
+  const t = useTranslations('apiKeys');
+
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -114,36 +117,36 @@ export default function ApiKeysPage() {
       {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">API Key Management</h1>
+          <h1 className="text-2xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            Manage API Keys used for accessing proxy interfaces
+            {t('description')}
           </p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
-          New API Key
+          {t('actions.new')}
         </Button>
       </div>
 
       {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>API Key List</CardTitle>
+          <CardTitle>{t('list.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="Failed to load API Key list"
+              message={t('list.loadFailed')}
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="No API Keys found"
-              actionText="New API Key"
+              message={t('list.empty')}
+              actionText={t('actions.new')}
               onAction={handleCreate}
             />
           )}
@@ -181,9 +184,11 @@ export default function ApiKeysPage() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete API Key"
-        description={`Are you sure you want to delete API Key "${deletingKey?.key_name}"? Clients using this key will no longer be able to access the service.`}
-        confirmText="Delete"
+        title={t('dialogs.deleteTitle')}
+        description={t('dialogs.deleteDescription', {
+          name: deletingKey?.key_name ?? '',
+        })}
+        confirmText={t('actions.delete')}
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

@@ -7,6 +7,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import { Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
@@ -75,6 +76,7 @@ export function ProviderForm({
   onSubmit,
   loading = false,
 }: ProviderFormProps) {
+  const t = useTranslations('providers');
   // Check if edit mode
   const isEdit = !!provider;
   
@@ -309,21 +311,21 @@ export function ProviderForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Provider' : 'New Provider'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('form.title.edit') : t('form.title.new')}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">
-              Name <span className="text-destructive">*</span>
+              {t('form.name.label')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
-              placeholder="Enter provider name"
+              placeholder={t('form.name.placeholder')}
               {...register('name', {
-                required: 'Name is required',
-                validate: (v) => isNotEmpty(v) || 'Name cannot be empty',
+                required: t('form.name.required'),
+                validate: (v) => isNotEmpty(v) || t('form.name.empty'),
               })}
             />
             {errors.name && (
@@ -334,14 +336,14 @@ export function ProviderForm({
           {/* Protocol Type */}
           <div className="space-y-2">
             <Label>
-              Protocol Type <span className="text-destructive">*</span>
+              {t('form.protocol.label')} <span className="text-destructive">*</span>
             </Label>
             <Select
               value={protocol}
               onValueChange={(value: ProtocolType) => setValue('protocol', value)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select Protocol Type" />
+                <SelectValue placeholder={t('form.protocol.placeholder')} />
               </SelectTrigger>
               <SelectContent>
                 {protocolConfigs.map((option) => (
@@ -356,14 +358,14 @@ export function ProviderForm({
           {/* Base URL */}
           <div className="space-y-2">
             <Label htmlFor="base_url">
-              Base URL <span className="text-destructive">*</span>
+              {t('form.baseUrl.label')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="base_url"
               placeholder={protocolConfig?.base_url || 'https://api.openai.com'}
               {...register('base_url', {
-                required: 'Base URL is required',
-                validate: (v) => isValidUrl(v) || 'Please enter a valid URL',
+                required: t('form.baseUrl.required'),
+                validate: (v) => isValidUrl(v) || t('form.baseUrl.invalid'),
               })}
             />
             {errors.base_url && (
@@ -374,12 +376,15 @@ export function ProviderForm({
           {/* API Key */}
           <div className="space-y-2">
             <Label htmlFor="api_key">
-              API Key {!isEdit && <span className="text-muted-foreground">(Optional)</span>}
+              {t('form.apiKey.label')}{' '}
+              {!isEdit && <span className="text-muted-foreground">{t('form.apiKey.optional')}</span>}
             </Label>
             <Input
               id="api_key"
               type="password"
-              placeholder={isEdit ? 'Leave blank to keep unchanged' : 'Enter provider API Key'}
+              placeholder={
+                isEdit ? t('form.apiKey.placeholderEdit') : t('form.apiKey.placeholderNew')
+              }
               {...register('api_key')}
             />
           </div>
@@ -387,7 +392,7 @@ export function ProviderForm({
           {/* Extra Headers */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Extra Headers</Label>
+              <Label>{t('form.extraHeaders.label')}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -396,13 +401,13 @@ export function ProviderForm({
                 className="h-8 px-2"
               >
                 <Plus className="mr-1 h-3 w-3" suppressHydrationWarning />
-                Add
+                {t('form.extraHeaders.add')}
               </Button>
             </div>
             
             {extraHeaders.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No extra headers, click button above to add.
+                {t('form.extraHeaders.empty')}
               </p>
             )}
 
@@ -410,13 +415,13 @@ export function ProviderForm({
               {extraHeaders.map((header, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Input
-                    placeholder="Key"
+                    placeholder={t('form.extraHeaders.keyPlaceholder')}
                     value={header.key}
                     onChange={(e) => updateHeader(index, 'key', e.target.value)}
                     className="flex-1"
                   />
                   <Input
-                    placeholder="Value"
+                    placeholder={t('form.extraHeaders.valuePlaceholder')}
                     value={header.value}
                     onChange={(e) => updateHeader(index, 'value', e.target.value)}
                     className="flex-1"
@@ -438,7 +443,7 @@ export function ProviderForm({
           {/* Default Parameters */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Default Parameters</Label>
+              <Label>{t('form.defaultParams.label')}</Label>
               <Button
                 type="button"
                 variant="outline"
@@ -447,19 +452,19 @@ export function ProviderForm({
                 className="h-8 px-2"
               >
                 <Plus className="mr-1 h-3 w-3" suppressHydrationWarning />
-                Add
+                {t('form.defaultParams.add')}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Applies when the request does not provide the parameter.
+              {t('form.defaultParams.helpApply')}
             </p>
             <p className="text-xs text-muted-foreground">
-              Values only support numeric format.
+              {t('form.defaultParams.helpNumeric')}
             </p>
 
             {defaultParameters.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No default parameters, click button above to add.
+                {t('form.defaultParams.empty')}
               </p>
             )}
 
@@ -473,7 +478,7 @@ export function ProviderForm({
                     }
                   >
                     <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select key" />
+                      <SelectValue placeholder={t('form.defaultParams.selectKey')} />
                     </SelectTrigger>
                     <SelectContent>
                       {DEFAULT_PARAMETER_OPTIONS.map((option) => (
@@ -485,7 +490,7 @@ export function ProviderForm({
                   </Select>
                   <Input
                     type="number"
-                    placeholder="Number"
+                    placeholder={t('form.defaultParams.valuePlaceholder')}
                     value={param.value}
                     onChange={(e) =>
                       updateDefaultParameter(index, 'value', e.target.value)
@@ -509,7 +514,7 @@ export function ProviderForm({
           {/* Proxy Configuration */}
           <div className="space-y-3 rounded-md border border-border p-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="proxy_enabled">Proxy Configuration</Label>
+              <Label htmlFor="proxy_enabled">{t('form.proxy.label')}</Label>
               <Switch
                 id="proxy_enabled"
                 checked={proxyEnabled}
@@ -517,16 +522,18 @@ export function ProviderForm({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Use schema://auth@host:port (schema is socks5 or http).
+              {t('form.proxy.help')}
             </p>
 
             {proxyEnabled && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="proxy_url">Proxy URL</Label>
+                  <Label htmlFor="proxy_url">{t('form.proxy.urlLabel')}</Label>
                   <Input
                     id="proxy_url"
-                    placeholder={isEdit ? 'Leave blank to keep unchanged' : 'socks5://user:pass@host:port'}
+                    placeholder={
+                      isEdit ? t('form.proxy.urlPlaceholderEdit') : t('form.proxy.urlPlaceholderNew')
+                    }
                     {...register('proxy_url')}
                   />
                 </div>
@@ -536,7 +543,7 @@ export function ProviderForm({
 
           {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">Enabled Status</Label>
+            <Label htmlFor="is_active">{t('form.status.label')}</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -551,10 +558,10 @@ export function ProviderForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {t('form.actions.cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save'}
+              {loading ? t('form.actions.saving') : t('form.actions.save')}
             </Button>
           </DialogFooter>
         </form>

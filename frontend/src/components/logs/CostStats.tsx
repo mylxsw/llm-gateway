@@ -12,6 +12,7 @@ import { LogCostStatsResponse } from "@/types";
 import { formatNumber, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Maximize2, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -133,11 +134,6 @@ function computeStep(rangeMs: number, unit: "hour" | "day", maxBars: number) {
   return Math.max(1, Math.ceil(raw));
 }
 
-function stepLabel(unit: "hour" | "day", step: number) {
-  if (unit === "day") return step === 1 ? "Day" : `${step}d`;
-  return step === 1 ? "Hour" : `${step}h`;
-}
-
 function hashString(value: string) {
   let hash = 5381;
   for (let i = 0; i < value.length; i += 1) {
@@ -174,6 +170,8 @@ function TrendBars({
   maxTotal,
   height,
   bucketUnit,
+  noDataLabel,
+  showDetailsLabel,
 }: {
   title: string;
   points: LogCostStatsResponse["trend"];
@@ -181,12 +179,14 @@ function TrendBars({
   maxTotal: number;
   height: number;
   bucketUnit: "hour" | "day";
+  noDataLabel: string;
+  showDetailsLabel: (title: string, bucket: string) => string;
 }) {
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <div className="grid w-full grid-flow-col auto-cols-fr items-end gap-1 overflow-hidden pb-2">
         {points.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No data</div>
+          <div className="text-sm text-muted-foreground">{noDataLabel}</div>
         ) : (
           points.map((p) => {
             const rawValues = segments.map((seg) =>
@@ -216,7 +216,7 @@ function TrendBars({
                       type="button"
                       className="flex w-full flex-col justify-end overflow-hidden rounded-sm bg-muted/15 p-0 outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       style={{ height }}
-                      aria-label={`Show details for ${title} at ${bucketLabel}`}
+                      aria-label={showDetailsLabel(title, bucketLabel)}
                     >
                       {total > 0 ? (
                         <div
@@ -294,6 +294,9 @@ function TrendCard({
   totalLabel,
   totalValue,
   bucketUnit,
+  noDataLabel,
+  showDetailsLabel,
+  maximizeLabel,
 }: {
   title: string;
   points: LogCostStatsResponse["trend"];
@@ -303,6 +306,9 @@ function TrendCard({
   totalLabel: string;
   totalValue: string;
   bucketUnit: "hour" | "day";
+  noDataLabel: string;
+  showDetailsLabel: (title: string, bucket: string) => string;
+  maximizeLabel: (title: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const maxTotal = useMemo(() => {
@@ -323,7 +329,7 @@ function TrendCard({
             <button
               type="button"
               className="rounded-md p-1 text-muted-foreground opacity-80 transition hover:bg-muted/20 hover:text-foreground group-hover:opacity-100"
-              aria-label={`Maximize ${title}`}
+              aria-label={maximizeLabel(title)}
             >
               <Maximize2 className="h-4 w-4" suppressHydrationWarning />
             </button>
@@ -337,6 +343,8 @@ function TrendCard({
           maxTotal={maxTotal}
           height={96}
           bucketUnit={bucketUnit}
+          noDataLabel={noDataLabel}
+          showDetailsLabel={showDetailsLabel}
         />
 
         <div className="mt-1 flex items-end justify-between gap-6">
@@ -366,6 +374,8 @@ function TrendCard({
             maxTotal={maxTotal}
             height={220}
             bucketUnit={bucketUnit}
+            noDataLabel={noDataLabel}
+            showDetailsLabel={showDetailsLabel}
           />
 
           <div className="mt-2 flex items-end justify-between gap-6">
@@ -395,7 +405,7 @@ export function CostStats({
   refreshing,
   headerActions,
   headerExtras,
-  rangeLabel = "Selected Range",
+  rangeLabel,
   rangeDays = 1,
   rangeStart,
   rangeEnd,
@@ -403,12 +413,15 @@ export function CostStats({
   maxBars = 30,
   modelStatsControls,
 }: CostStatsProps) {
+  const t = useTranslations("logs");
   const modelMax = useMemo(() => {
     const values = stats?.by_model?.map((p) => Number(p.total_cost) || 0) ?? [];
     return Math.max(0, ...values);
   }, [stats?.by_model]);
 
   const safeRangeDays = Math.max(1, Math.round(rangeDays));
+  const rangeLabelText = rangeLabel ?? t("costStats.rangeSelected");
+  const noDataLabel = t("costStats.noData");
 
   const computedTrend = useMemo(() => {
     if (!stats) return [];
@@ -480,11 +493,13 @@ export function CostStats({
   }, [stats, rangeStart, rangeEnd, bucket, maxBars]);
 
   const avgTrendLabel = useMemo(() => {
-    if (!rangeStart || !rangeEnd) return "Avg Day";
+    if (!rangeStart || !rangeEnd) {
+      return t("costStats.avgLabel", { unit: t("costStats.day") });
+    }
     const startLocal = new Date(rangeStart);
     const endLocal = new Date(rangeEnd);
     if (Number.isNaN(startLocal.getTime()) || Number.isNaN(endLocal.getTime()))
-      return "Avg Day";
+      return t("costStats.avgLabel", { unit: t("costStats.day") });
     const alignedStart = floorToUnit(startLocal, bucket);
     const alignedEnd = ceilToUnitExclusive(endLocal, bucket);
     const alignedRangeMs = Math.max(
@@ -492,67 +507,75 @@ export function CostStats({
       alignedEnd.getTime() - alignedStart.getTime(),
     );
     const step = computeStep(alignedRangeMs, bucket, maxBars);
-    return `Avg ${stepLabel(bucket, step)}`;
-  }, [rangeStart, rangeEnd, bucket, maxBars]);
+    const unitLabel =
+      bucket === "day"
+        ? step === 1
+          ? t("costStats.day")
+          : t("costStats.dayShort", { count: step })
+        : step === 1
+          ? t("costStats.hour")
+          : t("costStats.hourShort", { count: step });
+    return t("costStats.avgLabel", { unit: unitLabel });
+  }, [bucket, maxBars, rangeEnd, rangeStart, t]);
 
   const spendSegments = useMemo<Segment[]>(
     () => [
       {
-        label: "Input",
+        label: t("costStats.input"),
         colorClassName: "bg-sky-500/80",
         getValue: (p) => p.input_cost,
         formatValue: (v) => formatUsd(v),
       },
       {
-        label: "Output",
+        label: t("costStats.output"),
         colorClassName: "bg-emerald-400/80",
         getValue: (p) => p.output_cost,
         formatValue: (v) => formatUsd(v),
       },
     ],
-    [],
+    [t],
   );
 
   const tokenSegments = useMemo<Segment[]>(
     () => [
       {
-        label: "Input",
+        label: t("costStats.input"),
         colorClassName: "bg-indigo-500/80",
         getValue: (p) => p.input_tokens,
         formatValue: (v) => formatCompactNumber(v),
       },
       {
-        label: "Output",
+        label: t("costStats.output"),
         colorClassName: "bg-cyan-400/80",
         getValue: (p) => p.output_tokens,
         formatValue: (v) => formatCompactNumber(v),
       },
     ],
-    [],
+    [t],
   );
 
   const requestSegments = useMemo<Segment[]>(
     () => [
       {
-        label: "Success",
+        label: t("costStats.success"),
         colorClassName: "bg-teal-400/80",
         getValue: (p) => p.success_count,
         formatValue: (v) => formatNumber(v),
       },
       {
-        label: "Error",
+        label: t("costStats.error"),
         colorClassName: "bg-rose-500/80",
         getValue: (p) => p.error_count,
         formatValue: (v) => formatNumber(v),
       },
     ],
-    [],
+    [t],
   );
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <CardTitle className="shrink-0">Activity</CardTitle>
+        <CardTitle className="shrink-0">{t("costStats.activity")}</CardTitle>
 
         {onRefresh || headerActions || headerExtras ? (
           <div className="ml-auto flex w-full flex-col items-end gap-2 sm:w-auto">
@@ -563,7 +586,7 @@ export function CostStats({
                   variant="outline"
                   size="sm"
                   className="h-8"
-                  aria-label="Refresh"
+                  aria-label={t("actions.refresh")}
                   onClick={onRefresh}
                   disabled={refreshing}
                 >
@@ -589,7 +612,7 @@ export function CostStats({
         {loading && <LoadingSpinner />}
         {!loading && !stats && (
           <div className="text-sm text-muted-foreground">
-            No stats available
+            {t("costStats.noStats")}
           </div>
         )}
 
@@ -597,7 +620,7 @@ export function CostStats({
           <>
             <div className="grid gap-4 lg:grid-cols-3">
               <TrendCard
-                title="Spend"
+                title={t("costStats.spend")}
                 points={computedTrend}
                 segments={spendSegments}
                 avgLabel={avgTrendLabel}
@@ -606,13 +629,18 @@ export function CostStats({
                     ? formatUsd(stats.summary.total_cost / computedTrend.length)
                     : formatUsd(stats.summary.total_cost / safeRangeDays)
                 }
-                totalLabel={rangeLabel}
+                totalLabel={rangeLabelText}
                 totalValue={formatUsd(stats.summary.total_cost)}
                 bucketUnit={bucket}
+                noDataLabel={noDataLabel}
+                showDetailsLabel={(title, bucketLabel) =>
+                  t("costStats.showDetails", { title, bucket: bucketLabel })
+                }
+                maximizeLabel={(title) => t("costStats.maximizeLabel", { title })}
               />
 
               <TrendCard
-                title="Tokens"
+                title={t("costStats.tokens")}
                 points={computedTrend}
                 segments={tokenSegments}
                 avgLabel={avgTrendLabel}
@@ -629,15 +657,20 @@ export function CostStats({
                           safeRangeDays,
                       )
                 }
-                totalLabel={rangeLabel}
+                totalLabel={rangeLabelText}
                 totalValue={formatCompactNumber(
                   stats.summary.input_tokens + stats.summary.output_tokens,
                 )}
                 bucketUnit={bucket}
+                noDataLabel={noDataLabel}
+                showDetailsLabel={(title, bucketLabel) =>
+                  t("costStats.showDetails", { title, bucket: bucketLabel })
+                }
+                maximizeLabel={(title) => t("costStats.maximizeLabel", { title })}
               />
 
               <TrendCard
-                title="Requests"
+                title={t("costStats.requests")}
                 points={computedTrend}
                 segments={requestSegments}
                 avgLabel={avgTrendLabel}
@@ -648,45 +681,50 @@ export function CostStats({
                       )
                     : formatNumber(stats.summary.request_count / safeRangeDays)
                 }
-                totalLabel={rangeLabel}
+                totalLabel={rangeLabelText}
                 totalValue={formatNumber(stats.summary.request_count)}
                 bucketUnit={bucket}
+                noDataLabel={noDataLabel}
+                showDetailsLabel={(title, bucketLabel) =>
+                  t("costStats.showDetails", { title, bucket: bucketLabel })
+                }
+                maximizeLabel={(title) => t("costStats.maximizeLabel", { title })}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">Total</div>
+                <div className="text-muted-foreground">{t("costStats.total")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatUsd(stats.summary.total_cost)}
                 </div>
               </div>
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">Input</div>
+                <div className="text-muted-foreground">{t("costStats.input")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatUsd(stats.summary.input_cost)}
                 </div>
               </div>
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">Output</div>
+                <div className="text-muted-foreground">{t("costStats.output")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatUsd(stats.summary.output_cost)}
                 </div>
               </div>
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">Requests</div>
+                <div className="text-muted-foreground">{t("costStats.requestsCount")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatNumber(stats.summary.request_count)}
                 </div>
               </div>
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">In Tokens</div>
+                <div className="text-muted-foreground">{t("costStats.inTokens")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatNumber(stats.summary.input_tokens)}
                 </div>
               </div>
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-muted-foreground">Out Tokens</div>
+                <div className="text-muted-foreground">{t("costStats.outTokens")}</div>
                 <div className="mt-1 font-mono font-medium">
                   {formatNumber(stats.summary.output_tokens)}
                 </div>
@@ -697,13 +735,13 @@ export function CostStats({
               <div className="rounded-lg border bg-muted/10 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium">
-                    Price-based Model Ranking
+                    {t("costStats.priceRanking")}
                   </div>
                   {modelStatsControls}
                 </div>
                 <div className="space-y-2">
                   {stats.by_model.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No data</div>
+                    <div className="text-sm text-muted-foreground">{noDataLabel}</div>
                   ) : (
                     stats.by_model.slice(0, 10).map((m) => {
                       const widthPct =
@@ -751,12 +789,12 @@ export function CostStats({
               <div className="rounded-lg border bg-muted/10 p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-sm font-medium">
-                    Token Usage-based Model Ranking
+                    {t("costStats.tokenRanking")}
                   </div>
                 </div>
                 <div className="space-y-2">
                   {(stats.by_model_tokens || []).length === 0 ? (
-                    <div className="text-sm text-muted-foreground">No data</div>
+                    <div className="text-sm text-muted-foreground">{noDataLabel}</div>
                   ) : (
                     (stats.by_model_tokens || []).slice(0, 10).map((m) => {
                       const totalTokens =

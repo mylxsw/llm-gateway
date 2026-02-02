@@ -8,6 +8,7 @@
 import React, { Suspense, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,8 @@ import {
   ModelMappingProviderCreate,
   ModelMappingProviderUpdate,
   ModelProviderStats,
+  ModelType,
+  SelectionStrategy,
 } from '@/types';
 import { formatDateTime, getActiveStatus, formatDuration } from '@/lib/utils';
 import { ProtocolType } from '@/types/provider';
@@ -64,10 +67,6 @@ function formatPrice(value: number | null | undefined) {
   return formatUsdCeil4(value);
 }
 
-function formatUsdOrFree(value: number) {
-  return value === 0 ? 'free' : formatUsdCeil4(value);
-}
-
 function isAllZero(values: number[]) {
   return values.every((v) => v === 0);
 }
@@ -86,41 +85,6 @@ function resolveInheritedPrice(
   return 0;
 }
 
-function formatBilling(
-  mapping: ModelMappingProvider,
-  fallbackPrices?: { input_price?: number | null; output_price?: number | null }
-) {
-  const mode = mapping.billing_mode ?? 'token_flat';
-  if (mode === 'per_request') {
-    if (mapping.per_request_price === null || mapping.per_request_price === undefined) {
-      return 'Per request: -';
-    }
-    if (mapping.per_request_price === 0) return 'free';
-    return `Per request: ${formatUsdCeil4(mapping.per_request_price)}`;
-  }
-  if (mode === 'token_tiered') {
-    const tiers = mapping.tiered_pricing ?? [];
-    if (!tiers.length) return 'Tiered: -';
-    if (isAllZero(tiers.flatMap((t) => [t.input_price, t.output_price]))) return 'free';
-    const preview = tiers
-      .slice(0, 2)
-      .map((t) => {
-        const max =
-          t.max_input_tokens === null || t.max_input_tokens === undefined
-            ? '∞'
-            : String(t.max_input_tokens);
-        return `≤${max}: ${formatUsdOrFree(t.input_price)}/${formatUsdOrFree(t.output_price)}`;
-      })
-      .join(', ');
-    return `Tiered: ${preview}${tiers.length > 2 ? ` (+${tiers.length - 2})` : ''}`;
-  }
-  // token_flat (default)
-  const effectiveInput = resolveInheritedPrice(mapping.input_price, fallbackPrices?.input_price);
-  const effectiveOutput = resolveInheritedPrice(mapping.output_price, fallbackPrices?.output_price);
-  if (effectiveInput === 0 && effectiveOutput === 0) return 'free';
-  return `Token: ${formatUsdOrFree(effectiveInput)}/${formatUsdOrFree(effectiveOutput)} (per 1M)`;
-}
-
 export default function ModelDetailPage() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
@@ -130,6 +94,8 @@ export default function ModelDetailPage() {
 }
 
 function ModelDetailContent() {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
   const searchParams = useSearchParams();
   const requestedModelParam = searchParams.get('model');
   const requestedModel = requestedModelParam ? decodeURIComponent(requestedModelParam) : '';
@@ -203,10 +169,92 @@ function ModelDetailContent() {
     }
   };
 
+  const getStrategyLabel = (strategy: SelectionStrategy) => {
+    switch (strategy) {
+      case 'cost_first':
+        return t('list.strategy.costFirst');
+      case 'priority':
+        return t('list.strategy.priority');
+      case 'round_robin':
+      default:
+        return t('list.strategy.roundRobin');
+    }
+  };
+
+  const getModelTypeLabel = (type?: ModelType | null) => {
+    switch (type) {
+      case 'speech':
+        return t('filters.speech');
+      case 'transcription':
+        return t('filters.transcription');
+      case 'embedding':
+        return t('filters.embedding');
+      case 'images':
+        return t('filters.images');
+      case 'chat':
+      default:
+        return t('filters.chat');
+    }
+  };
+
+  const formatUsdOrFree = (value: number) => {
+    return value === 0 ? t('detail.billingDisplay.free') : formatUsdCeil4(value);
+  };
+
+  const formatBilling = (
+    mapping: ModelMappingProvider,
+    fallbackPrices?: { input_price?: number | null; output_price?: number | null }
+  ) => {
+    const mode = mapping.billing_mode ?? 'token_flat';
+    if (mode === 'per_request') {
+      if (mapping.per_request_price === null || mapping.per_request_price === undefined) {
+        return t('detail.billingDisplay.perRequestEmpty');
+      }
+      if (mapping.per_request_price === 0) return t('detail.billingDisplay.free');
+      return t('detail.billingDisplay.perRequest', {
+        price: formatUsdCeil4(mapping.per_request_price),
+      });
+    }
+    if (mode === 'token_tiered') {
+      const tiers = mapping.tiered_pricing ?? [];
+      if (!tiers.length) return t('detail.billingDisplay.tieredEmpty');
+      if (isAllZero(tiers.flatMap((tier) => [tier.input_price, tier.output_price]))) {
+        return t('detail.billingDisplay.free');
+      }
+      const preview = tiers
+        .slice(0, 2)
+        .map((tier) => {
+          const max =
+            tier.max_input_tokens === null || tier.max_input_tokens === undefined
+              ? '∞'
+              : String(tier.max_input_tokens);
+          return t('detail.billingDisplay.tieredEntry', {
+            max,
+            input: formatUsdOrFree(tier.input_price),
+            output: formatUsdOrFree(tier.output_price),
+          });
+        })
+        .join(', ');
+      const more =
+        tiers.length > 2
+          ? t('detail.billingDisplay.tieredPreviewMore', { count: tiers.length - 2 })
+          : '';
+      return t('detail.billingDisplay.tieredPreview', { preview, more });
+    }
+    // token_flat (default)
+    const effectiveInput = resolveInheritedPrice(mapping.input_price, fallbackPrices?.input_price);
+    const effectiveOutput = resolveInheritedPrice(mapping.output_price, fallbackPrices?.output_price);
+    if (effectiveInput === 0 && effectiveOutput === 0) return t('detail.billingDisplay.free');
+    return t('detail.billingDisplay.tokenFlat', {
+      input: formatUsdOrFree(effectiveInput),
+      output: formatUsdOrFree(effectiveOutput),
+    });
+  };
+
   if (!requestedModel) {
     return (
       <ErrorState
-        message="Missing model parameter"
+        message={t('detail.missingModelParam')}
         onRetry={() => {
           window.location.href = '/models';
         }}
@@ -219,7 +267,7 @@ function ModelDetailContent() {
   if (isError || !model) {
     return (
       <ErrorState
-        message="Failed to load model details"
+        message={t('detail.loadFailed')}
         onRetry={() => refetch()}
       />
     );
@@ -241,39 +289,43 @@ function ModelDetailContent() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold font-mono">{model.requested_model}</h1>
-          <p className="mt-1 text-muted-foreground">Model Mapping Details</p>
+          <p className="mt-1 text-muted-foreground">{t('detail.title')}</p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Basic Information</CardTitle>
+          <CardTitle>{t('detail.basicInfo')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">Requested Model Name</p>
+              <p className="text-sm text-muted-foreground">
+                {t('detail.requestedModelName')}
+              </p>
               <code className="text-sm">{model.requested_model}</code>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Strategy</p>
-              <Badge variant="outline">{model.strategy}</Badge>
+              <p className="text-sm text-muted-foreground">{t('detail.strategy')}</p>
+              <Badge variant="outline">{getStrategyLabel(model.strategy)}</Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Model Type</p>
-              <Badge variant="secondary">{modelType}</Badge>
+              <p className="text-sm text-muted-foreground">{t('detail.modelType')}</p>
+              <Badge variant="secondary">{getModelTypeLabel(modelType)}</Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Status</p>
-              <Badge className={status.className}>{status.text}</Badge>
+              <p className="text-sm text-muted-foreground">{t('detail.status')}</p>
+              <Badge className={status.className}>
+                {model.is_active ? t('filters.active') : t('filters.inactive')}
+              </Badge>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Updated At</p>
+              <p className="text-sm text-muted-foreground">{t('detail.updatedAt')}</p>
               <p className="text-sm">{formatDateTime(model.updated_at)}</p>
             </div>
             {supportsBilling && (
               <div className="md:col-span-2">
-                <p className="text-sm text-muted-foreground">Pricing (USD / 1M tokens)</p>
+                <p className="text-sm text-muted-foreground">{t('detail.pricing')}</p>
                 <p className="text-sm">
                   <span className="font-mono">{formatPrice(model.input_price)}</span>
                   <span className="mx-2 text-muted-foreground">/</span>
@@ -287,26 +339,28 @@ function ModelDetailContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Usage Stats (Last 7 Days)</CardTitle>
+          <CardTitle>{t('detail.usageStats')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
-              <p className="text-sm text-muted-foreground">Avg Response Time</p>
+              <p className="text-sm text-muted-foreground">{t('detail.avgResponseTime')}</p>
               <p className="text-sm">{formatDuration(modelStats?.avg_response_time_ms ?? null)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Avg First Token (Stream)</p>
+              <p className="text-sm text-muted-foreground">
+                {t('detail.avgFirstTokenStream')}
+              </p>
               <p className="text-sm">
                 {formatDuration(modelStats?.avg_first_byte_time_ms ?? null)}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Success Rate</p>
+              <p className="text-sm text-muted-foreground">{t('detail.successRate')}</p>
               <p className="text-sm">{formatRate(modelStats?.success_rate)}</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Failure Rate</p>
+              <p className="text-sm text-muted-foreground">{t('detail.failureRate')}</p>
               <p className="text-sm">{formatRate(modelStats?.failure_rate)}</p>
             </div>
           </div>
@@ -326,25 +380,25 @@ function ModelDetailContent() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Provider Configuration</CardTitle>
+          <CardTitle>{t('detail.providerConfig')}</CardTitle>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setTestDialogOpen(true)}
             >
-              Model Test
+              {t('actions.modelTest')}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setMatchDialogOpen(true)}
             >
-              Match Test
+              {t('actions.matchTest')}
             </Button>
             <Button onClick={handleAddProvider} size="sm">
               <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
-              Add Provider
+              {t('actions.addProvider')}
             </Button>
           </div>
         </CardHeader>
@@ -353,14 +407,14 @@ function ModelDetailContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Target Model</TableHead>
-                  {supportsBilling && <TableHead>Billing</TableHead>}
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Rules</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('detail.provider')}</TableHead>
+                  <TableHead>{t('detail.targetModel')}</TableHead>
+                  {supportsBilling && <TableHead>{t('detail.billing')}</TableHead>}
+                  <TableHead>{t('detail.priority')}</TableHead>
+                  <TableHead>{t('detail.weight')}</TableHead>
+                  <TableHead>{t('detail.rules')}</TableHead>
+                  <TableHead>{t('detail.status')}</TableHead>
+                  <TableHead className="text-right">{t('detail.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -378,7 +432,7 @@ function ModelDetailContent() {
                             <Badge
                               variant="outline"
                               className="font-normal text-muted-foreground border-muted-foreground/30"
-                              title={`Protocol: ${protocol}`}
+                              title={t('detail.protocolTitle', { protocol })}
                             >
                               {protocolLabel(protocol, protocolConfigs)}
                             </Badge>
@@ -403,7 +457,7 @@ function ModelDetailContent() {
                       <TableCell>
                         {mapping.provider_rules ? (
                           <Badge variant="outline" className="text-blue-600">
-                            Configured
+                            {t('detail.configured')}
                           </Badge>
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -411,7 +465,7 @@ function ModelDetailContent() {
                       </TableCell>
                       <TableCell>
                         <Badge className={mappingStatus.className}>
-                          {mappingStatus.text}
+                          {mapping.is_active ? t('filters.active') : t('filters.inactive')}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -420,7 +474,7 @@ function ModelDetailContent() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleEditMapping(mapping)}
-                            title="Edit"
+                            title={tCommon('edit')}
                           >
                             <Pencil className="h-4 w-4" suppressHydrationWarning />
                           </Button>
@@ -428,7 +482,7 @@ function ModelDetailContent() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteMapping(mapping)}
-                            title="Delete"
+                            title={tCommon('delete')}
                           >
                             <Trash2
                               className="h-4 w-4 text-destructive"
@@ -444,7 +498,7 @@ function ModelDetailContent() {
             </Table>
           ) : (
             <p className="py-8 text-center text-muted-foreground">
-              No providers configured, click button above to add
+              {t('detail.noProviders')}
             </p>
           )}
         </CardContent>
@@ -452,19 +506,19 @@ function ModelDetailContent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Provider Stats (Last 7 Days)</CardTitle>
+          <CardTitle>{t('detail.providerStats')}</CardTitle>
         </CardHeader>
         <CardContent>
           {providerStats.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Target Model</TableHead>
-                  <TableHead>Avg Response</TableHead>
-                  <TableHead>Avg First Token</TableHead>
-                  <TableHead>Success</TableHead>
-                  <TableHead>Failure</TableHead>
+                  <TableHead>{t('detail.provider')}</TableHead>
+                  <TableHead>{t('detail.targetModel')}</TableHead>
+                  <TableHead>{t('detail.avgResponse')}</TableHead>
+                  <TableHead>{t('detail.avgFirstToken')}</TableHead>
+                  <TableHead>{t('detail.success')}</TableHead>
+                  <TableHead>{t('detail.failure')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -492,7 +546,7 @@ function ModelDetailContent() {
             </Table>
           ) : (
             <p className="py-8 text-center text-muted-foreground">
-              No stats available for the last 7 days
+              {t('detail.noStats')}
             </p>
           )}
         </CardContent>
@@ -525,9 +579,11 @@ function ModelDetailContent() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Provider Configuration"
-        description={`Are you sure you want to delete configuration for provider "${deletingMapping?.provider_name}"?`}
-        confirmText="Delete"
+        title={t('detail.deleteProviderConfigTitle')}
+        description={t('detail.deleteProviderConfigDescription', {
+          name: deletingMapping?.provider_name ?? '',
+        })}
+        confirmText={tCommon('delete')}
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}

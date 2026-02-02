@@ -12,6 +12,7 @@ import { getLogCostStats } from '@/lib/api';
 import { LogQueryParams } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { useTranslations } from 'next-intl';
 
 type RangePreset = '24h' | '7d' | '30d' | '90d' | '365d' | 'custom';
 
@@ -25,22 +26,22 @@ function resolveBucket(rangeMs: number, maxBars: number) {
   return perBarMs < DAY_MS ? 'hour' : 'day';
 }
 
-function getRangeLabel(preset: RangePreset) {
+function getRangeLabel(preset: RangePreset, t: (key: string) => string) {
   switch (preset) {
     case '24h':
-      return 'Past 24 hours';
+      return t('rangePast24Hours');
     case '7d':
-      return 'Past 7 days';
+      return t('rangePast7Days');
     case '30d':
-      return 'Past Month';
+      return t('rangePastMonth');
     case '90d':
-      return 'Past 90 days';
+      return t('rangePast90Days');
     case '365d':
-      return 'Past Year';
+      return t('rangePastYear');
     case 'custom':
-      return 'Selected Range';
+      return t('rangeSelected');
     default:
-      return 'Selected Range';
+      return t('rangeSelected');
   }
 }
 
@@ -115,6 +116,7 @@ function loadRangeStateFromStorage() {
 }
 
 export function HomeCostStats() {
+  const t = useTranslations('logs.costStats');
   const [{ preset, customStart, customEnd }, setRangeState] = useState(getDefaultRangeState);
   const [statsMode, setStatsMode] = useState<'request_model' | 'provider_model'>('request_model');
   const restoredRef = useRef(false);
@@ -197,11 +199,11 @@ export function HomeCostStats() {
     if (preset === 'custom') {
       const start = parseDateInputValue(customStart);
       const end = parseDateInputValue(customEnd);
-      if (!start || !end) return getRangeLabel(preset);
+      if (!start || !end) return getRangeLabel(preset, t);
       return `${customStart} ~ ${customEnd}`;
     }
-    return getRangeLabel(preset);
-  }, [preset, customStart, customEnd]);
+    return getRangeLabel(preset, t);
+  }, [preset, customStart, customEnd, t]);
 
   const queryKey = useMemo(
     () => ['logs', 'home-cost-stats', preset, customStart, customEnd, statsMode] as const,
@@ -267,8 +269,8 @@ export function HomeCostStats() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="request_model">Request Model</SelectItem>
-              <SelectItem value="provider_model">Provider Model</SelectItem>
+              <SelectItem value="request_model">{t('statsModeRequestModel')}</SelectItem>
+              <SelectItem value="provider_model">{t('statsModeProviderModel')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -280,15 +282,15 @@ export function HomeCostStats() {
             onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}
           >
             <SelectTrigger className="h-8 w-[160px]">
-              <SelectValue placeholder="Select time range" />
+              <SelectValue placeholder={t('selectTimeRange')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="24h">Last 24 hours</SelectItem>
-              <SelectItem value="7d">Last 7 days</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="90d">Last 90 days</SelectItem>
-              <SelectItem value="365d">Last 365 days</SelectItem>
-              <SelectItem value="custom">Custom…</SelectItem>
+              <SelectItem value="24h">{t('last24Hours')}</SelectItem>
+              <SelectItem value="7d">{t('last7Days')}</SelectItem>
+              <SelectItem value="30d">{t('last30Days')}</SelectItem>
+              <SelectItem value="90d">{t('last90Days')}</SelectItem>
+              <SelectItem value="365d">{t('last365Days')}</SelectItem>
+              <SelectItem value="custom">{t('customRange')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -301,7 +303,7 @@ export function HomeCostStats() {
                 className="h-8 w-[140px]"
                 type="date"
                 value={customStart}
-                aria-label="Start date"
+                aria-label={t('startDate')}
                 onChange={(e) => {
                   const nextStart = e.target.value;
                   if (!nextStart) return;
@@ -318,7 +320,7 @@ export function HomeCostStats() {
                 className="h-8 w-[140px]"
                 type="date"
                 value={customEnd}
-                aria-label="End date"
+                aria-label={t('endDate')}
                 onChange={(e) => {
                   const nextEnd = e.target.value;
                   if (!nextEnd) return;

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,9 @@ interface ModelFiltersProps {
 }
 
 export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
+
   const defaultValues = useMemo(
     () => ({
       requested_model: filters.requested_model,
@@ -72,72 +76,72 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-2">
-            <Label>Model Name</Label>
+            <Label>{t('filters.modelName')}</Label>
             <Input
-              placeholder="Fuzzy match"
+              placeholder={t('filters.fuzzyMatch')}
               {...register('requested_model')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Supplier Model Name</Label>
+            <Label>{t('filters.supplierModelName')}</Label>
             <Input
-              placeholder="Target model name"
+              placeholder={t('filters.targetModelName')}
               {...register('target_model_name')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Type</Label>
+            <Label>{t('filters.type')}</Label>
             <Select
               value={watch('model_type')}
               onValueChange={(value) => setValue('model_type', value as ModelType | 'all')}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={tCommon('all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="chat">Chat</SelectItem>
-                <SelectItem value="speech">Speech</SelectItem>
-                <SelectItem value="transcription">Transcription</SelectItem>
-                <SelectItem value="embedding">Embedding</SelectItem>
-                <SelectItem value="images">Images</SelectItem>
+                <SelectItem value="all">{tCommon('all')}</SelectItem>
+                <SelectItem value="chat">{t('filters.chat')}</SelectItem>
+                <SelectItem value="speech">{t('filters.speech')}</SelectItem>
+                <SelectItem value="transcription">{t('filters.transcription')}</SelectItem>
+                <SelectItem value="embedding">{t('filters.embedding')}</SelectItem>
+                <SelectItem value="images">{t('filters.images')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Strategy</Label>
+            <Label>{t('filters.strategy')}</Label>
             <Select
               value={watch('strategy')}
               onValueChange={(value) => setValue('strategy', value as SelectionStrategy | 'all')}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={tCommon('all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="round_robin">Round Robin</SelectItem>
-                <SelectItem value="cost_first">Cost First</SelectItem>
-                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="all">{tCommon('all')}</SelectItem>
+                <SelectItem value="round_robin">{t('filters.roundRobin')}</SelectItem>
+                <SelectItem value="cost_first">{t('filters.costFirst')}</SelectItem>
+                <SelectItem value="priority">{t('filters.priority')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Status</Label>
+            <Label>{t('filters.status')}</Label>
             <Select
               value={watch('is_active')}
               onValueChange={(value) => setValue('is_active', value)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={tCommon('all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">{tCommon('all')}</SelectItem>
+                <SelectItem value="active">{t('filters.active')}</SelectItem>
+                <SelectItem value="inactive">{t('filters.inactive')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -146,11 +150,11 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onReset}>
             <X className="mr-2 h-4 w-4" />
-            Reset
+            {t('filters.reset')}
           </Button>
           <Button type="submit">
             <Filter className="mr-2 h-4 w-4" />
-            Filter
+            {t('filters.filter')}
           </Button>
         </div>
       </div>

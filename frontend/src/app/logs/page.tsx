@@ -14,6 +14,7 @@ import { useApiKeys, useLogs, useModels, useProviders } from '@/lib/hooks';
 import { LogQueryParams, RequestLog } from '@/types';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslations } from 'next-intl';
 
 /** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
@@ -27,6 +28,7 @@ const DEFAULT_FILTERS: LogQueryParams = {
  * Request Log Page Component
  */
 export default function LogsPage() {
+  const t = useTranslations('logs');
   // Filter parameters state
   const [filters, setFilters] = useState<LogQueryParams>(DEFAULT_FILTERS);
 
@@ -94,9 +96,9 @@ export default function LogsPage() {
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">Logs</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
         <p className="mt-1 text-muted-foreground">
-          View proxy request logs, supports multi-condition filtering
+          {t('description')}
         </p>
       </div>
 
@@ -112,19 +114,19 @@ export default function LogsPage() {
       {/* Data List */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Log List</CardTitle>
+          <CardTitle>{t('list.title')}</CardTitle>
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-8"
-            aria-label="Refresh"
+            aria-label={t('actions.refresh')}
             onClick={async () => {
               try {
                 await refetch();
-                toast.success('Refreshed');
+                toast.success(t('toasts.refreshSuccess'));
               } catch {
-                toast.error('Refresh failed');
+                toast.error(t('toasts.refreshFailed'));
               }
             }}
             disabled={isLoading}
@@ -141,13 +143,13 @@ export default function LogsPage() {
           
           {isError && (
             <ErrorState
-              message="Failed to load log list"
+              message={t('list.loadFailed')}
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
-            <EmptyState message="No matching log records found" />
+            <EmptyState message={t('list.empty')} />
           )}
           
           {!isLoading && !isError && data && data.items.length > 0 && (

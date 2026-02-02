@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -42,6 +43,8 @@ export function ModelTestDialog({
   onOpenChange,
   requestedModel,
 }: ModelTestDialogProps) {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
   const [protocol, setProtocol] = useState<ProtocolType | ''>('');
   const [stream, setStream] = useState(false);
   const [result, setResult] = useState<ModelTestResponse | null>(null);
@@ -92,7 +95,7 @@ export function ModelTestDialog({
 
   const handleTest = async () => {
     if (!protocol) {
-      setError('Please select a protocol.');
+      setError(t('testDialog.protocolRequired'));
       return;
     }
     setError(null);
@@ -107,7 +110,7 @@ export function ModelTestDialog({
       });
       setResult(response);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Test failed'));
+      setError(getApiErrorMessage(err, t('testDialog.testFailed')));
     }
   };
 
@@ -117,15 +120,15 @@ export function ModelTestDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Model Test</DialogTitle>
+          <DialogTitle>{t('testDialog.title')}</DialogTitle>
           <DialogDescription>
-            Send a "hello" chat request and inspect latency and response.
+            {t('testDialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label>Protocol</Label>
+            <Label>{t('testDialog.protocol')}</Label>
             <Select
               value={protocol}
               onValueChange={(value) => setProtocol(value as ProtocolType)}
@@ -135,8 +138,8 @@ export function ModelTestDialog({
                 <SelectValue
                   placeholder={
                     availableProtocols.length === 0
-                      ? 'No provider protocols'
-                      : 'Select protocol'
+                      ? t('testDialog.noProtocols')
+                      : t('testDialog.selectProtocol')
                   }
                 />
               </SelectTrigger>
@@ -150,7 +153,7 @@ export function ModelTestDialog({
             </Select>
             {availableProtocols.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Add providers to enable protocol selection.
+                {t('testDialog.addProvidersHint')}
               </p>
             ) : null}
           </div>
@@ -158,10 +161,10 @@ export function ModelTestDialog({
           <div className="flex items-center justify-between rounded-md border px-3 py-2">
             <div>
               <Label htmlFor="model-test-stream" className="text-sm">
-                Stream
+                {t('testDialog.stream')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                Measure time to first token by streaming.
+                {t('testDialog.streamHint')}
               </p>
             </div>
             <Switch
@@ -180,31 +183,31 @@ export function ModelTestDialog({
 
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Provider</span>
+            <span className="text-muted-foreground">{t('testDialog.provider')}</span>
             <span className="font-mono">
               {result?.provider_name ?? '-'}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Target Model</span>
+            <span className="text-muted-foreground">{t('testDialog.targetModel')}</span>
             <span className="font-mono">
               {result?.target_model ?? '-'}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Latency</span>
+            <span className="text-muted-foreground">{t('testDialog.latency')}</span>
             <span className="font-mono">
               {formatDuration(result?.total_time_ms ?? null)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">First Token</span>
+            <span className="text-muted-foreground">{t('testDialog.firstToken')}</span>
             <span className="font-mono">
               {formatDuration(result?.first_byte_delay_ms ?? null)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Status</span>
+            <span className="text-muted-foreground">{t('testDialog.status')}</span>
             <span className="font-mono">
               {result?.response_status ?? '-'}
             </span>
@@ -212,12 +215,12 @@ export function ModelTestDialog({
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">Response</p>
+          <p className="text-sm font-medium">{t('testDialog.response')}</p>
           <Textarea
             rows={8}
             value={responseText}
             readOnly
-            placeholder="No response yet."
+            placeholder={t('testDialog.noResponse')}
             className="font-mono"
           />
         </div>
@@ -228,14 +231,14 @@ export function ModelTestDialog({
             variant="outline"
             onClick={() => handleOpenChange(false)}
           >
-            Close
+            {tCommon('close')}
           </Button>
           <Button
             type="button"
             onClick={handleTest}
             disabled={testMutation.isPending || availableProtocols.length === 0}
           >
-            Test
+            {tCommon('test')}
           </Button>
         </DialogFooter>
       </DialogContent>
