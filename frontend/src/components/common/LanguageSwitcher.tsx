@@ -1,6 +1,6 @@
 /**
  * Language Switcher
- * Persists locale in cookie and refreshes the page.
+ * Icon button with dropdown for language selection
  */
 
 'use client';
@@ -13,9 +13,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import { locales, type Locale } from '@/i18n/config';
 import { setLocale } from './IntlProvider';
 
@@ -24,15 +22,7 @@ const localeLabels: Record<Locale, string> = {
   zh: '中文',
 };
 
-interface LanguageSwitcherProps {
-  collapsed?: boolean;
-  compact?: boolean;
-}
-
-export function LanguageSwitcher({
-  collapsed = false,
-  compact = false,
-}: LanguageSwitcherProps) {
+export function LanguageSwitcher() {
   const locale = useLocale() as Locale;
   const t = useTranslations('common');
   const [mounted, setMounted] = React.useState(false);
@@ -53,20 +43,13 @@ export function LanguageSwitcher({
   return (
     <Select value={locale} onValueChange={handleChange}>
       <SelectTrigger
-        className={cn(
-          'h-9 w-full rounded-full bg-background shadow-sm',
-          collapsed ? 'px-2 text-xs' : 'px-3',
-          compact && 'w-[120px] px-2 text-xs'
-        )}
+        className="h-9 w-9 rounded-full bg-background border shadow-sm justify-center [&>svg:last-child]:hidden"
         aria-label={label}
         title={label}
       >
-        <span className="flex items-center gap-2 truncate">
-          <Languages className="h-4 w-4 text-muted-foreground" suppressHydrationWarning />
-          <SelectValue placeholder={t('selectLanguage')} />
-        </span>
+        <Languages className="h-4 w-4" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent align="end">
         {locales.map((loc) => (
           <SelectItem key={loc} value={loc}>
             {localeLabels[loc]}

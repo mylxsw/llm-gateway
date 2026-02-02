@@ -78,7 +78,7 @@ export default function RootLayout({
               </main>
             </div>
             <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
-              <LanguageSwitcher compact />
+              <LanguageSwitcher />
               <ThemeToggle inline />
             </div>
           </Providers>
