@@ -30,6 +30,7 @@
     "unknown": "未知",
     "noData": "暂无数据",
     "noDataAvailable": "暂无可用数据",
+    "loadFailed": "加载失败，请稍后重试",
     "noStats": "暂无统计数据",
     "back": "返回",
     "all": "全部",
@@ -553,8 +554,17 @@
   "logs": {
     "title": "日志",
     "description": "查看代理请求日志，支持多条件筛选",
+    "unknown": "未知",
+    "actions": {
+      "refresh": "刷新"
+    },
+    "toasts": {
+      "refreshSuccess": "已刷新",
+      "refreshFailed": "刷新失败"
+    },
     "list": {
       "title": "日志列表",
+      "loadFailed": "加载日志列表失败",
       "empty": "未找到匹配的日志记录",
       "columns": {
         "time": "时间",
@@ -566,11 +576,19 @@
         "action": "操作"
       },
       "streamRequest": "流式请求",
+      "viewDetails": "查看详情",
+      "costTooltip": "输入：{input}\n输出：{output}",
       "inTokens": "输入：{count}",
       "outTokens": "输出：{count}",
       "retry": "重试：{count}"
     },
     "filters": {
+      "all": "全部",
+      "reset": "重置",
+      "filter": "筛选",
+      "min": "最小值",
+      "max": "最大值",
+      "fuzzyMatch": "模糊匹配",
       "startTime": "开始时间",
       "endTime": "结束时间",
       "model": "模型",
@@ -596,10 +614,15 @@
       "overview": "概览",
       "overviewDescription": "基本信息、路由摘要和指标",
       "traceId": "Trace ID",
+      "copy": "复制",
+      "copied": "已复制",
       "requestTime": "请求时间",
       "provider": "供应商",
       "apiKey": "API Key",
       "modelMapping": "模型映射",
+      "model": "模型",
+      "status": "状态",
+      "protocol": "协议",
       "metrics": "指标",
       "ttfb": "TTFB",
       "total": "总耗时",
@@ -608,7 +631,21 @@
       "retries": "重试",
       "tokens": "Tokens",
       "cost": "成本",
+      "costTooltip": "输入：{input}\n输出：{output}",
       "tokenUsageDetails": "Token 用量详情",
+      "tokenUsage": {
+        "cachedTokens": "缓存 Tokens",
+        "cacheCreation": "缓存创建",
+        "cacheRead": "缓存读取",
+        "inputAudio": "音频输入",
+        "outputAudio": "音频输出",
+        "inputImage": "图片输入",
+        "outputImage": "图片输出",
+        "inputVideo": "视频输入",
+        "outputVideo": "视频输出",
+        "reasoning": "推理",
+        "toolTokens": "工具 Tokens"
+      },
       "requestFlow": "请求流",
       "error": "错误",
       "payload": "载荷",
@@ -633,12 +670,16 @@
       "total": "总计",
       "input": "输入",
       "output": "输出",
+      "success": "成功",
+      "error": "错误",
       "requestsCount": "请求数",
       "inTokens": "输入 Tokens",
       "outTokens": "输出 Tokens",
       "priceRanking": "基于价格的模型排行",
       "tokenRanking": "基于 Token 用量的模型排行",
+      "noData": "暂无数据",
       "noStats": "暂无统计数据",
+      "avgLabel": "平均{unit}",
       "rangePast24Hours": "过去24小时",
       "rangePast7Days": "过去7天",
       "rangePastMonth": "过去1个月",
@@ -657,8 +698,11 @@
       "startDate": "开始日期",
       "endDate": "结束日期",
       "hour": "小时",
+      "hourShort": "{count}小时",
       "day": "天",
-      "showDetails": "查看 {bucket} 的 {title} 详情"
+      "dayShort": "{count}天",
+      "showDetails": "查看 {bucket} 的 {title} 详情",
+      "maximizeLabel": "放大 {title}"
     }
   },
   "status": {

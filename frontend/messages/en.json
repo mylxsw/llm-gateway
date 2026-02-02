@@ -30,6 +30,7 @@
     "unknown": "Unknown",
     "noData": "No data",
     "noDataAvailable": "No data available",
+    "loadFailed": "Failed to load, please try again later",
     "noStats": "No stats available",
     "back": "Back",
     "all": "All",
@@ -553,8 +554,17 @@
   "logs": {
     "title": "Logs",
     "description": "View proxy request logs, supports multi-condition filtering",
+    "unknown": "Unknown",
+    "actions": {
+      "refresh": "Refresh"
+    },
+    "toasts": {
+      "refreshSuccess": "Refreshed",
+      "refreshFailed": "Refresh failed"
+    },
     "list": {
       "title": "Log List",
+      "loadFailed": "Failed to load log list",
       "empty": "No matching log records found",
       "columns": {
         "time": "Time",
@@ -566,11 +576,19 @@
         "action": "Action"
       },
       "streamRequest": "Stream Request",
+      "viewDetails": "View Details",
+      "costTooltip": "Input: {input}\nOutput: {output}",
       "inTokens": "In: {count}",
       "outTokens": "Out: {count}",
       "retry": "Retry: {count}"
     },
     "filters": {
+      "all": "All",
+      "reset": "Reset",
+      "filter": "Filter",
+      "min": "Min",
+      "max": "Max",
+      "fuzzyMatch": "Fuzzy match",
       "startTime": "Start Time",
       "endTime": "End Time",
       "model": "Model",
@@ -596,10 +614,15 @@
       "overview": "Overview",
       "overviewDescription": "Basic info, routing summary, and metrics",
       "traceId": "Trace ID",
+      "copy": "Copy",
+      "copied": "Copied",
       "requestTime": "Request Time",
       "provider": "Provider",
       "apiKey": "API Key",
       "modelMapping": "Model Mapping",
+      "model": "Model",
+      "status": "Status",
+      "protocol": "Protocol",
       "metrics": "Metrics",
       "ttfb": "TTFB",
       "total": "Total",
@@ -608,7 +631,21 @@
       "retries": "Retries",
       "tokens": "Tokens",
       "cost": "Cost",
+      "costTooltip": "Input: {input}\nOutput: {output}",
       "tokenUsageDetails": "Token Usage Details",
+      "tokenUsage": {
+        "cachedTokens": "Cached Tokens",
+        "cacheCreation": "Cache Creation",
+        "cacheRead": "Cache Read",
+        "inputAudio": "Input Audio",
+        "outputAudio": "Output Audio",
+        "inputImage": "Input Image",
+        "outputImage": "Output Image",
+        "inputVideo": "Input Video",
+        "outputVideo": "Output Video",
+        "reasoning": "Reasoning",
+        "toolTokens": "Tool Tokens"
+      },
       "requestFlow": "Request Flow",
       "error": "Error",
       "payload": "Payload",
@@ -633,12 +670,16 @@
       "total": "Total",
       "input": "Input",
       "output": "Output",
+      "success": "Success",
+      "error": "Error",
       "requestsCount": "Requests",
       "inTokens": "In Tokens",
       "outTokens": "Out Tokens",
       "priceRanking": "Price-based Model Ranking",
       "tokenRanking": "Token Usage-based Model Ranking",
+      "noData": "No data",
       "noStats": "No stats available",
+      "avgLabel": "Avg {unit}",
       "rangePast24Hours": "Past 24 hours",
       "rangePast7Days": "Past 7 days",
       "rangePastMonth": "Past Month",
@@ -657,8 +698,11 @@
       "startDate": "Start date",
       "endDate": "End date",
       "hour": "Hour",
+      "hourShort": "{count}h",
       "day": "Day",
-      "showDetails": "Show details for {title} at {bucket}"
+      "dayShort": "{count}d",
+      "showDetails": "Show details for {title} at {bucket}",
+      "maximizeLabel": "Maximize {title}"
     }
   },
   "status": {

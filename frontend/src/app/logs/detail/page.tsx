@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 import { LogDetail } from '@/components/logs';
 import { LoadingSpinner, ErrorState } from '@/components/common';
 import { useLogDetail } from '@/lib/hooks';
+import { useTranslations } from 'next-intl';
 
 export default function LogDetailPage() {
   return (
@@ -23,6 +24,7 @@ export default function LogDetailPage() {
 }
 
 function LogDetailContent() {
+  const t = useTranslations('logs');
   const searchParams = useSearchParams();
   const logId = Number(searchParams.get('id'));
 
@@ -31,7 +33,7 @@ function LogDetailContent() {
   if (!Number.isFinite(logId)) {
     return (
       <ErrorState
-        message="Invalid log id"
+        message={t('detail.invalidLogId')}
         onRetry={() => {
           window.location.href = '/logs';
         }}
@@ -44,7 +46,7 @@ function LogDetailContent() {
   if (isError || !log) {
     return (
       <ErrorState
-        message="Failed to load log details"
+        message={t('detail.loadFailed')}
         onRetry={() => refetch()}
       />
     );
@@ -55,13 +57,13 @@ function LogDetailContent() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/logs">
-            <Button variant="ghost" size="icon" aria-label="Back to logs">
+            <Button variant="ghost" size="icon" aria-label={t('detail.backToLogs')}>
               <ArrowLeft className="h-4 w-4" suppressHydrationWarning />
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Log Details</h1>
-            <p className="mt-1 text-muted-foreground">Log ID: {log.id}</p>
+            <h1 className="text-2xl font-bold">{t('detail.title')}</h1>
+            <p className="mt-1 text-muted-foreground">{t('detail.logId', { id: log.id })}</p>
           </div>
         </div>
       </div>
