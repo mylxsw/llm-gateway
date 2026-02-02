@@ -93,6 +93,67 @@
       "logsDescription": "查看所有代理请求日志，支持多条件筛选"
     }
   },
+  "apiKeys": {
+    "title": "API 密钥管理",
+    "description": "管理用于访问代理接口的 API Key",
+    "actions": {
+      "new": "新建 API 密钥",
+      "copy": "复制",
+      "show": "显示",
+      "hide": "隐藏",
+      "edit": "编辑",
+      "delete": "删除",
+      "cancel": "取消",
+      "save": "保存",
+      "saving": "保存中...",
+      "create": "创建"
+    },
+    "list": {
+      "title": "API 密钥列表",
+      "empty": "未找到 API 密钥",
+      "loadFailed": "加载 API 密钥列表失败",
+      "fetchFailed": "获取 API 密钥失败",
+      "columns": {
+        "id": "ID",
+        "name": "名称",
+        "key": "API Key",
+        "status": "状态",
+        "createdAt": "创建时间",
+        "lastUsed": "最近使用",
+        "actions": "操作"
+      },
+      "status": {
+        "active": "启用",
+        "inactive": "停用"
+      }
+    },
+    "toasts": {
+      "copied": "已复制 API Key 到剪贴板",
+      "copyFailed": "复制到剪贴板失败"
+    },
+    "dialogs": {
+      "deleteTitle": "删除 API 密钥",
+      "deleteDescription": "是否确认删除 API 密钥 \"{name}\"？使用该密钥的客户端将无法继续访问服务。"
+    },
+    "form": {
+      "newTitle": "新建 API 密钥",
+      "editTitle": "编辑 API 密钥",
+      "nameLabel": "名称",
+      "namePlaceholder": "输入 API Key 名称，例如：Production",
+      "nameRequired": "请输入名称",
+      "nameInvalid": "名称格式无效",
+      "enabledStatusLabel": "启用状态",
+      "autoGenerateHint": "API Key 将由系统自动生成，请在创建后立即保存",
+      "keyNameLabel": "API Key 名称",
+      "keyLabel": "API Key"
+    },
+    "success": {
+      "title": "API Key 创建成功",
+      "description": "请立即复制并保存以下 API Key。关闭后将无法再次查看完整密钥。",
+      "notice": "完整密钥仅会显示这一次",
+      "confirmSaved": "我已复制并保存"
+    }
+  },
   "providers": {
     "title": "供应商管理",
     "description": "管理上游 AI 供应商配置",
