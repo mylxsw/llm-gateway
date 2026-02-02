@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
 
 import {
@@ -12,9 +12,19 @@ const isLocale = (value?: string): value is Locale =>
   !!value && locales.includes(value as Locale);
 
 export default getRequestConfig(async () => {
-  const store = await cookies();
-  const cookieLocale = store.get(localeCookieName)?.value;
-  const locale = isLocale(cookieLocale) ? cookieLocale : defaultLocale;
+  let locale: Locale = defaultLocale;
+
+  // In static export mode, cookies() throws during build.
+  // We catch and fall back to default locale.
+  try {
+    const store = await cookies();
+    const cookieLocale = store.get(localeCookieName)?.value;
+    if (isLocale(cookieLocale)) {
+      locale = cookieLocale;
+    }
+  } catch {
+    // Static export build - use default locale
+  }
 
   return {
     locale,

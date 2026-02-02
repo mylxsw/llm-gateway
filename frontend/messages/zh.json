@@ -158,15 +158,57 @@
   "providers": {
     "title": "供应商管理",
     "description": "管理上游 AI 供应商配置",
-    "actions": {
-      "addProvider": "添加供应商",
+    "page": {
+      "title": "供应商管理",
+      "subtitle": "管理上游 AI 供应商配置",
       "import": "导入",
       "export": "导出",
-      "fetchModels": "获取模型"
+      "addProvider": "添加供应商",
+      "providerList": "供应商列表",
+      "empty": "未找到供应商",
+      "loadError": "加载供应商列表失败"
+    },
+    "alerts": {
+      "exportFailed": "导出失败",
+      "importInvalidFile": "导入文件无效：期望为 JSON 数组",
+      "importComplete": "导入完成。\n成功：{success}\n跳过：{skipped}",
+      "importFailedUnknown": "导入失败，发生未知错误",
+      "importFailedWithMessage": "导入失败：{message}"
+    },
+    "errors": {
+      "fetchModelsFailed": "获取模型失败"
+    },
+    "delete": {
+      "title": "删除供应商",
+      "description": "是否确认删除供应商 \"{name}\"？若被模型引用则无法删除。",
+      "confirm": "删除"
+    },
+    "models": {
+      "title": "上游模型",
+      "noProviderSelected": "未选择供应商",
+      "empty": "上游未返回模型。"
+    },
+    "filters": {
+      "name": {
+        "label": "供应商名称",
+        "placeholder": "模糊匹配"
+      },
+      "protocol": {
+        "label": "协议",
+        "all": "全部"
+      },
+      "status": {
+        "label": "状态",
+        "all": "全部",
+        "active": "启用",
+        "inactive": "停用"
+      },
+      "actions": {
+        "reset": "重置",
+        "filter": "筛选"
+      }
     },
     "list": {
-      "title": "供应商列表",
-      "empty": "未找到供应商",
       "columns": {
         "id": "ID",
         "name": "名称",
@@ -175,66 +217,71 @@
         "status": "状态",
         "updatedAt": "更新时间",
         "actions": "操作"
+      },
+      "actions": {
+        "fetchModels": "获取模型",
+        "edit": "编辑",
+        "delete": "删除"
       }
     },
-    "filters": {
-      "providerName": "供应商名称",
-      "protocol": "协议",
-      "status": "状态",
-      "fuzzyMatch": "模糊匹配",
-      "active": "启用",
-      "inactive": "停用",
-      "reset": "重置",
-      "filter": "筛选"
-    },
     "form": {
-      "editTitle": "编辑供应商",
-      "newTitle": "新建供应商",
-      "nameLabel": "名称",
-      "namePlaceholder": "输入供应商名称",
-      "nameRequired": "请输入名称",
-      "nameEmpty": "名称不能为空",
-      "protocolTypeLabel": "协议类型",
-      "protocolTypePlaceholder": "选择协议类型",
-      "baseUrlLabel": "基础 URL",
-      "baseUrlPlaceholder": "https://api.openai.com",
-      "baseUrlRequired": "请输入基础 URL",
-      "invalidUrl": "请输入有效的 URL",
-      "apiKeyLabel": "API Key",
-      "apiKeyOptional": "（可选）",
-      "apiKeyPlaceholderNew": "输入供应商 API Key",
-      "apiKeyPlaceholderEdit": "留空以保持不变",
-      "extraHeadersLabel": "额外请求头",
-      "extraHeadersEmpty": "没有额外请求头，点击上方按钮添加。",
-      "headerKey": "键",
-      "headerValue": "值",
-      "defaultParametersLabel": "默认参数",
-      "defaultParametersDescription": "当请求未提供该参数时生效。",
-      "defaultParametersNumericOnly": "仅支持数字格式。",
-      "defaultParametersEmpty": "没有默认参数，点击上方按钮添加。",
-      "defaultParametersSelectKey": "选择键",
-      "defaultParametersNumber": "数字",
-      "proxyConfigLabel": "代理配置",
-      "proxyConfigDescription": "使用 schema://auth@host:port（schema 为 socks5 或 http）。",
-      "proxyUrlLabel": "代理 URL",
-      "proxyUrlPlaceholderNew": "socks5://user:pass@host:port",
-      "proxyUrlPlaceholderEdit": "留空以保持不变",
-      "enabledStatusLabel": "启用状态"
-    },
-    "dialogs": {
-      "deleteTitle": "删除供应商",
-      "deleteDescription": "是否确认删除供应商 \"{name}\"？若被模型引用则无法删除。",
-      "upstreamModelsTitle": "上游模型",
-      "providerLabel": "供应商：{name}（{protocol}）",
-      "noProviderSelected": "未选择供应商",
-      "noModelsReturned": "上游未返回模型。"
-    },
-    "importExport": {
-      "invalidFile": "导入文件无效：期望为 JSON 数组",
-      "importComplete": "导入完成。\n成功：{success}\n跳过：{skipped}",
-      "importFailed": "导入失败：{message}",
-      "importFailedUnknown": "导入失败，发生未知错误",
-      "exportFailed": "导出失败"
+      "title": {
+        "new": "新建供应商",
+        "edit": "编辑供应商"
+      },
+      "name": {
+        "label": "名称",
+        "placeholder": "输入供应商名称",
+        "required": "请输入名称",
+        "empty": "名称不能为空"
+      },
+      "protocol": {
+        "label": "协议类型",
+        "placeholder": "选择协议类型"
+      },
+      "baseUrl": {
+        "label": "基础 URL",
+        "placeholder": "https://api.openai.com",
+        "required": "请输入基础 URL",
+        "invalid": "请输入有效的 URL"
+      },
+      "apiKey": {
+        "label": "API Key",
+        "optional": "（可选）",
+        "placeholderNew": "输入供应商 API Key",
+        "placeholderEdit": "留空以保持不变"
+      },
+      "extraHeaders": {
+        "label": "额外请求头",
+        "add": "添加",
+        "empty": "没有额外请求头，点击上方按钮添加。",
+        "keyPlaceholder": "键",
+        "valuePlaceholder": "值"
+      },
+      "defaultParams": {
+        "label": "默认参数",
+        "add": "添加",
+        "helpApply": "当请求未提供该参数时生效。",
+        "helpNumeric": "仅支持数字格式。",
+        "empty": "没有默认参数，点击上方按钮添加。",
+        "selectKey": "选择键",
+        "valuePlaceholder": "数字"
+      },
+      "proxy": {
+        "label": "代理配置",
+        "help": "使用 schema://auth@host:port（schema 为 socks5 或 http）。",
+        "urlLabel": "代理 URL",
+        "urlPlaceholderNew": "socks5://user:pass@host:port",
+        "urlPlaceholderEdit": "留空以保持不变"
+      },
+      "status": {
+        "label": "启用状态"
+      },
+      "actions": {
+        "cancel": "取消",
+        "save": "保存",
+        "saving": "保存中..."
+      }
     }
   },
   "models": {
@@ -497,58 +544,6 @@
       "importFailed": "导入失败：{message}",
       "importFailedUnknown": "导入失败，发生未知错误",
       "exportFailed": "导出失败"
-    }
-  },
-  "apiKeys": {
-    "title": "API 密钥管理",
-    "description": "管理用于访问代理接口的 API Key",
-    "actions": {
-      "newApiKey": "新建 API Key"
-    },
-    "list": {
-      "title": "API Key 列表",
-      "empty": "未找到 API Key",
-      "columns": {
-        "id": "ID",
-        "name": "名称",
-        "apiKey": "API Key",
-        "status": "状态",
-        "createdAt": "创建时间",
-        "lastUsed": "最后使用",
-        "actions": "操作"
-      },
-      "show": "显示",
-      "hide": "隐藏",
-      "copy": "复制"
-    },
-    "form": {
-      "createdTitle": "API Key 创建成功",
-      "createdDescription": "请立即复制并保存以下 API Key，关闭后将无法再次查看完整密钥。",
-      "createdWarning": "这是唯一一次显示完整密钥的机会",
-      "apiKeyName": "API Key 名称",
-      "apiKey": "API Key",
-      "copiedConfirm": "我已复制并保存",
-      "editTitle": "编辑 API Key",
-      "newTitle": "新建 API Key",
-      "nameLabel": "名称",
-      "namePlaceholder": "输入 API Key 名称，例如：Production",
-      "nameRequired": "请输入名称",
-      "nameInvalid": "名称格式不正确",
-      "enabledStatus": "启用状态",
-      "createHint": "API Key 将由系统自动生成，请创建后立即保存",
-      "create": "创建"
-    },
-    "dialogs": {
-      "deleteTitle": "删除 API Key",
-      "deleteDescription": "确认删除 API Key \"{name}\"？使用该密钥的客户端将无法再访问服务。"
-    },
-    "toasts": {
-      "fetchFailed": "获取 API Key 失败",
-      "copySuccess": "已复制 API Key 到剪贴板",
-      "copyFailed": "复制到剪贴板失败"
-    },
-    "errors": {
-      "loadFailed": "加载 API Key 列表失败"
     }
   },
   "logs": {

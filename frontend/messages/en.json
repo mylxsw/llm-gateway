@@ -158,15 +158,57 @@
   "providers": {
     "title": "Provider Management",
     "description": "Manage upstream AI provider configurations",
-    "actions": {
-      "addProvider": "Add Provider",
+    "page": {
+      "title": "Provider Management",
+      "subtitle": "Manage upstream AI provider configurations",
       "import": "Import",
       "export": "Export",
-      "fetchModels": "Fetch Models"
+      "addProvider": "Add Provider",
+      "providerList": "Provider List",
+      "empty": "No providers found",
+      "loadError": "Failed to load provider list"
+    },
+    "alerts": {
+      "exportFailed": "Export failed",
+      "importInvalidFile": "Invalid import file: expected a JSON array",
+      "importComplete": "Import complete.\nSuccess: {success}\nSkipped: {skipped}",
+      "importFailedUnknown": "Import failed due to an unknown error",
+      "importFailedWithMessage": "Import failed: {message}"
+    },
+    "errors": {
+      "fetchModelsFailed": "Failed to fetch models"
+    },
+    "delete": {
+      "title": "Delete Provider",
+      "description": "Are you sure you want to delete provider \"{name}\"? It cannot be deleted if referenced by models.",
+      "confirm": "Delete"
+    },
+    "models": {
+      "title": "Upstream Models",
+      "noProviderSelected": "No provider selected",
+      "empty": "No models returned from upstream."
+    },
+    "filters": {
+      "name": {
+        "label": "Provider Name",
+        "placeholder": "Fuzzy match"
+      },
+      "protocol": {
+        "label": "Protocol",
+        "all": "All"
+      },
+      "status": {
+        "label": "Status",
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "actions": {
+        "reset": "Reset",
+        "filter": "Filter"
+      }
     },
     "list": {
-      "title": "Provider List",
-      "empty": "No providers found",
       "columns": {
         "id": "ID",
         "name": "Name",
@@ -175,66 +217,71 @@
         "status": "Status",
         "updatedAt": "Updated At",
         "actions": "Actions"
+      },
+      "actions": {
+        "fetchModels": "Fetch Models",
+        "edit": "Edit",
+        "delete": "Delete"
       }
     },
-    "filters": {
-      "providerName": "Provider Name",
-      "protocol": "Protocol",
-      "status": "Status",
-      "fuzzyMatch": "Fuzzy match",
-      "active": "Active",
-      "inactive": "Inactive",
-      "reset": "Reset",
-      "filter": "Filter"
-    },
     "form": {
-      "editTitle": "Edit Provider",
-      "newTitle": "New Provider",
-      "nameLabel": "Name",
-      "namePlaceholder": "Enter provider name",
-      "nameRequired": "Name is required",
-      "nameEmpty": "Name cannot be empty",
-      "protocolTypeLabel": "Protocol Type",
-      "protocolTypePlaceholder": "Select Protocol Type",
-      "baseUrlLabel": "Base URL",
-      "baseUrlPlaceholder": "https://api.openai.com",
-      "baseUrlRequired": "Base URL is required",
-      "invalidUrl": "Please enter a valid URL",
-      "apiKeyLabel": "API Key",
-      "apiKeyOptional": "(Optional)",
-      "apiKeyPlaceholderNew": "Enter provider API Key",
-      "apiKeyPlaceholderEdit": "Leave blank to keep unchanged",
-      "extraHeadersLabel": "Extra Headers",
-      "extraHeadersEmpty": "No extra headers, click button above to add.",
-      "headerKey": "Key",
-      "headerValue": "Value",
-      "defaultParametersLabel": "Default Parameters",
-      "defaultParametersDescription": "Applies when the request does not provide the parameter.",
-      "defaultParametersNumericOnly": "Values only support numeric format.",
-      "defaultParametersEmpty": "No default parameters, click button above to add.",
-      "defaultParametersSelectKey": "Select key",
-      "defaultParametersNumber": "Number",
-      "proxyConfigLabel": "Proxy Configuration",
-      "proxyConfigDescription": "Use schema://auth@host:port (schema is socks5 or http).",
-      "proxyUrlLabel": "Proxy URL",
-      "proxyUrlPlaceholderNew": "socks5://user:pass@host:port",
-      "proxyUrlPlaceholderEdit": "Leave blank to keep unchanged",
-      "enabledStatusLabel": "Enabled Status"
-    },
-    "dialogs": {
-      "deleteTitle": "Delete Provider",
-      "deleteDescription": "Are you sure you want to delete provider \"{name}\"? It cannot be deleted if referenced by models.",
-      "upstreamModelsTitle": "Upstream Models",
-      "providerLabel": "Provider: {name} ({protocol})",
-      "noProviderSelected": "No provider selected",
-      "noModelsReturned": "No models returned from upstream."
-    },
-    "importExport": {
-      "invalidFile": "Invalid import file: expected a JSON array",
-      "importComplete": "Import complete.\nSuccess: {success}\nSkipped: {skipped}",
-      "importFailed": "Import failed: {message}",
-      "importFailedUnknown": "Import failed due to an unknown error",
-      "exportFailed": "Export failed"
+      "title": {
+        "new": "New Provider",
+        "edit": "Edit Provider"
+      },
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter provider name",
+        "required": "Name is required",
+        "empty": "Name cannot be empty"
+      },
+      "protocol": {
+        "label": "Protocol Type",
+        "placeholder": "Select Protocol Type"
+      },
+      "baseUrl": {
+        "label": "Base URL",
+        "placeholder": "https://api.openai.com",
+        "required": "Base URL is required",
+        "invalid": "Please enter a valid URL"
+      },
+      "apiKey": {
+        "label": "API Key",
+        "optional": "(Optional)",
+        "placeholderNew": "Enter provider API Key",
+        "placeholderEdit": "Leave blank to keep unchanged"
+      },
+      "extraHeaders": {
+        "label": "Extra Headers",
+        "add": "Add",
+        "empty": "No extra headers, click button above to add.",
+        "keyPlaceholder": "Key",
+        "valuePlaceholder": "Value"
+      },
+      "defaultParams": {
+        "label": "Default Parameters",
+        "add": "Add",
+        "helpApply": "Applies when the request does not provide the parameter.",
+        "helpNumeric": "Values only support numeric format.",
+        "empty": "No default parameters, click button above to add.",
+        "selectKey": "Select key",
+        "valuePlaceholder": "Number"
+      },
+      "proxy": {
+        "label": "Proxy Configuration",
+        "help": "Use schema://auth@host:port (schema is socks5 or http).",
+        "urlLabel": "Proxy URL",
+        "urlPlaceholderNew": "socks5://user:pass@host:port",
+        "urlPlaceholderEdit": "Leave blank to keep unchanged"
+      },
+      "status": {
+        "label": "Enabled Status"
+      },
+      "actions": {
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving..."
+      }
     }
   },
   "models": {
@@ -497,58 +544,6 @@
       "importFailed": "Import failed: {message}",
       "importFailedUnknown": "Import failed due to an unknown error",
       "exportFailed": "Export failed"
-    }
-  },
-  "apiKeys": {
-    "title": "API Key Management",
-    "description": "Manage API Keys used for accessing proxy interfaces",
-    "actions": {
-      "newApiKey": "New API Key"
-    },
-    "list": {
-      "title": "API Key List",
-      "empty": "No API Keys found",
-      "columns": {
-        "id": "ID",
-        "name": "Name",
-        "apiKey": "API Key",
-        "status": "Status",
-        "createdAt": "Created At",
-        "lastUsed": "Last Used",
-        "actions": "Actions"
-      },
-      "show": "Show",
-      "hide": "Hide",
-      "copy": "Copy"
-    },
-    "form": {
-      "createdTitle": "API Key Created Successfully",
-      "createdDescription": "Please copy and save the following API Key immediately. You will not be able to see the full key again after closing.",
-      "createdWarning": "This is the only time the full Key will be displayed",
-      "apiKeyName": "API Key Name",
-      "apiKey": "API Key",
-      "copiedConfirm": "I have copied and saved it",
-      "editTitle": "Edit API Key",
-      "newTitle": "New API Key",
-      "nameLabel": "Name",
-      "namePlaceholder": "Enter API Key name, e.g.: Production",
-      "nameRequired": "Name is required",
-      "nameInvalid": "Invalid name format",
-      "enabledStatus": "Enabled Status",
-      "createHint": "API Key will be automatically generated by the system, please save it immediately after creation",
-      "create": "Create"
-    },
-    "dialogs": {
-      "deleteTitle": "Delete API Key",
-      "deleteDescription": "Are you sure you want to delete API Key \"{name}\"? Clients using this key will no longer be able to access the service."
-    },
-    "toasts": {
-      "fetchFailed": "Failed to fetch API Key",
-      "copySuccess": "API Key copied to clipboard",
-      "copyFailed": "Failed to copy to clipboard"
-    },
-    "errors": {
-      "loadFailed": "Failed to load API Key list"
     }
   },
   "logs": {
