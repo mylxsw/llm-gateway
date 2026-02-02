@@ -18,33 +18,34 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 /** Navigation Items Definition */
 const navItems = [
   {
-    title: 'Home',
+    title: 'home',
     href: '/',
     icon: Home,
   },
   {
-    title: 'Providers',
+    title: 'providers',
     href: '/providers',
     icon: Server,
   },
   {
-    title: 'Models',
+    title: 'models',
     href: '/models',
     icon: Layers,
   },
   {
-    title: 'API Keys',
+    title: 'apiKeys',
     href: '/api-keys',
     icon: Key,
   },
   {
-    title: 'Logs',
+    title: 'logs',
     href: '/logs',
     icon: FileText,
   },
@@ -55,6 +56,7 @@ const navItems = [
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const t = useTranslations('sidebar');
   const [collapsed, setCollapsed] = React.useState(false);
 
   React.useEffect(() => {
@@ -98,7 +100,7 @@ export function Sidebar() {
                 : 'max-w-[160px] opacity-100 translate-x-0'
             )}
           >
-            Squirrel
+            {t('appName')}
           </span>
         </div>
 
@@ -107,8 +109,8 @@ export function Sidebar() {
           variant="outline"
           size="icon"
           onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? t('expand') : t('collapse')}
+          title={collapsed ? t('expand') : t('collapse')}
           className={cn(
             'absolute -right-4 top-1/2 z-20 h-8 w-8 -translate-y-1/2 rounded-full',
             'bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80',
@@ -129,12 +131,13 @@ export function Sidebar() {
           const isActive = pathname === item.href ||
             (item.href !== '/' && pathname.startsWith(item.href));
           const Icon = item.icon;
+          const title = t(item.title);
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              title={collapsed ? item.title : undefined}
+              title={collapsed ? title : undefined}
               className={cn(
                 'flex items-center rounded-lg py-2 text-sm font-medium transition-colors',
                 collapsed ? 'justify-center px-2' : 'gap-3 px-3',
@@ -152,7 +155,7 @@ export function Sidebar() {
                     : 'max-w-[180px] opacity-100 translate-x-0'
                 )}
               >
-                {item.title}
+                {title}
               </span>
             </Link>
           );
@@ -167,7 +170,7 @@ export function Sidebar() {
             collapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'
           )}
         >
-          Squirrel LLM Gateway v1.0.0
+          {t('version')}
         </p>
       </div>
     </div>

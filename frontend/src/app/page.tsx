@@ -4,49 +4,51 @@
  */
 
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Server, Layers, Key, FileText, ArrowRight } from 'lucide-react';
 import { HomeCostStats } from '@/components/home/HomeCostStats';
 
-/** Feature Card Data */
-const features = [
-  {
-    title: 'Provider Management',
-    description: 'Manage upstream AI providers, configure base URLs and API keys',
-    href: '/providers',
-    icon: Server,
-  },
-  {
-    title: 'Model Management',
-    description: 'Configure model mapping rules, support multiple providers for the same model',
-    href: '/models',
-    icon: Layers,
-  },
-  {
-    title: 'API Key Management',
-    description: 'Manage system API Keys for clients to access proxy interfaces',
-    href: '/api-keys',
-    icon: Key,
-  },
-  {
-    title: 'Request Logs',
-    description: 'View all proxy request logs, supports multi-condition filtering',
-    href: '/logs',
-    icon: FileText,
-  },
-];
-
 /**
  * Home Page Component
  */
-export default function HomePage() {
+export default async function HomePage() {
+  const t = await getTranslations('home');
+
+  const features = [
+    {
+      title: t('cards.providersTitle'),
+      description: t('cards.providersDescription'),
+      href: '/providers',
+      icon: Server,
+    },
+    {
+      title: t('cards.modelsTitle'),
+      description: t('cards.modelsDescription'),
+      href: '/models',
+      icon: Layers,
+    },
+    {
+      title: t('cards.apiKeysTitle'),
+      description: t('cards.apiKeysDescription'),
+      href: '/api-keys',
+      icon: Key,
+    },
+    {
+      title: t('cards.logsTitle'),
+      description: t('cards.logsDescription'),
+      href: '/logs',
+      icon: FileText,
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
       <div>
-        <h1 className="text-2xl font-bold">LLM Gateway</h1>
+        <h1 className="text-2xl font-bold">{t('title')}</h1>
         <p className="mt-1 text-muted-foreground">
-          Model Routing & Proxy Service Management System
+          {t('description')}
         </p>
       </div>
 
