@@ -6,6 +6,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Table,
   TableBody,
@@ -41,18 +42,19 @@ export function ProviderList({
   onFetchModels,
   onDelete,
 }: ProviderListProps) {
+  const t = useTranslations('providers');
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[60px]">ID</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Base URL</TableHead>
-          <TableHead>Protocol</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Updated At</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead className="w-[60px]">{t('list.columns.id')}</TableHead>
+          <TableHead>{t('list.columns.name')}</TableHead>
+          <TableHead>{t('list.columns.baseUrl')}</TableHead>
+          <TableHead>{t('list.columns.protocol')}</TableHead>
+          <TableHead>{t('list.columns.status')}</TableHead>
+          <TableHead>{t('list.columns.updatedAt')}</TableHead>
+          <TableHead className="text-right">{t('list.columns.actions')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -86,7 +88,7 @@ export function ProviderList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onFetchModels(provider)}
-                    title="Fetch Models"
+                    title={t('list.actions.fetchModels')}
                   >
                     <Sparkles className="h-4 w-4" suppressHydrationWarning />
                   </Button>
@@ -94,7 +96,7 @@ export function ProviderList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(provider)}
-                    title="Edit"
+                    title={t('list.actions.edit')}
                   >
                     <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
@@ -102,7 +104,7 @@ export function ProviderList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(provider)}
-                    title="Delete"
+                    title={t('list.actions.delete')}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>

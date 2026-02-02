@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -26,6 +27,7 @@ import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/prov
  * Provider Management Page Component
  */
 export default function ProvidersPage() {
+  const t = useTranslations('providers');
   // Pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -97,7 +99,7 @@ export default function ProvidersPage() {
     try {
       const result = await getProviderModels(provider.id);
       if (!result.success) {
-        const message = result.error?.message || 'Failed to fetch models';
+        const message = result.error?.message || t('errors.fetchModelsFailed');
         setModelError(message);
         return;
       }
@@ -105,7 +107,7 @@ export default function ProvidersPage() {
     } catch (error) {
       console.error('Fetch models failed:', error);
       const message =
-        error instanceof Error ? error.message : 'Failed to fetch models';
+        error instanceof Error ? error.message : t('errors.fetchModelsFailed');
       setModelError(message);
     } finally {
       setModelLoading(false);
@@ -159,7 +161,7 @@ export default function ProvidersPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Export failed');
+      alert(t('alerts.exportFailed'));
     }
   };
 
@@ -176,16 +178,21 @@ export default function ProvidersPage() {
       const text = await file.text();
       const json = JSON.parse(text) as unknown;
       if (!Array.isArray(json)) {
-        throw new Error('Invalid import file: expected a JSON array');
+        throw new Error(t('alerts.importInvalidFile'));
       }
       const result = await importProviders(json as ProviderCreate[]);
-      alert(`Import complete.\nSuccess: ${result.success}\nSkipped: ${result.skipped}`);
+      alert(
+        t('alerts.importComplete', {
+          success: result.success,
+          skipped: result.skipped,
+        })
+      );
       refetch();
     } catch (error) {
       console.error('Import failed:', error);
       const message =
-        error instanceof Error ? error.message : 'Import failed due to an unknown error';
-      alert(`Import failed: ${message}`);
+        error instanceof Error ? error.message : t('alerts.importFailedUnknown');
+      alert(t('alerts.importFailedWithMessage', { message }));
     }
     // Reset input
     event.target.value = '';
@@ -196,9 +203,9 @@ export default function ProvidersPage() {
       {/* Page Title and Actions */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Provider Management</h1>
+          <h1 className="text-2xl font-bold">{t('page.title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            Manage upstream AI provider configurations
+            {t('page.subtitle')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -211,15 +218,15 @@ export default function ProvidersPage() {
           />
           <Button variant="outline" onClick={handleImportClick}>
             <Upload className="mr-2 h-4 w-4" />
-            Import
+            {t('page.import')}
           </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            {t('page.export')}
           </Button>
           <Button onClick={handleCreate}>
             <Plus className="mr-2 h-4 w-4" suppressHydrationWarning />
-            Add Provider
+            {t('page.addProvider')}
           </Button>
         </div>
       </div>
@@ -228,22 +235,22 @@ export default function ProvidersPage() {
       {/* Data List */}
       <Card>
         <CardHeader>
-          <CardTitle>Provider List</CardTitle>
+          <CardTitle>{t('page.providerList')}</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <LoadingSpinner />}
           
           {isError && (
             <ErrorState
-              message="Failed to load provider list"
+              message={t('page.loadError')}
               onRetry={() => refetch()}
             />
           )}
           
           {!isLoading && !isError && data?.items.length === 0 && (
             <EmptyState
-              message="No providers found"
-              actionText="Add Provider"
+              message={t('page.empty')}
+              actionText={t('page.addProvider')}
               onAction={handleCreate}
             />
           )}
@@ -281,9 +288,9 @@ export default function ProvidersPage() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Delete Provider"
-        description={`Are you sure you want to delete provider "${deletingProvider?.name}"? It cannot be deleted if referenced by models.`}
-        confirmText="Delete"
+        title={t('delete.title')}
+        description={t('delete.description', { name: deletingProvider?.name ?? '' })}
+        confirmText={t('delete.confirm')}
         onConfirm={handleConfirmDelete}
         destructive
         loading={deleteMutation.isPending}
@@ -292,11 +299,14 @@ export default function ProvidersPage() {
       <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Upstream Models</DialogTitle>
+            <DialogTitle>{t('models.title')}</DialogTitle>
             <DialogDescription>
               {selectedProvider
-                ? `Provider: ${selectedProvider.name} (${getProviderProtocolLabel(selectedProvider.protocol, protocolConfigs)})`
-                : 'No provider selected'}
+                ? t('models.description', {
+                    name: selectedProvider.name,
+                    protocol: getProviderProtocolLabel(selectedProvider.protocol, protocolConfigs),
+                  })
+                : t('models.noProviderSelected')}
             </DialogDescription>
           </DialogHeader>
           {modelLoading && <LoadingSpinner />}
@@ -307,7 +317,7 @@ export default function ProvidersPage() {
             <div className="max-h-[360px] overflow-auto rounded-md border p-3">
               {modelList.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  No models returned from upstream.
+                  {t('models.empty')}
                 </div>
               ) : (
                 <ul className="space-y-1 text-sm">

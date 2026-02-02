@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,7 @@ interface ProviderFiltersProps {
 }
 
 export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProps) {
+  const t = useTranslations('providers');
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const defaultValues = useMemo(
     () => ({
@@ -68,24 +70,24 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
-            <Label>Provider Name</Label>
+            <Label>{t('filters.name.label')}</Label>
             <Input
-              placeholder="Fuzzy match"
+              placeholder={t('filters.name.placeholder')}
               {...register('name')}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Protocol</Label>
+            <Label>{t('filters.protocol.label')}</Label>
             <Select
               value={watch('protocol')}
               onValueChange={(value) => setValue('protocol', value as ProtocolType | 'all')}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.protocol.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all">{t('filters.protocol.all')}</SelectItem>
                 {protocolConfigs.map((option) => (
                   <SelectItem key={option.protocol} value={option.protocol}>
                     {option.label}
@@ -96,18 +98,18 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
           </div>
 
           <div className="space-y-2">
-            <Label>Status</Label>
+            <Label>{t('filters.status.label')}</Label>
             <Select
               value={watch('is_active')}
               onValueChange={(value) => setValue('is_active', value)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.status.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="all">{t('filters.status.all')}</SelectItem>
+                <SelectItem value="active">{t('filters.status.active')}</SelectItem>
+                <SelectItem value="inactive">{t('filters.status.inactive')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -116,11 +118,11 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onReset}>
             <X className="mr-2 h-4 w-4" />
-            Reset
+            {t('filters.actions.reset')}
           </Button>
           <Button type="submit">
             <Filter className="mr-2 h-4 w-4" />
-            Filter
+            {t('filters.actions.filter')}
           </Button>
         </div>
       </div>
