@@ -6,7 +6,6 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Languages } from 'lucide-react';
 import {
@@ -33,11 +32,9 @@ export function LanguageSwitcher({
   collapsed = false,
   compact = false,
 }: LanguageSwitcherProps) {
-  const router = useRouter();
   const locale = useLocale() as Locale;
   const t = useTranslations('common');
   const [mounted, setMounted] = React.useState(false);
-  const [isPending, startTransition] = React.useTransition();
 
   React.useEffect(() => {
     setMounted(true);
@@ -49,7 +46,8 @@ export function LanguageSwitcher({
     if (!locales.includes(value as Locale)) return;
     const maxAge = 60 * 60 * 24 * 365;
     document.cookie = `${localeCookieName}=${value}; path=/; max-age=${maxAge}; samesite=lax`;
-    startTransition(() => router.refresh());
+    // Full page reload is required for static export mode
+    window.location.reload();
   };
 
   const label = t('language');
@@ -58,13 +56,12 @@ export function LanguageSwitcher({
     <Select value={locale} onValueChange={handleChange}>
       <SelectTrigger
         className={cn(
-          'h-9 w-full',
+          'h-9 w-full rounded-full bg-background shadow-sm',
           collapsed ? 'px-2 text-xs' : 'px-3',
           compact && 'w-[120px] px-2 text-xs'
         )}
         aria-label={label}
         title={label}
-        disabled={isPending}
       >
         <span className="flex items-center gap-2 truncate">
           <Languages className="h-4 w-4 text-muted-foreground" suppressHydrationWarning />
