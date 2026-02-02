@@ -11,6 +11,8 @@ import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
 import { AuthGate } from "@/components/auth";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
+import { IntlProvider } from "@/components/common/IntlProvider";
 
 // Configure Sans-serif Font
 const geistSans = Geist({
@@ -64,18 +66,23 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <Providers>
-          <AuthGate />
-          <div className="flex min-h-screen">
-            {/* Sidebar Navigation */}
-            <Sidebar />
-            {/* Main Content Area */}
-            <main className="flex-1 overflow-auto bg-muted/30 p-6">
-              {children}
-            </main>
-          </div>
-          <ThemeToggle />
-        </Providers>
+        <IntlProvider>
+          <Providers>
+            <AuthGate />
+            <div className="flex min-h-screen">
+              {/* Sidebar Navigation */}
+              <Sidebar />
+              {/* Main Content Area */}
+              <main className="flex-1 overflow-auto bg-muted/30 p-6">
+                {children}
+              </main>
+            </div>
+            <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+              <LanguageSwitcher />
+              <ThemeToggle inline />
+            </div>
+          </Providers>
+        </IntlProvider>
       </body>
     </html>
   );

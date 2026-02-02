@@ -8,6 +8,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface PaginationProps {
   /** Current page number (starts from 1) */
@@ -36,6 +37,7 @@ export function Pagination({
   onPageSizeChange,
   pageSizeOptions = [10, 20, 50, 100],
 }: PaginationProps) {
+  const t = useTranslations('common');
   // Calculate total pages
   const totalPages = Math.ceil(total / pageSize);
   
@@ -52,13 +54,13 @@ export function Pagination({
       {/* Left: Display Info */}
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <span>
-          Total {total} items, showing {startItem}-{endItem}
+          {t('pagination.totalItemsRange', { total, start: startItem, end: endItem })}
         </span>
         
         {/* Page Size Selection */}
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
-            <span>Per page</span>
+            <span>{t('pagination.perPage')}</span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -70,7 +72,7 @@ export function Pagination({
                 </option>
               ))}
             </select>
-            <span>items</span>
+            <span>{t('pagination.items')}</span>
           </div>
         )}
       </div>
@@ -83,7 +85,7 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(1)}
           disabled={!canPreviousPage}
-          title="First Page"
+          title={t('pagination.firstPage')}
         >
           <ChevronsLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
@@ -94,14 +96,14 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(page - 1)}
           disabled={!canPreviousPage}
-          title="Previous Page"
+          title={t('pagination.previousPage')}
         >
           <ChevronLeft className="h-4 w-4" suppressHydrationWarning />
         </Button>
         
         {/* Page Number Display */}
         <span className="flex items-center gap-1 px-2 text-sm">
-          <span>Page</span>
+          <span>{t('pagination.page')}</span>
           <input
             type="number"
             min={1}
@@ -124,7 +126,7 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(page + 1)}
           disabled={!canNextPage}
-          title="Next Page"
+          title={t('pagination.nextPage')}
         >
           <ChevronRight className="h-4 w-4" suppressHydrationWarning />
         </Button>
@@ -135,7 +137,7 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(totalPages)}
           disabled={!canNextPage}
-          title="Last Page"
+          title={t('pagination.lastPage')}
         >
           <ChevronsRight className="h-4 w-4" suppressHydrationWarning />
         </Button>

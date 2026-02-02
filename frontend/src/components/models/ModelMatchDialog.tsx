@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -81,6 +82,8 @@ export function ModelMatchDialog({
   onOpenChange,
   requestedModel,
 }: ModelMatchDialogProps) {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
   const [inputTokens, setInputTokens] = useState('1000');
   const [headersInput, setHeadersInput] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -93,7 +96,7 @@ export function ModelMatchDialog({
   const handleMatch = async () => {
     const tokensValue = Number(inputTokens);
     if (!Number.isFinite(tokensValue) || tokensValue < 0) {
-      setMatchError('Please enter a valid input token count.');
+      setMatchError(t('matchDialog.inputTokensError'));
       return;
     }
 
@@ -101,7 +104,7 @@ export function ModelMatchDialog({
     try {
       headers = parseHeadersInput(headersInput);
     } catch {
-      setMatchError('Invalid headers format. Use JSON or key: value per line.');
+      setMatchError(t('matchDialog.headersInvalid'));
       return;
     }
 
@@ -118,7 +121,7 @@ export function ModelMatchDialog({
       setMatchResults(result);
     } catch (error) {
       setMatchResults([]);
-      setMatchError(getApiErrorMessage(error, 'Match failed'));
+      setMatchError(getApiErrorMessage(error, t('matchDialog.matchFailed')));
     }
   };
 
@@ -133,15 +136,15 @@ export function ModelMatchDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Test Provider Matching</DialogTitle>
+          <DialogTitle>{t('matchDialog.title')}</DialogTitle>
           <DialogDescription>
-            Enter test inputs and run matching to preview the provider order.
+            {t('matchDialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="match-input-tokens">Input Tokens</Label>
+            <Label htmlFor="match-input-tokens">{t('matchDialog.inputTokens')}</Label>
             <Input
               id="match-input-tokens"
               type="number"
@@ -152,25 +155,25 @@ export function ModelMatchDialog({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="match-headers">Headers</Label>
+            <Label htmlFor="match-headers">{t('matchDialog.headers')}</Label>
             <Textarea
               id="match-headers"
               rows={4}
-              placeholder={`{\n  \"x-priority\": \"high\"\n}`}
+              placeholder={t('matchDialog.headersPlaceholder')}
               value={headersInput}
               onChange={(event) => setHeadersInput(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Use JSON or key: value per line.
+              {t('matchDialog.headersHint')}
             </p>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="match-api-key">API Key</Label>
+            <Label htmlFor="match-api-key">{t('matchDialog.apiKey')}</Label>
             <Input
               id="match-api-key"
               type="password"
               autoComplete="off"
-              placeholder="lgw-xxxxxxxxxxxx"
+              placeholder={t('matchDialog.apiKeyPlaceholder')}
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
             />
@@ -184,16 +187,16 @@ export function ModelMatchDialog({
         ) : null}
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">Results</p>
+          <p className="text-sm font-medium">{t('matchDialog.results')}</p>
           {matchResults.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Provider</TableHead>
-                  <TableHead>Target Model</TableHead>
-                  <TableHead>Protocol</TableHead>
-                  <TableHead>Cost</TableHead>
+                  <TableHead>{t('matchDialog.order')}</TableHead>
+                  <TableHead>{t('matchDialog.provider')}</TableHead>
+                  <TableHead>{t('matchDialog.targetModel')}</TableHead>
+                  <TableHead>{t('matchDialog.protocol')}</TableHead>
+                  <TableHead>{t('matchDialog.cost')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -217,7 +220,7 @@ export function ModelMatchDialog({
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground">No matches yet.</p>
+            <p className="text-sm text-muted-foreground">{t('matchDialog.noMatches')}</p>
           )}
         </div>
 
@@ -227,14 +230,14 @@ export function ModelMatchDialog({
             variant="outline"
             onClick={() => handleOpenChange(false)}
           >
-            Close
+            {tCommon('close')}
           </Button>
           <Button
             type="button"
             onClick={handleMatch}
             disabled={matchMutation.isPending}
           >
-            Test
+            {tCommon('test')}
           </Button>
         </DialogFooter>
       </DialogContent>

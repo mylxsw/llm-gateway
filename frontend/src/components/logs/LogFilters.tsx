@@ -20,6 +20,7 @@ import {
 import { ChevronDown, ChevronUp, Filter, X } from 'lucide-react';
 import { LogQueryParams } from '@/types';
 import { normalizeUtcDateString } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 interface LogFiltersProps {
   /** Current filter values */
@@ -96,6 +97,7 @@ export function LogFilters({
   models,
   apiKeys,
 }: LogFiltersProps) {
+  const t = useTranslations('logs');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const defaultValues = useMemo<Partial<LogQueryParams>>(
@@ -208,17 +210,17 @@ export function LogFilters({
       <div className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
-            <Label>Start Time</Label>
+            <Label>{t('filters.startTime')}</Label>
             <Input type="datetime-local" {...register('start_time')} />
           </div>
 
           <div className="space-y-2">
-            <Label>End Time</Label>
+            <Label>{t('filters.endTime')}</Label>
             <Input type="datetime-local" {...register('end_time')} />
           </div>
 
           <div className="space-y-2">
-            <Label>Model</Label>
+            <Label>{t('filters.model')}</Label>
             <Select
               value={modelValue}
               onValueChange={(value) =>
@@ -226,10 +228,10 @@ export function LogFilters({
               }
             >
               <SelectTrigger className="w-full min-w-0">
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all">{t('filters.all')}</SelectItem>
                 {models.map((m) => (
                   <SelectItem key={m.requested_model} value={m.requested_model}>
                     {m.requested_model}
@@ -240,7 +242,7 @@ export function LogFilters({
           </div>
 
           <div className="space-y-2">
-            <Label>API Key</Label>
+            <Label>{t('filters.apiKey')}</Label>
             <Select
               value={apiKeyValue}
               onValueChange={(value) =>
@@ -248,10 +250,10 @@ export function LogFilters({
               }
             >
               <SelectTrigger className="w-full min-w-0">
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all">{t('filters.all')}</SelectItem>
                 {apiKeys.map((k) => (
                   <SelectItem key={k.id} value={String(k.id)}>
                     {k.key_name}
@@ -264,7 +266,7 @@ export function LogFilters({
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
-            <Label>Provider</Label>
+            <Label>{t('filters.provider')}</Label>
             <Select
               value={providerValue}
               onValueChange={(value) =>
@@ -276,10 +278,10 @@ export function LogFilters({
               }
             >
               <SelectTrigger className="w-full min-w-0">
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all">{t('filters.all')}</SelectItem>
                 {providers.map((p) => (
                   <SelectItem key={p.id} value={String(p.id)}>
                     {p.name}
@@ -290,7 +292,7 @@ export function LogFilters({
           </div>
 
           <div className="space-y-2">
-            <Label>Has Error</Label>
+            <Label>{t('filters.hasError')}</Label>
             <Select
               value={errorValue}
               onValueChange={(value) =>
@@ -302,12 +304,12 @@ export function LogFilters({
               }
             >
               <SelectTrigger className="w-full min-w-0">
-                <SelectValue placeholder="All" />
+                <SelectValue placeholder={t('filters.all')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="true">Has Error</SelectItem>
-                <SelectItem value="false">No Error</SelectItem>
+                <SelectItem value="all">{t('filters.all')}</SelectItem>
+                <SelectItem value="true">{t('filters.hasErrorTrue')}</SelectItem>
+                <SelectItem value="false">{t('filters.hasErrorFalse')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -315,18 +317,18 @@ export function LogFilters({
           <div className="flex items-end justify-end gap-2">
             <Button type="button" variant="outline" onClick={onReset}>
               <X className="mr-2 h-4 w-4" suppressHydrationWarning />
-              Reset
+              {t('filters.reset')}
             </Button>
             <Button type="submit">
               <Filter className="mr-2 h-4 w-4" suppressHydrationWarning />
-              Filter
+              {t('filters.filter')}
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="icon"
               className="shrink-0"
-              aria-label="Toggle advanced filters"
+              aria-label={t('filters.toggleAdvanced')}
               onClick={() => setShowAdvanced((v) => !v)}
             >
               {showAdvanced ? (
@@ -342,11 +344,11 @@ export function LogFilters({
           <div className="space-y-4 border-t pt-4">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
-                <Label>Status Code Range</Label>
+                <Label>{t('filters.statusCodeRange')}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="Min"
+                    placeholder={t('filters.min')}
                     className="min-w-0 flex-1"
                     {...register('status_min', {
                       setValueAs: (v) =>
@@ -355,7 +357,7 @@ export function LogFilters({
                   />
                   <Input
                     type="number"
-                    placeholder="Max"
+                    placeholder={t('filters.max')}
                     className="min-w-0 flex-1"
                     {...register('status_max', {
                       setValueAs: (v) =>
@@ -366,12 +368,12 @@ export function LogFilters({
               </div>
 
               <div className="space-y-2">
-                <Label>Retry Count Range</Label>
+                <Label>{t('filters.retryCountRange')}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     min={0}
-                    placeholder="Min"
+                    placeholder={t('filters.min')}
                     className="min-w-0 flex-1"
                     {...register('retry_count_min', {
                       setValueAs: (v) =>
@@ -381,7 +383,7 @@ export function LogFilters({
                   <Input
                     type="number"
                     min={0}
-                    placeholder="Max"
+                    placeholder={t('filters.max')}
                     className="min-w-0 flex-1"
                     {...register('retry_count_max', {
                       setValueAs: (v) =>
@@ -392,19 +394,19 @@ export function LogFilters({
               </div>
 
               <div className="space-y-2">
-                <Label>API Key Name</Label>
+                <Label>{t('filters.apiKeyName')}</Label>
                 <Input
-                  placeholder="Fuzzy match"
+                  placeholder={t('filters.fuzzyMatch')}
                   {...register('api_key_name')}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Input Tokens Range</Label>
+                <Label>{t('filters.inputTokensRange')}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="Min"
+                    placeholder={t('filters.min')}
                     className="min-w-0 flex-1"
                     {...register('input_tokens_min', {
                       setValueAs: (v) =>
@@ -413,7 +415,7 @@ export function LogFilters({
                   />
                   <Input
                     type="number"
-                    placeholder="Max"
+                    placeholder={t('filters.max')}
                     className="min-w-0 flex-1"
                     {...register('input_tokens_max', {
                       setValueAs: (v) =>
@@ -426,18 +428,18 @@ export function LogFilters({
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
-                <Label>Target Model</Label>
+                <Label>{t('filters.targetModel')}</Label>
                 <Input
-                  placeholder="Fuzzy match"
+                  placeholder={t('filters.fuzzyMatch')}
                   {...register('target_model')}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Total Duration Range (ms)</Label>
+                <Label>{t('filters.totalDurationRange')}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    placeholder="Min"
+                    placeholder={t('filters.min')}
                     className="min-w-0 flex-1"
                     {...register('total_time_min', {
                       setValueAs: (v) =>
@@ -446,7 +448,7 @@ export function LogFilters({
                   />
                   <Input
                     type="number"
-                    placeholder="Max"
+                    placeholder={t('filters.max')}
                     className="min-w-0 flex-1"
                     {...register('total_time_max', {
                       setValueAs: (v) =>

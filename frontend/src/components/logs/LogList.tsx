@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { RequestLog } from '@/types';
 import { formatDateTime, getStatusColor, formatUsd } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 interface LogListProps {
   /** Log list data */
@@ -35,17 +36,18 @@ interface LogListProps {
  * Log List Component
  */
 export function LogList({ logs, onView }: LogListProps) {
+  const t = useTranslations('logs');
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[180px]">Time</TableHead>
-          <TableHead>Provider</TableHead>
-          <TableHead>Model Mapping</TableHead>
-          <TableHead>In/Out Token</TableHead>
-          <TableHead>Cost</TableHead>
-          <TableHead>Status/Retry</TableHead>
-          <TableHead className="text-right">Action</TableHead>
+          <TableHead className="w-[180px]">{t('list.columns.time')}</TableHead>
+          <TableHead>{t('list.columns.provider')}</TableHead>
+          <TableHead>{t('list.columns.modelMapping')}</TableHead>
+          <TableHead>{t('list.columns.tokenInOut')}</TableHead>
+          <TableHead>{t('list.columns.cost')}</TableHead>
+          <TableHead>{t('list.columns.statusRetry')}</TableHead>
+          <TableHead className="text-right">{t('list.columns.action')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -74,7 +76,7 @@ export function LogList({ logs, onView }: LogListProps) {
                       </>
                     )}
                     {log.is_stream && (
-                      <span title="Stream Request" className="ml-1">
+                      <span title={t('list.streamRequest')} className="ml-1">
                         <Waves className="h-3 w-3 text-blue-500" suppressHydrationWarning />
                       </span>
                     )}
@@ -86,24 +88,29 @@ export function LogList({ logs, onView }: LogListProps) {
               </TableCell>
               <TableCell>
                 <div className="flex flex-col text-xs">
-                  <span>In: {log.input_tokens || 0}</span>
-                  <span className="text-muted-foreground">Out: {log.output_tokens || 0}</span>
+                  <span>{t('list.inTokens', { count: log.input_tokens || 0 })}</span>
+                  <span className="text-muted-foreground">
+                    {t('list.outTokens', { count: log.output_tokens || 0 })}
+                  </span>
                 </div>
               </TableCell>
               <TableCell
                 className="font-mono text-xs"
-                title={`Input: ${formatUsd(log.input_cost)}\nOutput: ${formatUsd(log.output_cost)}`}
+                title={t('list.costTooltip', {
+                  input: formatUsd(log.input_cost),
+                  output: formatUsd(log.output_cost),
+                })}
               >
                 {formatUsd(log.total_cost)}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col items-start gap-1">
                   <Badge variant="outline" className={statusColor}>
-                    {log.response_status || 'Unknown'}
+                    {log.response_status ?? t('unknown')}
                   </Badge>
                   {log.retry_count > 0 && (
                     <span className="text-xs text-orange-500">
-                      Retry: {log.retry_count}
+                      {t('list.retry', { count: log.retry_count })}
                     </span>
                   )}
                 </div>
@@ -113,7 +120,7 @@ export function LogList({ logs, onView }: LogListProps) {
                   variant="ghost"
                   size="icon"
                   onClick={() => onView(log)}
-                  title="View Details"
+                  title={t('list.viewDetails')}
                 >
                   <Eye className="h-4 w-4" suppressHydrationWarning />
                 </Button>

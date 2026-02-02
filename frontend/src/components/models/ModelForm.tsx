@@ -7,6 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { useTranslations } from 'next-intl';
 import {
   Dialog,
   DialogContent,
@@ -68,6 +69,9 @@ export function ModelForm({
   onSubmit,
   loading = false,
 }: ModelFormProps) {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
+
   // Check if edit mode
   const isEdit = !!model;
   
@@ -171,25 +175,27 @@ export function ModelForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Model Mapping' : 'New Model Mapping'}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? t('form.editTitle') : t('form.newTitle')}
+          </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           {/* Requested Model Name */}
           <div className="space-y-2">
             <Label htmlFor="requested_model">
-              Requested Model Name <span className="text-destructive">*</span>
+              {t('form.requestedModelLabel')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="requested_model"
-              placeholder="e.g.: gpt-4, claude-3-opus, coding/kimi"
+              placeholder={t('form.requestedModelPlaceholder')}
               disabled={isEdit}
               {...register('requested_model', {
-                required: !isEdit ? 'Requested model name is required' : false,
+                required: !isEdit ? t('form.requestedModelRequired') : false,
                 validate: !isEdit
                   ? (v) =>
                       isValidModelName(v) ||
-                      'Model name can only contain letters, numbers, underscores, hyphens, dots, and slashes'
+                      t('form.requestedModelInvalid')
                   : undefined,
               })}
             />
@@ -200,7 +206,7 @@ export function ModelForm({
             )}
             {isEdit && (
               <p className="text-sm text-muted-foreground">
-                Model name is the primary key and cannot be modified
+                {t('form.requestedModelImmutable')}
               </p>
             )}
           </div>
@@ -209,21 +215,21 @@ export function ModelForm({
 
           {/* Model Type */}
           <div className="space-y-2">
-            <Label>Model Type</Label>
+            <Label>{t('form.modelTypeLabel')}</Label>
             <Controller
               name="model_type"
               control={control}
               render={({ field }) => (
                 <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select model type" />
+                    <SelectValue placeholder={t('form.modelTypePlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="chat">Chat</SelectItem>
-                    <SelectItem value="speech">Speech</SelectItem>
-                    <SelectItem value="transcription">Transcription</SelectItem>
-                    <SelectItem value="embedding">Embedding</SelectItem>
-                    <SelectItem value="images">Images</SelectItem>
+                    <SelectItem value="chat">{t('filters.chat')}</SelectItem>
+                    <SelectItem value="speech">{t('filters.speech')}</SelectItem>
+                    <SelectItem value="transcription">{t('filters.transcription')}</SelectItem>
+                    <SelectItem value="embedding">{t('filters.embedding')}</SelectItem>
+                    <SelectItem value="images">{t('filters.images')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -233,40 +239,42 @@ export function ModelForm({
           {/* Pricing */}
           {supportsBilling && (
             <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="mb-2 text-sm font-medium">Pricing (USD / 1M tokens)</div>
+              <div className="mb-2 text-sm font-medium">
+                {t('form.pricingTitle')}
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="input_price">Input Price</Label>
+                  <Label htmlFor="input_price">{t('form.inputPrice')}</Label>
                   <Input
                     id="input_price"
                     type="number"
                     min={0}
                     step="0.0001"
-                    placeholder="e.g. 5"
+                    placeholder={t('form.inputPricePlaceholder')}
                     {...register('input_price')}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="output_price">Output Price</Label>
+                  <Label htmlFor="output_price">{t('form.outputPrice')}</Label>
                   <Input
                     id="output_price"
                     type="number"
                     min={0}
                     step="0.0001"
-                    placeholder="e.g. 15"
+                    placeholder={t('form.outputPricePlaceholder')}
                     {...register('output_price')}
                   />
                 </div>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Used as model fallback price when no provider override exists; empty means unconfigured.
+                {t('form.pricingHint')}
               </p>
             </div>
           )}
 
           {/* Strategy */}
           <div className="space-y-3">
-            <Label>Selection Strategy</Label>
+            <Label>{t('form.selectionStrategy')}</Label>
             <Controller
               name="strategy"
               control={control}
@@ -294,16 +302,18 @@ export function ModelForm({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-2xl">🔄</span>
-                          <span className="font-semibold text-base">Round Robin</span>
+                          <span className="font-semibold text-base">
+                            {t('form.roundRobinTitle')}
+                          </span>
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground pl-8">
-                        Evenly distribute requests across all available providers
+                        {t('form.roundRobinDescription')}
                       </p>
                       <div className="pl-8 pt-1">
                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs">
                           <span>⚖️</span>
-                          <span>Load Balancing</span>
+                          <span>{t('form.roundRobinTag')}</span>
                         </div>
                       </div>
                     </div>
@@ -331,16 +341,18 @@ export function ModelForm({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-2xl">🏷️</span>
-                          <span className="font-semibold text-base">Priority</span>
+                          <span className="font-semibold text-base">
+                            {t('form.priorityTitle')}
+                          </span>
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground pl-8">
-                        Prefer higher-priority providers, round robin on ties
+                        {t('form.priorityDescription')}
                       </p>
                       <div className="pl-8 pt-1">
                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs">
                           <span>🎯</span>
-                          <span>Priority Routing</span>
+                          <span>{t('form.priorityTag')}</span>
                         </div>
                       </div>
                     </div>
@@ -376,16 +388,18 @@ export function ModelForm({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-2xl">💰</span>
-                          <span className="font-semibold text-base">Cost First</span>
+                          <span className="font-semibold text-base">
+                            {t('form.costFirstTitle')}
+                          </span>
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground pl-8">
-                        Prioritize providers with the lowest estimated cost
+                        {t('form.costFirstDescription')}
                       </p>
                       <div className="pl-8 pt-1">
                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs">
                           <span>📊</span>
-                          <span>Cost Optimization</span>
+                          <span>{t('form.costFirstTag')}</span>
                         </div>
                       </div>
                     </div>
@@ -394,13 +408,13 @@ export function ModelForm({
               )}
             />
             <p className="text-xs text-muted-foreground">
-              💡 Choose how the gateway selects providers for this model
+              💡 {t('form.strategyHint')}
             </p>
           </div>
 
           {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">Enabled Status</Label>
+            <Label htmlFor="is_active">{t('form.enabledStatusLabel')}</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -417,10 +431,10 @@ export function ModelForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save'}
+              {loading ? tCommon('saving') : tCommon('save')}
             </Button>
           </DialogFooter>
         </form>

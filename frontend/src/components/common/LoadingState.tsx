@@ -9,6 +9,7 @@ import React from 'react';
 import { Loader2, AlertCircle, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useTranslations } from 'next-intl';
 
 interface LoadingStateProps {
   /** Custom class name */
@@ -38,16 +39,18 @@ interface ErrorStateProps extends LoadingStateProps {
  */
 export function ErrorState({
   className,
-  message = 'Failed to load, please try again later',
+  message,
   onRetry,
 }: ErrorStateProps) {
+  const t = useTranslations('common');
+  const resolvedMessage = message ?? t('loadFailed');
   return (
     <div className={cn('flex flex-col items-center justify-center py-8', className)}>
       <AlertCircle className="h-10 w-10 text-destructive" suppressHydrationWarning />
-      <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{resolvedMessage}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-          Retry
+          {t('retry')}
         </Button>
       )}
     </div>
@@ -68,14 +71,16 @@ interface EmptyStateProps extends LoadingStateProps {
  */
 export function EmptyState({
   className,
-  message = 'No data available',
+  message,
   actionText,
   onAction,
 }: EmptyStateProps) {
+  const t = useTranslations('common');
+  const resolvedMessage = message ?? t('noDataAvailable');
   return (
     <div className={cn('flex flex-col items-center justify-center py-8', className)}>
       <Inbox className="h-10 w-10 text-muted-foreground" suppressHydrationWarning />
-      <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{resolvedMessage}</p>
       {actionText && onAction && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onAction}>
           {actionText}

@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Table,
   TableBody,
@@ -39,6 +40,8 @@ export function ApiKeyList({
   onEdit,
   onDelete,
 }: ApiKeyListProps) {
+  const t = useTranslations('apiKeys');
+
   // Store copy state, visibility state, loading state, and raw key values
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [visibleId, setVisibleId] = useState<number | null>(null);
@@ -56,7 +59,7 @@ export function ApiKeyList({
       setRawKeyValues(prev => ({ ...prev, [id]: keyValue }));
       return keyValue;
     } catch {
-      toast.error('Failed to fetch API Key');
+      toast.error(t('list.fetchFailed'));
       return null;
     } finally {
       setLoadingId(null);
@@ -70,10 +73,10 @@ export function ApiKeyList({
       try {
         await navigator.clipboard.writeText(keyValue);
         setCopiedId(apiKey.id);
-        toast.success('API Key copied to clipboard');
+        toast.success(t('toasts.copied'));
         setTimeout(() => setCopiedId(null), 2000);
       } catch {
-        toast.error('Failed to copy to clipboard');
+        toast.error(t('toasts.copyFailed'));
       }
     }
   };
@@ -92,13 +95,13 @@ export function ApiKeyList({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[60px]">ID</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>API Key</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Created At</TableHead>
-          <TableHead>Last Used</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead className="w-[60px]">{t('list.columns.id')}</TableHead>
+          <TableHead>{t('list.columns.name')}</TableHead>
+          <TableHead>{t('list.columns.key')}</TableHead>
+          <TableHead>{t('list.columns.status')}</TableHead>
+          <TableHead>{t('list.columns.createdAt')}</TableHead>
+          <TableHead>{t('list.columns.lastUsed')}</TableHead>
+          <TableHead className="text-right">{t('list.columns.actions')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -125,7 +128,7 @@ export function ApiKeyList({
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => toggleVisible(apiKey.id)}
-                    title={isVisible ? 'Hide' : 'Show'}
+                    title={isVisible ? t('actions.hide') : t('actions.show')}
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -141,7 +144,7 @@ export function ApiKeyList({
                     size="icon"
                     className="h-7 w-7"
                     onClick={() => handleCopy(apiKey)}
-                    title="Copy"
+                    title={t('actions.copy')}
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -155,7 +158,9 @@ export function ApiKeyList({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className={status.className}>{status.text}</Badge>
+                <Badge className={status.className}>
+                  {apiKey.is_active ? t('list.status.active') : t('list.status.inactive')}
+                </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDateTime(apiKey.created_at)}
@@ -169,7 +174,7 @@ export function ApiKeyList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onEdit(apiKey)}
-                    title="Edit"
+                    title={t('actions.edit')}
                   >
                     <Pencil className="h-4 w-4" suppressHydrationWarning />
                   </Button>
@@ -177,7 +182,7 @@ export function ApiKeyList({
                     variant="ghost"
                     size="icon"
                     onClick={() => onDelete(apiKey)}
-                    title="Delete"
+                    title={t('actions.delete')}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" suppressHydrationWarning />
                   </Button>
