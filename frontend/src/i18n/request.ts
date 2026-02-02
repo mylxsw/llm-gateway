@@ -1,33 +1,12 @@
-import { cookies, headers } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
 
-import {
-  defaultLocale,
-  localeCookieName,
-  locales,
-  type Locale,
-} from "./config";
+import { defaultLocale } from "./config";
 
-const isLocale = (value?: string): value is Locale =>
-  !!value && locales.includes(value as Locale);
-
+// For static export mode, we use client-side IntlProvider
+// This config is only used during build time for prerendering
 export default getRequestConfig(async () => {
-  let locale: Locale = defaultLocale;
-
-  // In static export mode, cookies() throws during build.
-  // We catch and fall back to default locale.
-  try {
-    const store = await cookies();
-    const cookieLocale = store.get(localeCookieName)?.value;
-    if (isLocale(cookieLocale)) {
-      locale = cookieLocale;
-    }
-  } catch {
-    // Static export build - use default locale
-  }
-
   return {
-    locale,
-    messages: (await import(`../../messages/${locale}.json`)).default,
+    locale: defaultLocale,
+    messages: (await import(`../../messages/${defaultLocale}.json`)).default,
   };
 });

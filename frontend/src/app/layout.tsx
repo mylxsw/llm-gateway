@@ -6,14 +6,13 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
-import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Sidebar } from "@/components/common/Sidebar";
 import { AuthGate } from "@/components/auth";
 import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
+import { IntlProvider } from "@/components/common/IntlProvider";
 
 // Configure Sans-serif Font
 const geistSans = Geist({
@@ -37,16 +36,13 @@ export const metadata: Metadata = {
  * Root Layout Component
  * Contains sidebar navigation and main content area
  */
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
-  const messages = await getMessages();
-
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <Script
           id="theme-init"
@@ -70,7 +66,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <IntlProvider>
           <Providers>
             <AuthGate />
             <div className="flex min-h-screen">
@@ -86,7 +82,7 @@ export default async function RootLayout({
               <ThemeToggle inline />
             </div>
           </Providers>
-        </NextIntlClientProvider>
+        </IntlProvider>
       </body>
     </html>
   );

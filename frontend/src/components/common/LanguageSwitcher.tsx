@@ -16,7 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { locales, localeCookieName, type Locale } from '@/i18n/config';
+import { locales, type Locale } from '@/i18n/config';
+import { setLocale } from './IntlProvider';
 
 const localeLabels: Record<Locale, string> = {
   en: 'English',
@@ -44,10 +45,7 @@ export function LanguageSwitcher({
 
   const handleChange = (value: string) => {
     if (!locales.includes(value as Locale)) return;
-    const maxAge = 60 * 60 * 24 * 365;
-    document.cookie = `${localeCookieName}=${value}; path=/; max-age=${maxAge}; samesite=lax`;
-    // Full page reload is required for static export mode
-    window.location.reload();
+    setLocale(value as Locale);
   };
 
   const label = t('language');
