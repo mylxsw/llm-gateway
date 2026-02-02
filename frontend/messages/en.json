@@ -186,7 +186,8 @@
     "models": {
       "title": "Upstream Models",
       "noProviderSelected": "No provider selected",
-      "empty": "No models returned from upstream."
+      "empty": "No models returned from upstream.",
+      "description": "List of models available from the selected provider."
     },
     "filters": {
       "name": {
