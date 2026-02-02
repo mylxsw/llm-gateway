@@ -4,25 +4,25 @@ LLM Gateway Application Entry Point
 FastAPI application main entry, including router registration and application configuration.
 """
 
-from contextlib import asynccontextmanager
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.routing import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.routing import APIRouter
 from fastapi.staticfiles import StaticFiles
 
-from app.config import get_settings
-from app.logging_config import setup_logging
-from app.db.session import init_db
-from app.common.errors import AppError
-from app.api.proxy import openai_router, anthropic_router
-from app.api.admin import providers_router, models_router, api_keys_router, logs_router
+from app.api.admin import api_keys_router, logs_router, models_router, providers_router
 from app.api.auth import router as auth_router
-from app.scheduler import start_scheduler, shutdown_scheduler
-
+from app.api.proxy import anthropic_router, openai_router
+from app.common.errors import AppError
+from app.config import get_settings
+from app.db.redis import close_redis, init_redis
+from app.db.session import init_db
+from app.logging_config import setup_logging
+from app.scheduler import shutdown_scheduler, start_scheduler
 
 # Initialize logging configuration
 setup_logging()
@@ -38,10 +38,15 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     await init_db()
+    settings = get_settings()
+    if settings.KV_STORE_TYPE == "redis":
+        await init_redis()
     start_scheduler()
     yield
     # Shutdown
     shutdown_scheduler()
+    if settings.KV_STORE_TYPE == "redis":
+        await close_redis()
 
 
 # Create FastAPI application
@@ -50,7 +55,9 @@ settings = get_settings()
 repo_root = Path(__file__).resolve().parents[3]
 default_frontend_dist = repo_root / "frontend" / "out"
 frontend_dist_dir = Path(os.getenv("FRONTEND_DIST_DIR", str(default_frontend_dist)))
-frontend_enabled = frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists()
+frontend_enabled = (
+    frontend_dist_dir.exists() and (frontend_dist_dir / "index.html").exists()
+)
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -103,7 +110,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 async def health_check():
     """
     Health Check
-    
+
     Used for service liveness probe.
     """
     return {"status": "healthy"}
@@ -113,7 +120,7 @@ async def health_check():
 async def root():
     """
     Root Path
-    
+
     When the frontend static bundle exists, serve the dashboard homepage.
     Otherwise, return basic service information (API-only mode).
     """
@@ -138,6 +145,7 @@ api_router.include_router(models_router)
 api_router.include_router(api_keys_router)
 api_router.include_router(logs_router)
 app.include_router(api_router)
+
 
 class FrontendStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
@@ -168,12 +176,16 @@ class FrontendStaticFiles(StaticFiles):
 
 
 if frontend_enabled:
-    app.mount("/", FrontendStaticFiles(directory=str(frontend_dist_dir), html=True), name="frontend")
+    app.mount(
+        "/",
+        FrontendStaticFiles(directory=str(frontend_dist_dir), html=True),
+        name="frontend",
+    )
 
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

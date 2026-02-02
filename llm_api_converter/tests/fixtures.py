@@ -742,6 +742,63 @@ OPENAI_CHAT_STREAM_MULTI_TOOL_WITH_INDEX = [
     },
 ]
 
+# Streaming chunks: OpenAI Responses multi-tool stream WITHOUT output_index fields
+OPENAI_RESPONSES_STREAM_MULTI_TOOL_NO_INDEX = [
+    # Stream creation event
+    {
+        "type": "response.created",
+        "response": {
+            "id": "resp_123",
+            "model": "gpt-4.1-mini",
+            "created_at": 1700000000,
+        },
+    },
+    # First function_call output item, provider omits output_index
+    {
+        "type": "response.output_item.added",
+        "item": {
+            "id": "item_1",
+            "type": "function_call",
+            "name": "write",
+            "call_id": "call_1",
+            "arguments": '{"path":"IDENTITY.md"}',
+        },
+    },
+    # Second function_call output item, also missing output_index
+    {
+        "type": "response.output_item.added",
+        "item": {
+            "id": "item_2",
+            "type": "function_call",
+            "name": "write",
+            "call_id": "call_2",
+            "arguments": '{"path":"USER.md"}',
+        },
+    },
+    # Argument deltas for each tool call
+    {
+        "type": "response.function_call_arguments.delta",
+        "delta": '{"path":"IDENTITY.md"}',
+        "call_id": "call_1",
+    },
+    {
+        "type": "response.function_call_arguments.delta",
+        "delta": '{"path":"USER.md"}',
+        "call_id": "call_2",
+    },
+    # Finish each output item
+    {"type": "response.output_item.done", "call_id": "call_1"},
+    {"type": "response.output_item.done", "call_id": "call_2"},
+    # Stream done
+    {
+        "type": "response.done",
+        "response": {
+            "status": "completed",
+            "usage": {"input_tokens": 10, "output_tokens": 20},
+        },
+    },
+]
+
 OPENAI_CHAT_WITH_BASE64_IMAGE_REQUEST = {
     "model": "gpt-4o",
     "messages": [

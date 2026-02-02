@@ -37,6 +37,20 @@ from .exceptions import ConversionError, ValidationError
 class OpenAIResponsesDecoder:
     """Decodes OpenAI Responses API format to IR."""
 
+    def __init__(self) -> None:
+        self._reset_stream_state()
+
+    def _reset_stream_state(self) -> None:
+        """Reset per-stream state used for decoding streaming responses."""
+        # Mapping of output item ID / call_id to assigned content block index
+        self._stream_item_id_to_index: Dict[str, int] = {}
+        # Next available content block index when the provider omits output_index
+        self._stream_next_block_index: int = 0
+        # Active content block index (used as a fallback when no identifiers exist)
+        self._stream_active_block_index: Optional[int] = None
+        # Whether MESSAGE_START has been emitted (Responses uses response.created)
+        self._stream_message_started: bool = False
+
     def decode_request(self, payload: Dict[str, Any]) -> IRRequest:
         """Decode an OpenAI Responses request to IR."""
         ir = IRRequest(
@@ -368,18 +382,22 @@ class OpenAIResponsesDecoder:
             item_type = item.get("type", "")
 
             if item_type == "message":
+                index = self._resolve_output_index(event, item)
+                self._stream_active_block_index = index
                 ir_events.append(
                     IRStreamEvent(
                         type=StreamEventType.CONTENT_BLOCK_START,
-                        index=event.get("output_index", 0),
+                        index=index,
                         content_block=IRTextBlock(),
                     )
                 )
             elif item_type == "function_call":
+                index = self._resolve_output_index(event, item)
+                self._stream_active_block_index = index
                 ir_events.append(
                     IRStreamEvent(
                         type=StreamEventType.CONTENT_BLOCK_START,
-                        index=event.get("output_index", 0),
+                        index=index,
                         content_block=IRToolUseBlock(
                             id=item.get("call_id", item.get("id", "")),
                             name=item.get("name", ""),
@@ -388,32 +406,36 @@ class OpenAIResponsesDecoder:
                 )
 
         elif event_type in ("response.text.delta", "response.output_text.delta"):
+            index = self._resolve_output_index(event)
             ir_events.append(
                 IRStreamEvent(
                     type=StreamEventType.CONTENT_BLOCK_DELTA,
-                    index=event.get("output_index", 0),
+                    index=index,
                     delta_type="text",
                     delta_text=event.get("delta", ""),
                 )
             )
 
         elif event_type == "response.function_call_arguments.delta":
+            index = self._resolve_output_index(event)
             ir_events.append(
                 IRStreamEvent(
                     type=StreamEventType.CONTENT_BLOCK_DELTA,
-                    index=event.get("output_index", 0),
+                    index=index,
                     delta_type="input_json",
                     delta_json=event.get("delta", ""),
                 )
             )
 
         elif event_type == "response.output_item.done":
+            index = self._resolve_output_index(event)
             ir_events.append(
                 IRStreamEvent(
                     type=StreamEventType.CONTENT_BLOCK_STOP,
-                    index=event.get("output_index", 0),
+                    index=index,
                 )
             )
+            self._stream_active_block_index = None
 
         elif event_type == "response.done":
             response_data = event.get("response", {})
@@ -466,6 +488,71 @@ class OpenAIResponsesDecoder:
             data["type"] = event_type
             return data
         return data
+
+    def _resolve_output_index(
+        self, event: Dict[str, Any], item: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """Resolve the correct content block index for streaming Responses output.
+
+        Some providers (e.g., Gemini's OpenAI-compatible endpoint) omit
+        ``output_index`` on function call events. We map indices based on the
+        output item ID/call_id when present, and fall back to incrementing a
+        counter so each tool call gets its own block.
+        """
+        # Explicit output_index takes precedence
+        if "output_index" in event and event["output_index"] is not None:
+            index = event["output_index"]
+            self._update_index_mapping(event, item, index)
+            return index
+
+        # Try to resolve by identifiers carried on the event
+        for key in ("item_id", "call_id", "id"):
+            if key in event and event[key]:
+                item_id = str(event[key])
+                if item_id in self._stream_item_id_to_index:
+                    return self._stream_item_id_to_index[item_id]
+                index = self._stream_next_block_index
+                self._update_index_mapping(event, item, index, explicit_item_id=item_id)
+                return index
+
+        # Try identifiers on the nested item payload
+        if item:
+            for key in ("id", "call_id"):
+                if key in item and item[key]:
+                    item_id = str(item[key])
+                    if item_id in self._stream_item_id_to_index:
+                        return self._stream_item_id_to_index[item_id]
+                    index = self._stream_next_block_index
+                    self._update_index_mapping(event, item, index, explicit_item_id=item_id)
+                    return index
+
+        # Fallback to the active block if any, else start at 0
+        if self._stream_active_block_index is not None:
+            return self._stream_active_block_index
+        return 0
+
+    def _update_index_mapping(
+        self,
+        event: Dict[str, Any],
+        item: Optional[Dict[str, Any]],
+        index: int,
+        *,
+        explicit_item_id: Optional[str] = None,
+    ) -> None:
+        """Track mapping between item IDs and block indices and advance counter."""
+        if explicit_item_id:
+            self._stream_item_id_to_index[explicit_item_id] = index
+
+        if item:
+            for key in ("id", "call_id"):
+                if key in item and item[key]:
+                    self._stream_item_id_to_index[str(item[key])] = index
+
+        for key in ("item_id", "call_id", "id"):
+            if key in event and event[key]:
+                self._stream_item_id_to_index[str(event[key])] = index
+
+        self._stream_next_block_index = max(self._stream_next_block_index, index + 1)
 
     def _map_role(self, role: str) -> Role:
         """Map OpenAI Responses role to IR role."""

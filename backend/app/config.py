@@ -14,30 +14,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """
     Application Configuration Class
-    
+
     All configuration items can be overridden by environment variables, with names matching fields (uppercase).
     """
-    
+
     # Application Config
     APP_NAME: str = "LLM Gateway"
     DEBUG: bool = False
-    
+
     # Database Config
     # Supports "sqlite" or "postgresql"
     DATABASE_TYPE: Literal["sqlite", "postgresql"] = "sqlite"
     # SQLite default database path, PostgreSQL requires full connection string
     DATABASE_URL: str = "sqlite+aiosqlite:///./llm_gateway.db"
-    
+
     # Retry Config
     # Max retries on same provider (triggered when status code >= 500)
     RETRY_MAX_ATTEMPTS: int = 3
     # Retry interval (ms)
     RETRY_DELAY_MS: int = 1000
-    
+
     # HTTP Client Config
     # Request timeout (seconds)
     HTTP_TIMEOUT: int = 1800
-    
+
     # API Key Config
     # Generated API Key prefix
     API_KEY_PREFIX: str = "lgw-"
@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str | None = None
     # Admin login token TTL (seconds)
     ADMIN_TOKEN_TTL_SECONDS: int = 86400
+
+    # KV Store Config
+    # KV store backend: "database" uses the SQL database, "redis" uses Redis
+    KV_STORE_TYPE: Literal["database", "redis"] = "database"
+    # Redis connection URL (only used when KV_STORE_TYPE is "redis")
+    REDIS_URL: str = "redis://localhost:6379/0"
 
     # Log Cleanup Config
     # Log retention days (default 7 days)
@@ -68,9 +74,9 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """
     Get application configuration (Singleton)
-    
+
     Uses lru_cache to ensure configuration is loaded only once, improving performance.
-    
+
     Returns:
         Settings: Application configuration instance
     """

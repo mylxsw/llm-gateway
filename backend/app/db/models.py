@@ -293,3 +293,32 @@ class RequestLog(Base):
     
     # Relationships
     api_key: Mapped[Optional["ApiKey"]] = relationship("ApiKey", back_populates="logs")
+
+
+class KeyValueStore(Base):
+    """
+    Key-Value Store Table
+    
+    Simple KV storage with expiration support.
+    """
+    __tablename__ = "key_value_store"
+    
+    # Key as Primary Key
+    key: Mapped[str] = mapped_column(String(255), primary_key=True, nullable=False)
+    # Value (stored as text)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    # Expiration Time (NULL means never expires)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Creation Time
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now_naive, nullable=False
+    )
+    # Update Time
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
+    )
+    
+    # Index for expiration cleanup
+    __table_args__ = (
+        Index("idx_kv_expires_at", "expires_at"),
+    )

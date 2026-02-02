@@ -1,7 +1,7 @@
 """
 Scheduled Task Module
 
-Uses APScheduler to manage scheduled tasks, such as log cleanup.
+Uses APScheduler to manage scheduled tasks, such as log cleanup and KV store cleanup.
 """
 
 import logging
@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import get_settings
 from app.db.session import get_db
+from app.repositories.sqlalchemy.kv_store_repo import SQLAlchemyKVStoreRepository
 from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
 from app.services.log_service import LogService
 
@@ -50,6 +51,27 @@ async def cleanup_logs_task():
         logger.error(f"Log cleanup task failed: {str(e)}", exc_info=True)
 
 
+async def cleanup_expired_kv_task():
+    """
+    Scheduled KV Store Cleanup Task
+
+    Deletes expired key-value pairs.
+    """
+    logger.info("Starting scheduled KV store cleanup task")
+
+    try:
+        async for db in get_db():
+            kv_repo = SQLAlchemyKVStoreRepository(db)
+            deleted_count = await kv_repo.cleanup_expired()
+            logger.info(
+                f"KV store cleanup task completed: {deleted_count} expired keys deleted"
+            )
+            break
+
+    except Exception as e:
+        logger.error(f"KV store cleanup task failed: {str(e)}", exc_info=True)
+
+
 def start_scheduler():
     """
     Start Scheduled Task Scheduler
@@ -76,10 +98,28 @@ def start_scheduler():
         replace_existing=True,
     )
 
+    # Add KV store cleanup task (Executes daily at 1:00 AM)
+    # Skip when using Redis as KV backend since Redis manages TTL natively
+    if settings.KV_STORE_TYPE != "redis":
+        _scheduler.add_job(
+            cleanup_expired_kv_task,
+            trigger=CronTrigger(hour=1, minute=0),
+            id="cleanup_expired_kv",
+            name="Clean up expired KV pairs",
+            replace_existing=True,
+        )
+
     # Start scheduler
     _scheduler.start()
+
+    kv_cleanup_msg = (
+        ", KV store cleanup scheduled daily at 1:00"
+        if settings.KV_STORE_TYPE != "redis"
+        else ", KV store cleanup skipped (using Redis)"
+    )
     logger.info(
         f"Scheduler started: log cleanup scheduled daily at {settings.LOG_CLEANUP_HOUR}:00"
+        + kv_cleanup_msg
     )
 
 

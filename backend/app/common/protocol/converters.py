@@ -620,9 +620,8 @@ class SDKStreamConverter(IStreamConverter):
         current_block_index = 0
         # current_block_type: "text" | "tool_use" | None
         current_block_type: Optional[str] = None
-        # OpenAI tool index -> Anthropic block index mapping is implicit
-        # We track the current OpenAI tool index being processed to detect switches
-        current_openai_tool_index: Optional[int] = None
+        # Track current tool call by id (more reliable than index which may be missing)
+        current_tool_call_id: Optional[str] = None
 
         async for chunk in upstream:
             for payload in decoder.feed(chunk):
@@ -689,7 +688,7 @@ class SDKStreamConverter(IStreamConverter):
                             event="content_block_start",
                         )
                         current_block_type = "text"
-                        current_openai_tool_index = None
+                        current_tool_call_id = None
 
                     yield _encode_sse_json(
                         {
@@ -704,13 +703,20 @@ class SDKStreamConverter(IStreamConverter):
                 tool_calls = delta.get("tool_calls")
                 if tool_calls:
                     for tool_call in tool_calls:
-                        idx = tool_call.get("index")
+                        t_id = tool_call.get("id")
+                        t_name = tool_call.get("function", {}).get("name", "")
 
-                        # Check if we switched to a new tool call or from text
-                        if (
-                            idx != current_openai_tool_index
-                            or current_block_type != "tool_use"
-                        ):
+                        # Detect if this is a new tool call:
+                        # 1. If we're not currently in a tool_use block, it's new
+                        # 2. If the tool_call has an id and it differs from current, it's new
+                        # Note: Some providers (like Gemini) don't provide index field
+                        is_new_tool_call = False
+                        if current_block_type != "tool_use":
+                            is_new_tool_call = True
+                        elif t_id is not None and t_id != current_tool_call_id:
+                            is_new_tool_call = True
+
+                        if is_new_tool_call:
                             if current_block_type is not None:
                                 # Close previous block
                                 yield _encode_sse_json(
@@ -723,16 +729,13 @@ class SDKStreamConverter(IStreamConverter):
                                 current_block_index += 1
 
                             # Start new tool block
-                            t_id = tool_call.get("id", "")
-                            t_name = tool_call.get("function", {}).get("name", "")
-
                             yield _encode_sse_json(
                                 {
                                     "type": "content_block_start",
                                     "index": current_block_index,
                                     "content_block": {
                                         "type": "tool_use",
-                                        "id": t_id,
+                                        "id": t_id or "",
                                         "name": t_name,
                                         "input": {},  # Empty input for now
                                     },
@@ -740,7 +743,7 @@ class SDKStreamConverter(IStreamConverter):
                                 event="content_block_start",
                             )
                             current_block_type = "tool_use"
-                            current_openai_tool_index = idx
+                            current_tool_call_id = t_id
 
                         # Handle arguments
                         args = tool_call.get("function", {}).get("arguments")

@@ -67,6 +67,7 @@ from tests.fixtures import (
     OPENAI_RESPONSES_SIMPLE_REQUEST,
     OPENAI_RESPONSES_SIMPLE_RESPONSE,
     OPENAI_RESPONSES_TOOL_CALL_RESPONSE,
+    OPENAI_RESPONSES_STREAM_MULTI_TOOL_NO_INDEX,
     OPENAI_RESPONSES_WITH_INSTRUCTIONS_REQUEST,
     OPENAI_RESPONSES_WITH_TOOLS_REQUEST,
 )
@@ -723,6 +724,36 @@ class TestStreamingMultiToolCalls:
             ("content_block_stop", 1),
         ]
         assert block_events == expected
+
+    def test_responses_multi_tool_no_index_produces_separate_blocks(self):
+        """OpenAI Responses streams without output_index still get split per tool."""
+        result = list(
+            convert_stream(
+                Protocol.OPENAI_RESPONSES,
+                Protocol.ANTHROPIC_MESSAGES,
+                iter(OPENAI_RESPONSES_STREAM_MULTI_TOOL_NO_INDEX),
+            )
+        )
+
+        starts = [
+            e
+            for e in result
+            if isinstance(e, dict) and e.get("type") == "content_block_start"
+        ]
+        assert len(starts) == 2
+        assert starts[0]["index"] == 0
+        assert starts[1]["index"] == 1
+
+        deltas = [
+            e
+            for e in result
+            if isinstance(e, dict) and e.get("type") == "content_block_delta"
+        ]
+        assert len(deltas) == 2
+        assert deltas[0]["index"] == 0
+        assert deltas[1]["index"] == 1
+        assert "IDENTITY.md" in deltas[0]["delta"]["partial_json"]
+        assert "USER.md" in deltas[1]["delta"]["partial_json"]
 
     def test_no_duplicate_message_start(self):
         """Multiple chunks with role field should only produce one message_start."""

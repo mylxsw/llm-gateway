@@ -777,3 +777,135 @@ def test_convert_request_strips_stream_options_same_protocol_openai():
     assert "stream_options" not in out_body
     assert "include_usage" not in out_body
     assert out_body["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_convert_stream_openai_to_anthropic_multiple_tool_calls_without_index():
+    """Test that multiple tool_calls in OpenAI stream are correctly converted to separate
+    Anthropic content blocks, even when the 'index' field is missing (e.g., Gemini API).
+
+    This is a regression test for the bug where multiple tool_calls without index were
+    merged into a single content block, causing JSON parsing errors.
+    """
+    # Simulate Gemini-style OpenAI response with multiple tool_calls without index field
+    chunk_1 = {
+        "choices": [
+            {
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": '{"path":"file1.txt","content":"content1"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-001",
+                            "type": "function",
+                        }
+                    ],
+                },
+                "index": 0,
+            }
+        ],
+        "created": 1234567890,
+        "id": "test-id-1",
+        "model": "gemini-3-pro-preview",
+        "object": "chat.completion.chunk",
+    }
+    chunk_2 = {
+        "choices": [
+            {
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "function": {
+                                "arguments": '{"path":"file2.txt","content":"content2"}',
+                                "name": "write",
+                            },
+                            "id": "function-call-002",
+                            "type": "function",
+                        }
+                    ],
+                },
+                "index": 0,
+            }
+        ],
+        "created": 1234567891,
+        "id": "test-id-1",
+        "model": "gemini-3-pro-preview",
+        "object": "chat.completion.chunk",
+    }
+    chunk_3 = {
+        "choices": [
+            {"delta": {"role": "assistant"}, "finish_reason": "stop", "index": 0}
+        ],
+        "created": 1234567892,
+        "id": "test-id-1",
+        "model": "gemini-3-pro-preview",
+        "object": "chat.completion.chunk",
+    }
+    upstream = _agen(
+        [
+            f"data: {json.dumps(chunk_1)}\n\n".encode(),
+            f"data: {json.dumps(chunk_2)}\n\n".encode(),
+            f"data: {json.dumps(chunk_3)}\n\n".encode(),
+            b"data: [DONE]\n\n",
+        ]
+    )
+
+    out = b""
+    async for c in convert_stream_for_user(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        upstream=upstream,
+        model="claude-3-5-sonnet",
+    ):
+        out += c
+
+    decoder = SSEDecoder()
+    payloads = decoder.feed(out)
+    events = [json.loads(p) for p in payloads if p.strip() != "[DONE]"]
+
+    # Count content_block_start events for tool_use
+    tool_use_starts = [
+        e
+        for e in events
+        if e.get("type") == "content_block_start"
+        and e.get("content_block", {}).get("type") == "tool_use"
+    ]
+    assert (
+        len(tool_use_starts) == 2
+    ), f"Expected 2 tool_use content_block_start events, got {len(tool_use_starts)}"
+
+    # Verify each tool has correct id
+    tool_ids = [e["content_block"]["id"] for e in tool_use_starts]
+    assert "function-call-001" in tool_ids
+    assert "function-call-002" in tool_ids
+
+    # Verify each tool has correct index (0 and 1)
+    tool_indices = [e["index"] for e in tool_use_starts]
+    assert 0 in tool_indices
+    assert 1 in tool_indices
+
+    # Count content_block_delta events for input_json_delta
+    json_deltas = [
+        e
+        for e in events
+        if e.get("type") == "content_block_delta"
+        and e.get("delta", {}).get("type") == "input_json_delta"
+    ]
+    assert (
+        len(json_deltas) == 2
+    ), f"Expected 2 input_json_delta events, got {len(json_deltas)}"
+
+    # Verify the deltas have different indices (0 and 1)
+    delta_indices = [e["index"] for e in json_deltas]
+    assert 0 in delta_indices
+    assert 1 in delta_indices
+
+    # Count content_block_stop events
+    block_stops = [e for e in events if e.get("type") == "content_block_stop"]
+    assert (
+        len(block_stops) == 2
+    ), f"Expected 2 content_block_stop events, got {len(block_stops)}"
