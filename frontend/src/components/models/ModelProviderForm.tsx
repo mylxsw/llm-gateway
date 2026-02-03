@@ -7,6 +7,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import {
   Dialog,
@@ -93,6 +94,8 @@ export function ModelProviderForm({
   onSubmit,
   loading = false,
 }: ModelProviderFormProps) {
+  const t = useTranslations('models');
+  const tCommon = useTranslations('common');
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   // Check if edit mode
   const isEdit = !!mapping;
@@ -279,7 +282,7 @@ export function ModelProviderForm({
           setValue('output_price', String(match.output_price ?? 0));
         }
       } catch (error) {
-        toast.error('Failed to load model price history');
+        toast.error(t('providerForm.loadHistoryFailed'));
       } finally {
         lastSyncedTarget.current = targetModelName.trim();
         setHistoryLoading(false);
@@ -291,17 +294,17 @@ export function ModelProviderForm({
 
   const handleOpenProviderModelDialog = async () => {
     if (!providerId) {
-      toast.error('Please select a provider first');
+      toast.error(t('providerForm.selectProviderFirst'));
       return;
     }
     const result = await providerModelQuery.refetch();
     const data = result.data;
     if (!data) {
-      toast.error('Failed to load provider models');
+      toast.error(t('providerForm.loadProviderModelsFailed'));
       return;
     }
     if (!data.success) {
-      toast.error(data.error?.message || 'Failed to load provider models');
+      toast.error(data.error?.message || t('providerForm.loadProviderModelsFailed'));
       return;
     }
     const models = data.models || [];
@@ -445,29 +448,31 @@ export function ModelProviderForm({
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? 'Edit Provider Configuration' : 'Add Provider Configuration'}
+            {isEdit ? t('providerForm.editTitle') : t('providerForm.newTitle')}
           </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           {/* Requested Model Name (Read Only) */}
           <div className="space-y-2">
-            <Label>Requested Model Name</Label>
+            <Label>{t('providerForm.requestedModel')}</Label>
             <Input value={requestedModel} disabled />
           </div>
 
           {/* Provider Selection */}
           <div className="space-y-2">
             <Label>
-              Provider <span className="text-destructive">*</span>
+              {t('providerForm.provider')} <span className="text-destructive">*</span>
             </Label>
             {providers.length === 0 && !isEdit ? (
               <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50">
-                No available providers, please
-                <Link href="/providers" className="text-primary hover:underline mx-1">
-                  create a provider
-                </Link>
-                first.
+                {t.rich('providerForm.noProviders', {
+                  link: (chunks) => (
+                    <Link href="/providers" className="text-primary hover:underline mx-1">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </div>
             ) : (
               <Select
@@ -476,7 +481,7 @@ export function ModelProviderForm({
                 disabled={isEdit}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Provider" />
+                  <SelectValue placeholder={t('providerForm.selectProvider')} />
                 </SelectTrigger>
                 <SelectContent>
                   {providers.map((provider) => (
@@ -488,21 +493,23 @@ export function ModelProviderForm({
               </Select>
             )}
             {!providerId && !isEdit && providers.length > 0 && (
-              <p className="text-sm text-destructive">Please select a provider</p>
+              <p className="text-sm text-destructive">
+                {t('providerForm.selectProviderError')}
+              </p>
             )}
           </div>
 
           {/* Target Model Name */}
           <div className="space-y-2">
             <Label htmlFor="target_model_name">
-              Target Model Name <span className="text-destructive">*</span>
+              {t('providerForm.targetModel')} <span className="text-destructive">*</span>
             </Label>
             <div className="flex gap-2">
               <Input
                 id="target_model_name"
-                placeholder="Actual model name used by this provider, e.g. gpt-4-0613"
+                placeholder={t('providerForm.targetModelPlaceholder')}
                 {...register('target_model_name', {
-                  required: 'Target model name is required',
+                  required: t('providerForm.targetModelRequired'),
                 })}
               />
               <Button
@@ -511,7 +518,9 @@ export function ModelProviderForm({
                 onClick={handleOpenProviderModelDialog}
                 disabled={!providerId || providerModelQuery.isFetching}
               >
-                {providerModelQuery.isFetching ? 'Loading...' : 'Pick from provider'}
+                {providerModelQuery.isFetching
+                  ? t('providerForm.loading')
+                  : t('providerForm.pickFromProvider')}
               </Button>
             </div>
             {errors.target_model_name && (
@@ -521,7 +530,7 @@ export function ModelProviderForm({
             )}
             {historyLoading && (
               <p className="text-xs text-muted-foreground">
-                Loading previous pricing for this model...
+                {t('providerForm.loadingHistory')}
               </p>
             )}
           </div>
@@ -529,11 +538,11 @@ export function ModelProviderForm({
           {/* Billing / Pricing */}
           {supportsBilling && (
             <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-              <div className="text-sm font-medium">Billing</div>
+              <div className="text-sm font-medium">{t('providerForm.billing')}</div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Billing Mode</Label>
+                  <Label>{t('providerForm.billingMode')}</Label>
                   <Select
                     value={billingMode}
                     onValueChange={(value) =>
@@ -541,12 +550,18 @@ export function ModelProviderForm({
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select billing mode" />
+                      <SelectValue placeholder={t('providerForm.billingModePlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="per_request">Per request</SelectItem>
-                      <SelectItem value="token_flat">Per token (flat)</SelectItem>
-                      <SelectItem value="token_tiered">Per token (tiered by input tokens)</SelectItem>
+                      <SelectItem value="per_request">
+                        {t('providerForm.billingModePerRequest')}
+                      </SelectItem>
+                      <SelectItem value="token_flat">
+                        {t('providerForm.billingModeTokenFlat')}
+                      </SelectItem>
+                      <SelectItem value="token_tiered">
+                        {t('providerForm.billingModeTokenTiered')}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -554,7 +569,9 @@ export function ModelProviderForm({
 
               {billingMode === 'per_request' ? (
                 <div className="space-y-2">
-                  <Label htmlFor="per_request_price">Price (USD / request)</Label>
+                  <Label htmlFor="per_request_price">
+                    {t('providerForm.pricePerRequest')}
+                  </Label>
                   <Input
                     id="per_request_price"
                     type="number"
@@ -566,37 +583,37 @@ export function ModelProviderForm({
               ) : billingMode === 'token_tiered' ? (
                 <div className="space-y-3">
                   <div className="text-xs text-muted-foreground">
-                    Choose the tier by input tokens, then bill input/output tokens separately by that tier’s prices.
+                    {t('providerForm.tieredHint')}
                   </div>
                   <div className="space-y-2">
                     {tierFields.map((field, idx) => (
                       <div key={field.id} className="grid grid-cols-7 gap-2 items-end">
                         <div className="col-span-2 space-y-1">
-                          <Label>Max Input Tokens</Label>
+                          <Label>{t('providerForm.maxInputTokens')}</Label>
                           <Input
                             type="number"
                             min={1}
-                            placeholder="e.g. 32768 (empty = no limit)"
+                            placeholder={t('providerForm.tierMaxPlaceholder')}
                             {...register(`tiers.${idx}.max_input_tokens` as const)}
                           />
                         </div>
                         <div className="col-span-2 space-y-1">
-                          <Label>Input (USD / 1M)</Label>
+                          <Label>{t('providerForm.tierInputPrice')}</Label>
                           <Input
                             type="number"
                             min={0}
                             step="0.0001"
-                            placeholder="e.g. 1.2"
+                            placeholder={t('providerForm.tierInputPlaceholder')}
                             {...register(`tiers.${idx}.input_price` as const)}
                           />
                         </div>
                         <div className="col-span-2 space-y-1">
-                          <Label>Output (USD / 1M)</Label>
+                          <Label>{t('providerForm.tierOutputPrice')}</Label>
                           <Input
                             type="number"
                             min={0}
                             step="0.0001"
-                            placeholder="e.g. 3.6"
+                            placeholder={t('providerForm.tierOutputPlaceholder')}
                             {...register(`tiers.${idx}.output_price` as const)}
                           />
                         </div>
@@ -607,7 +624,7 @@ export function ModelProviderForm({
                             onClick={() => removeTier(idx)}
                             disabled={tierFields.length <= 1}
                           >
-                            Remove
+                            {t('providerForm.removeTier')}
                           </Button>
                         </div>
                       </div>
@@ -619,7 +636,7 @@ export function ModelProviderForm({
                         appendTier({ max_input_tokens: '', input_price: '', output_price: '' })
                       }
                     >
-                      Add Tier
+                      {t('providerForm.addTier')}
                     </Button>
                   </div>
                 </div>
@@ -627,7 +644,7 @@ export function ModelProviderForm({
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="input_price">Input Price (USD / 1M tokens)</Label>
+                      <Label htmlFor="input_price">{t('providerForm.inputPrice')}</Label>
                       <Input
                         id="input_price"
                         type="number"
@@ -637,7 +654,7 @@ export function ModelProviderForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="output_price">Output Price (USD / 1M tokens)</Label>
+                      <Label htmlFor="output_price">{t('providerForm.outputPrice')}</Label>
                       <Input
                         id="output_price"
                         type="number"
@@ -651,7 +668,7 @@ export function ModelProviderForm({
               )}
 
               <p className="text-xs text-muted-foreground">
-                Billing is applied when this request routes to the selected provider.
+                {t('providerForm.billingHint')}
               </p>
             </div>
           )}
@@ -659,17 +676,19 @@ export function ModelProviderForm({
           {/* Priority and Weight */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="priority">{t('providerForm.priority')}</Label>
               <Input
                 id="priority"
                 type="number"
                 min={0}
                 {...register('priority', { valueAsNumber: true })}
               />
-              <p className="text-sm text-muted-foreground">Lower value means higher priority</p>
+              <p className="text-sm text-muted-foreground">
+                {t('providerForm.priorityHint')}
+              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="weight">Weight</Label>
+              <Label htmlFor="weight">{t('providerForm.weight')}</Label>
               <Input
                 id="weight"
                 type="number"
@@ -681,7 +700,7 @@ export function ModelProviderForm({
 
           {/* Provider Level Rules */}
           <div className="space-y-2">
-            <Label>Provider Level Rules (Beta)</Label>
+            <Label>{t('providerForm.providerRules')}</Label>
             <Controller
               name="provider_rules"
               control={control}
@@ -696,7 +715,7 @@ export function ModelProviderForm({
 
           {/* Status */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">Enabled Status</Label>
+            <Label htmlFor="is_active">{t('providerForm.enabledStatus')}</Label>
             <Switch
               id="is_active"
               checked={isActive}
@@ -711,13 +730,13 @@ export function ModelProviderForm({
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button
               type="submit"
               disabled={loading || (!isEdit && !providerId)}
             >
-              {loading ? 'Saving...' : 'Save'}
+              {loading ? tCommon('saving') : tCommon('save')}
             </Button>
           </DialogFooter>
         </form>
@@ -725,12 +744,14 @@ export function ModelProviderForm({
       <Dialog open={providerModelDialogOpen} onOpenChange={setProviderModelDialogOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>Select Provider Model</DialogTitle>
+            <DialogTitle>{t('providerForm.selectProviderModelTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-md border p-2 max-h-64 overflow-y-auto">
               {providerModels.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No models found.</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('providerForm.noProviderModels')}
+                </p>
               ) : (
                 <div className="space-y-1">
                   {providerModels.map((modelName) => {
@@ -760,14 +781,14 @@ export function ModelProviderForm({
               variant="outline"
               onClick={() => setProviderModelDialogOpen(false)}
             >
-              Cancel
+              {tCommon('cancel')}
             </Button>
             <Button
               type="button"
               onClick={handleConfirmProviderModel}
               disabled={!selectedProviderModel}
             >
-              Use selected model
+              {t('providerForm.useSelectedModel')}
             </Button>
           </DialogFooter>
         </DialogContent>
