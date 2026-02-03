@@ -187,7 +187,14 @@ function ModelsContent() {
         });
       } else {
         // Create
-        await createMutation.mutateAsync(formData as ModelMappingCreate);
+        const createData = formData as ModelMappingCreate;
+        await createMutation.mutateAsync(createData);
+        const requestedModel = createData.requested_model;
+        if (requestedModel) {
+          router.push(
+            `/models/detail?model=${encodeURIComponent(requestedModel)}&returnTo=${encodeURIComponent(returnTo)}`
+          );
+        }
       }
       setFormOpen(false);
       setEditingModel(null);
