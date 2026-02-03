@@ -17,10 +17,14 @@ import {
   Squirrel,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { logout } from '@/lib/api/auth';
+import { clearStoredAdminToken } from '@/lib/api/client';
 
 /** Navigation Items Definition */
 const navItems = [
@@ -57,7 +61,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const t = useTranslations('sidebar');
+  const router = useRouter();
   const [collapsed, setCollapsed] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
 
   React.useEffect(() => {
     try {
@@ -72,6 +78,23 @@ export function Sidebar() {
       localStorage.setItem('sidebar:collapsed', collapsed ? '1' : '0');
     } catch {}
   }, [collapsed]);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    const confirmed = window.confirm(t('logoutConfirm'));
+    if (!confirmed) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      // Ignore logout errors; clear local token anyway.
+    } finally {
+      clearStoredAdminToken();
+      const returnTo = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      router.replace(`/login?returnTo=${returnTo}`);
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <div
@@ -163,15 +186,33 @@ export function Sidebar() {
       </nav>
 
       {/* Footer Info */}
-      <div className={cn('border-t border-border py-4', collapsed ? 'px-3' : 'px-4')}>
-        <p
+      <div className={cn('border-t border-border py-3', collapsed ? 'px-2' : 'px-4')}>
+        <div
           className={cn(
-            'overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-[max-width,opacity] duration-200',
-            collapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'
+            'flex items-center justify-between gap-2',
+            collapsed ? 'justify-center' : 'justify-between'
           )}
         >
-          {t('version')}
-        </p>
+          <p
+            className={cn(
+              'overflow-hidden whitespace-nowrap text-xs text-muted-foreground transition-[max-width,opacity] duration-200',
+              collapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'
+            )}
+          >
+            {t('version')}
+          </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title={t('logout')}
+            className="h-8 w-8 text-primary hover:text-primary"
+          >
+            <LogOut className="h-4 w-4" suppressHydrationWarning />
+          </Button>
+        </div>
       </div>
     </div>
   );

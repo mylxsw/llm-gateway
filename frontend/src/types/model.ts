@@ -21,6 +21,7 @@ export interface ModelMapping {
   input_price?: number | null;
   output_price?: number | null;
   provider_count?: number;            // Associated provider count
+  active_provider_count?: number;     // Associated active provider count
   providers?: ModelMappingProvider[]; // Detail contains provider list
   created_at: string;
   updated_at: string;

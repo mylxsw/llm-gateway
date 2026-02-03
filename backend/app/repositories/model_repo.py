@@ -99,6 +99,11 @@ class ModelRepository(ABC):
     async def get_provider_count(self, requested_model: str) -> int:
         """Get the count of providers associated with the model"""
         pass
+
+    @abstractmethod
+    async def get_active_provider_count(self, requested_model: str) -> int:
+        """Get the count of active providers associated with the model"""
+        pass
     
     @abstractmethod
     async def update_provider_mapping(self, id: int, data: ModelMappingProviderUpdate) -> Optional[ModelMappingProvider]:

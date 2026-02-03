@@ -31,6 +31,8 @@ interface ModelListProps {
   onDelete: (model: ModelMapping) => void;
   /** Test callback */
   onTest: (model: ModelMapping) => void;
+  /** Return URL for detail navigation */
+  returnTo?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function ModelList({
   onEdit,
   onDelete,
   onTest,
+  returnTo,
 }: ModelListProps) {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
@@ -98,6 +101,11 @@ export function ModelList({
         {models.map((model) => {
           const status = getActiveStatus(model.is_active);
           const stats = statsByModel?.[model.requested_model];
+          const providerCount = model.provider_count ?? model.providers?.length ?? 0;
+          const activeProviderCount =
+            model.active_provider_count ??
+            model.providers?.filter((provider) => provider.is_active).length ??
+            0;
           return (
             <TableRow key={model.requested_model}>
               <TableCell className="font-medium font-mono">
@@ -112,7 +120,12 @@ export function ModelList({
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">{model.provider_count || 0}</Badge>
+                <Badge
+                  variant="secondary"
+                  title={t('list.columns.providerCountHint')}
+                >
+                  {activeProviderCount}/{providerCount}
+                </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 <div className="flex flex-col gap-1">
@@ -130,7 +143,9 @@ export function ModelList({
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Link
-                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}`}
+                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}${
+                      returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ''
+                    }`}
                   >
                     <Button variant="ghost" size="icon" title={t('list.viewDetails')}>
                       <Server className="h-4 w-4" suppressHydrationWarning />

@@ -436,6 +436,25 @@ def test_convert_request_anthropic_to_anthropic_injects_default_max_tokens():
     assert out_body["max_tokens"] == 4096
 
 
+def test_convert_request_anthropic_to_anthropic_uses_provider_default_max_tokens():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="anthropic",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "system": "You are helpful",
+            "messages": [{"role": "user", "content": "Hi"}],
+        },
+        target_model="claude-3-5-sonnet",
+        options={"default_parameters": {"max_tokens": 8192}},
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["model"] == "claude-3-5-sonnet"
+    assert out_body["max_tokens"] == 8192
+
+
 def test_convert_request_anthropic_to_anthropic_maps_max_completion_tokens():
     path, out_body = convert_request_for_supplier(
         request_protocol="anthropic",

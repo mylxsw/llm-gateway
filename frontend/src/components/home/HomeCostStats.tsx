@@ -13,6 +13,7 @@ import { LogQueryParams } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useTranslations } from 'next-intl';
+import { useApiKeys } from '@/lib/hooks';
 
 type RangePreset = '24h' | '7d' | '30d' | '90d' | '365d' | 'custom';
 
@@ -117,9 +118,13 @@ function loadRangeStateFromStorage() {
 
 export function HomeCostStats() {
   const t = useTranslations('logs.costStats');
+  const tFilters = useTranslations('logs.filters');
   const [{ preset, customStart, customEnd }, setRangeState] = useState(getDefaultRangeState);
   const [statsMode, setStatsMode] = useState<'request_model' | 'provider_model'>('request_model');
+  const [apiKeyId, setApiKeyId] = useState<number | undefined>(undefined);
   const restoredRef = useRef(false);
+
+  const { data: apiKeysData } = useApiKeys({ is_active: true, page: 1, page_size: 1000 });
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -206,8 +211,8 @@ export function HomeCostStats() {
   }, [preset, customStart, customEnd, t]);
 
   const queryKey = useMemo(
-    () => ['logs', 'home-cost-stats', preset, customStart, customEnd, statsMode] as const,
-    [preset, customStart, customEnd, statsMode]
+    () => ['logs', 'home-cost-stats', preset, customStart, customEnd, statsMode, apiKeyId] as const,
+    [preset, customStart, customEnd, statsMode, apiKeyId]
   );
 
   const { data, isLoading, isFetching, refetch } = useQuery({
@@ -225,6 +230,7 @@ export function HomeCostStats() {
           tz_offset_minutes: tzOffsetMinutes,
           bucket,
           group_by: statsMode,
+          api_key_id: apiKeyId,
         };
         return getLogCostStats(params);
       }
@@ -240,6 +246,7 @@ export function HomeCostStats() {
         tz_offset_minutes: tzOffsetMinutes,
         bucket,
         group_by: statsMode,
+        api_key_id: apiKeyId,
       };
       return getLogCostStats(params);
     },
@@ -276,7 +283,23 @@ export function HomeCostStats() {
         </div>
       }
       headerActions={
-        <div className="flex items-center justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Select
+            value={apiKeyId === undefined ? 'all' : String(apiKeyId)}
+            onValueChange={(value) => setApiKeyId(value === 'all' ? undefined : Number(value))}
+          >
+            <SelectTrigger className="h-8 w-[170px]">
+              <SelectValue placeholder={tFilters('apiKey')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{tFilters('all')}</SelectItem>
+              {(apiKeysData?.items || []).map((k) => (
+                <SelectItem key={k.id} value={String(k.id)}>
+                  {k.key_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={preset}
             onValueChange={(v) => setRangeState((s) => ({ ...s, preset: v as RangePreset }))}

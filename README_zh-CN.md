@@ -16,7 +16,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/fastapi-latest-009688.svg" alt="FastAPI">
-  <img src="https://img.shields.io/badge/nextjs-15-black.svg" alt="Next.js">
+  <img src="https://img.shields.io/badge/nextjs-16-black.svg" alt="Next.js">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
 </p>
 
@@ -24,7 +24,7 @@
 
 ## 概述
 
-**Squirrel** 是一个高性能、生产就绪的代理服务，用于统一管理和访问多个大语言模型（LLM）供应商。它作为应用程序与 LLM 服务之间的智能网关，提供无缝的故障转移、负载均衡、全面的可观测性以及现代化的管理面板。
+**Squirrel** 是一个高性能、生产就绪的代理服务，用于统一管理和访问多个大语言模型（LLM）供应商。它作为应用程序与 LLM 服务之间的智能网关，提供无缝的故障转移、负载均衡、全面的可观测性以及现代化的管理面板——现已原生支持 OpenAI Responses，并可在 OpenAI Chat、OpenAI Responses 与 Anthropic Messages 之间平滑转换。
 
 ### 为什么选择 Squirrel？
 
@@ -41,8 +41,9 @@
 ### 统一 API 接口
 
 - **兼容 OpenAI**：全面支持 `/v1/chat/completions`、`/v1/completions`、`/v1/embeddings`、`/v1/audio/*`、`/v1/images/*`
+- **兼容 OpenAI Responses**：支持 `/v1/responses`，含流式与工具调用
 - **兼容 Anthropic**：原生支持 `/v1/messages` 端点
-- **协议转换**：使用 [litellm](https://github.com/BerriAI/litellm) 自动在 OpenAI 和 Anthropic 格式之间转换
+- **协议转换**：基于内置 `llm_api_converter`，实现 OpenAI Chat ↔ OpenAI Responses ↔ Anthropic Messages 的请求、响应与流式互转
 - **流式支持**：完整的 Server-Sent Events (SSE) 支持，实现实时响应
 
 ### 智能路由
@@ -71,7 +72,7 @@
 
 ### 现代化管理面板
 
-基于 **Next.js 15** + **TypeScript** + **shadcn/ui** 构建：
+基于 **Next.js 16** + **TypeScript** + **shadcn/ui** 构建：
 
 - 供应商管理，支持连接测试
 - 模型映射配置，内置规则编辑器
@@ -167,7 +168,7 @@ docker run -d \
 
 - Python 3.12+
 - Node.js 18+
-- pnpm（用于前端）
+- npm（用于前端）
 
 #### 后端设置
 
@@ -191,13 +192,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 cd frontend
 
 # 安装依赖
-pnpm install
+npm install
 
 # 开发模式
-pnpm dev
+npm run dev
 
 # 生产构建
-pnpm build && pnpm start
+npm run build && npm run start
 ```
 
 ---
@@ -209,7 +210,7 @@ pnpm build && pnpm start
 1. **添加供应商**：进入供应商页面，添加您的 LLM 供应商（如 OpenAI）
    - 设置基础 URL（如 `https://api.openai.com/v1`）
    - 添加您的 API Key
-   - 选择协议类型（OpenAI 或 Anthropic）
+   - 选择协议类型（OpenAI、OpenAI Responses 或 Anthropic）
 
 2. **创建模型映射**：进入模型页面创建映射
    - 定义模型名称（如 `gpt-4`）
@@ -234,6 +235,22 @@ response = client.chat.completions.create(
 )
 ```
 
+#### OpenAI Responses 示例
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="lgw-your-gateway-api-key"
+)
+
+response = client.responses.create(
+    model="gpt-4.1-mini",
+    input="请用一句话概括。"
+)
+```
+
 ### API 端点
 
 #### 代理端点（OpenAI 兼容）
@@ -246,7 +263,9 @@ response = client.chat.completions.create(
 | POST | `/v1/embeddings` | 生成向量嵌入 |
 | POST | `/v1/audio/speech` | 文字转语音 |
 | POST | `/v1/audio/transcriptions` | 语音转文字 |
+| POST | `/v1/audio/translations` | 语音转文字（翻译） |
 | POST | `/v1/images/generations` | 图像生成 |
+| POST | `/v1/responses` | Responses API |
 
 #### 代理端点（Anthropic 兼容）
 
@@ -311,6 +330,7 @@ Squirrel 可以代理任何 OpenAI 或 Anthropic 兼容的 API：
 | 供应商 | 协议 | 说明 |
 |--------|------|------|
 | OpenAI | OpenAI | 全面支持 GPT-4、GPT-3.5、嵌入、语音、图像 |
+| OpenAI | OpenAI Responses | 通过 `/v1/responses` 提供 Responses API |
 | Anthropic | Anthropic | 通过 Messages API 支持 Claude 模型 |
 | Azure OpenAI | OpenAI | 使用 Azure 端点 URL |
 | 本地模型 | OpenAI | Ollama、vLLM、LocalAI 等 |
@@ -336,6 +356,7 @@ llm-gateway/
 │   │   └── common/        # 工具类
 │   ├── migrations/        # Alembic 数据库迁移
 │   └── tests/             # 测试套件
+├── llm_api_converter/     # 协议转换 SDK（OpenAI/Responses/Anthropic）
 ├── frontend/
 │   └── src/
 │       ├── app/           # Next.js App Router 页面
@@ -371,6 +392,7 @@ alembic upgrade head
 - [架构设计](docs/architecture.md)
 - [API 参考](docs/api.md)
 - [模块详情](docs/modules.md)
+- [协议转换](docs/protocol_conversion.md)
 - [需求文档](docs/req.md)
 
 ---

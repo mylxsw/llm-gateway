@@ -40,7 +40,7 @@ import {
   ModelType,
   SelectionStrategy,
 } from '@/types';
-import { formatDateTime, getActiveStatus, formatDuration } from '@/lib/utils';
+import { formatDateTime, getActiveStatus, formatDuration, normalizeReturnTo } from '@/lib/utils';
 import { ProtocolType } from '@/types/provider';
 import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 
@@ -99,6 +99,10 @@ function ModelDetailContent() {
   const searchParams = useSearchParams();
   const requestedModelParam = searchParams.get('model');
   const requestedModel = requestedModelParam ? decodeURIComponent(requestedModelParam) : '';
+  const returnTo = useMemo(
+    () => normalizeReturnTo(searchParams.get('returnTo'), '/models'),
+    [searchParams]
+  );
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMapping, setEditingMapping] = useState<ModelMappingProvider | null>(null);
@@ -256,7 +260,7 @@ function ModelDetailContent() {
       <ErrorState
         message={t('detail.missingModelParam')}
         onRetry={() => {
-          window.location.href = '/models';
+          window.location.href = returnTo;
         }}
       />
     );
@@ -282,7 +286,7 @@ function ModelDetailContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/models">
+        <Link href={returnTo}>
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" suppressHydrationWarning />
           </Button>

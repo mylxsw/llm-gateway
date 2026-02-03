@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,17 +34,44 @@ import {
   ModelType,
   SelectionStrategy,
 } from '@/types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { parseNumberParam, parseStringParam, setParam } from '@/lib/utils';
 
 /**
  * Model Management Page Component
  */
 export default function ModelsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ModelsContent />
+    </Suspense>
+  );
+}
+
+function ModelsContent() {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const buildStateFromParams = useCallback(() => {
+    const parsedPage = parseNumberParam(searchParams.get('page'), { min: 1 }) ?? 1;
+    const parsedPageSize = parseNumberParam(searchParams.get('page_size'), { min: 1 }) ?? 20;
+    const parsedFilters: ModelFiltersState = {
+      requested_model: parseStringParam(searchParams.get('requested_model')) ?? '',
+      target_model_name: parseStringParam(searchParams.get('target_model_name')) ?? '',
+      model_type: (parseStringParam(searchParams.get('model_type')) as ModelType | 'all') ?? 'all',
+      strategy:
+        (parseStringParam(searchParams.get('strategy')) as SelectionStrategy | 'all') ?? 'all',
+      is_active: parseStringParam(searchParams.get('is_active')) ?? 'all',
+    };
+
+    return { parsedPage, parsedPageSize, parsedFilters };
+  }, [searchParams]);
 
   // Pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(() => buildStateFromParams().parsedPage);
+  const [pageSize, setPageSize] = useState(() => buildStateFromParams().parsedPageSize);
 
   // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
@@ -57,13 +84,54 @@ export default function ModelsPage() {
   const [testingModel, setTestingModel] = useState<ModelMapping | null>(null);
 
   // Filter state
-  const [filters, setFilters] = useState<ModelFiltersState>({
-    requested_model: '',
-    target_model_name: '',
-    model_type: 'all',
-    strategy: 'all',
-    is_active: 'all',
-  });
+  const [filters, setFilters] = useState<ModelFiltersState>(
+    () => buildStateFromParams().parsedFilters
+  );
+
+  const areFiltersEqual = useCallback((a: ModelFiltersState, b: ModelFiltersState) => (
+    a.requested_model === b.requested_model &&
+    a.target_model_name === b.target_model_name &&
+    a.model_type === b.model_type &&
+    a.strategy === b.strategy &&
+    a.is_active === b.is_active
+  ), []);
+
+  useEffect(() => {
+    const { parsedPage, parsedPageSize, parsedFilters } = buildStateFromParams();
+    setPage((prev) => (prev === parsedPage ? prev : parsedPage));
+    setPageSize((prev) => (prev === parsedPageSize ? prev : parsedPageSize));
+    setFilters((prev) => (areFiltersEqual(prev, parsedFilters) ? prev : parsedFilters));
+  }, [areFiltersEqual, buildStateFromParams]);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (page !== 1) setParam(params, 'page', page);
+    if (pageSize !== 20) setParam(params, 'page_size', pageSize);
+    setParam(params, 'requested_model', filters.requested_model);
+    setParam(params, 'target_model_name', filters.target_model_name);
+    if (filters.model_type && filters.model_type !== 'all') {
+      setParam(params, 'model_type', filters.model_type);
+    }
+    if (filters.strategy && filters.strategy !== 'all') {
+      setParam(params, 'strategy', filters.strategy);
+    }
+    if (filters.is_active && filters.is_active !== 'all') {
+      setParam(params, 'is_active', filters.is_active);
+    }
+    return params.toString();
+  }, [filters, page, pageSize]);
+
+  const returnTo = useMemo(
+    () => (queryString ? `/models?${queryString}` : '/models'),
+    [queryString]
+  );
+
+  useEffect(() => {
+    const currentQuery = searchParams.toString();
+    if (queryString === currentQuery) return;
+    const nextUrl = queryString ? `/models?${queryString}` : '/models';
+    router.replace(nextUrl, { scroll: false });
+  }, [queryString, router, searchParams]);
 
   // Data query
   const { data, isLoading, isError, refetch } = useModels({
@@ -273,6 +341,7 @@ export default function ModelsPage() {
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onTest={handleTest}
+                returnTo={returnTo}
               />
               <Pagination
                 page={page}

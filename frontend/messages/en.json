@@ -66,7 +66,11 @@
       "login": "Login",
       "loginDescription": "Username and password are required to access the admin panel.",
       "username": "Username",
-      "password": "Password"
+      "password": "Password",
+      "loggingIn": "Logging in...",
+      "checking": "Checking authentication status...",
+      "authDisabled": "Authentication is not enabled. You can continue without logging in.",
+      "back": "Go back"
     }
   },
   "sidebar": {
@@ -76,6 +80,8 @@
     "models": "Models",
     "apiKeys": "API Keys",
     "logs": "Logs",
+    "logout": "Log out",
+    "logoutConfirm": "Are you sure you want to log out?",
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar",
     "version": "Squirrel LLM Gateway v1.0.0"
@@ -309,6 +315,7 @@
         "type": "Type",
         "strategy": "Strategy",
         "providerCount": "Provider Count",
+        "providerCountHint": "Active providers first, total providers second",
         "avgResponse": "Avg Response (7d)",
         "avgFirstToken": "Avg First Token (7d)",
         "status": "Status",
@@ -423,7 +430,7 @@
       "newTitle": "Add Provider Configuration",
       "requestedModel": "Requested Model Name",
       "provider": "Provider",
-      "noProviders": "No available providers, please create a provider first.",
+      "noProviders": "No available providers, please <link>create a provider</link> first.",
       "createProvider": "create a provider",
       "selectProvider": "Select Provider",
       "selectProviderError": "Please select a provider",
@@ -432,6 +439,9 @@
       "targetModelRequired": "Target model name is required",
       "pickFromProvider": "Pick from provider",
       "loading": "Loading...",
+      "selectProviderFirst": "Please select a provider first",
+      "loadProviderModelsFailed": "Failed to load provider models",
+      "loadHistoryFailed": "Failed to load model price history",
       "loadingHistory": "Loading previous pricing for this model...",
       "billing": "Billing",
       "billingMode": "Billing Mode",

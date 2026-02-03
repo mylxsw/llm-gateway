@@ -228,6 +228,7 @@ class ProtocolConverterManager:
                 path=path,
                 body=body,
                 target_model=target_model,
+                options=options,
             )
 
         converter = self._registry.get_request_converter(
@@ -328,6 +329,8 @@ class ProtocolConverterManager:
         path: str,
         body: Dict[str, Any],
         target_model: str,
+        *,
+        options: Optional[Dict[str, Any]] = None,
     ) -> ConversionResult:
         """
         Handle identity conversion (same protocol).
@@ -339,6 +342,7 @@ class ProtocolConverterManager:
         from typing import List
 
         new_body = copy.deepcopy(body)
+        new_body = self._apply_default_parameters(protocol, new_body, options or {})
         new_body["model"] = target_model
 
         # Normalize OpenAI legacy functions to tools
@@ -364,6 +368,39 @@ class ProtocolConverterManager:
                     new_body["max_tokens"] = 4096
 
         return ConversionResult(path=path, body=new_body)
+
+    def _apply_default_parameters(
+        self,
+        protocol: Protocol,
+        body: Dict[str, Any],
+        options: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        default_params = options.get("default_parameters")
+        if not isinstance(default_params, dict):
+            return body
+
+        for key in ("temperature", "top_p", "top_k"):
+            if key in default_params and body.get(key) is None:
+                body[key] = default_params[key]
+
+        if "max_tokens" in default_params:
+            if protocol == Protocol.OPENAI_RESPONSES:
+                if body.get("max_output_tokens") is None:
+                    body["max_output_tokens"] = default_params["max_tokens"]
+            elif protocol == Protocol.OPENAI:
+                if (
+                    body.get("max_tokens") is None
+                    and body.get("max_completion_tokens") is None
+                ):
+                    body["max_tokens"] = default_params["max_tokens"]
+            elif protocol == Protocol.ANTHROPIC:
+                if (
+                    body.get("max_tokens") is None
+                    and body.get("max_completion_tokens") is None
+                ):
+                    body["max_tokens"] = default_params["max_tokens"]
+
+        return body
 
     def _normalize_openai_tooling_fields(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """

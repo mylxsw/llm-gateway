@@ -16,7 +16,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/fastapi-latest-009688.svg" alt="FastAPI">
-  <img src="https://img.shields.io/badge/nextjs-15-black.svg" alt="Next.js">
+  <img src="https://img.shields.io/badge/nextjs-16-black.svg" alt="Next.js">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
 </p>
 
@@ -24,7 +24,7 @@
 
 ## Overview
 
-**Squirrel** is a high-performance, production-ready proxy service that unifies access to multiple Large Language Model (LLM) providers. It acts as an intelligent gateway between your applications and LLM services, providing seamless failover, load balancing, comprehensive observability, and a modern management dashboard.
+**Squirrel** is a high-performance, production-ready proxy service that unifies access to multiple Large Language Model (LLM) providers. It acts as an intelligent gateway between your applications and LLM services, providing seamless failover, load balancing, comprehensive observability, and a modern management dashboard — now with first-class OpenAI Responses support and smooth protocol conversion across OpenAI Chat, OpenAI Responses, and Anthropic Messages.
 
 ### Why Squirrel?
 
@@ -41,8 +41,9 @@
 ### Unified API Interface
 
 - **OpenAI Compatible**: Full support for `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/audio/*`, `/v1/images/*`
+- **OpenAI Responses Compatible**: `/v1/responses` with streaming and tool-calls
 - **Anthropic Compatible**: Native support for `/v1/messages` endpoint
-- **Protocol Conversion**: Automatically convert between OpenAI and Anthropic formats using [litellm](https://github.com/BerriAI/litellm)
+- **Protocol Conversion**: Smoothly convert between OpenAI Chat ↔ OpenAI Responses ↔ Anthropic Messages (requests, responses, and streaming), powered by the built-in `llm_api_converter`
 - **Streaming Support**: Full Server-Sent Events (SSE) support for real-time responses
 
 ### Intelligent Routing
@@ -71,7 +72,7 @@
 
 ### Modern Dashboard
 
-Built with **Next.js 15** + **TypeScript** + **shadcn/ui**:
+Built with **Next.js 16** + **TypeScript** + **shadcn/ui**:
 
 - Provider management with connection testing
 - Model mapping configuration with rule editor
@@ -167,7 +168,7 @@ docker run -d \
 
 - Python 3.12+
 - Node.js 18+
-- pnpm (for frontend)
+- npm (for frontend)
 
 #### Backend Setup
 
@@ -191,13 +192,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 cd frontend
 
 # Install dependencies
-pnpm install
+npm install
 
 # Development
-pnpm dev
+npm run dev
 
 # Production build
-pnpm build && pnpm start
+npm run build && npm run start
 ```
 
 ---
@@ -209,7 +210,7 @@ pnpm build && pnpm start
 1. **Add a Provider**: Navigate to Providers page and add your LLM provider (e.g., OpenAI)
    - Set the base URL (e.g., `https://api.openai.com/v1`)
    - Add your API key
-   - Select the protocol (OpenAI or Anthropic)
+   - Select the protocol (OpenAI, OpenAI Responses, or Anthropic)
 
 2. **Create Model Mapping**: Go to Models page and create a mapping
    - Define a model name (e.g., `gpt-4`)
@@ -234,6 +235,22 @@ response = client.chat.completions.create(
 )
 ```
 
+#### OpenAI Responses example
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="lgw-your-gateway-api-key"
+)
+
+response = client.responses.create(
+    model="gpt-4.1-mini",
+    input="Summarize this in one sentence."
+)
+```
+
 ### API Endpoints
 
 #### Proxy Endpoints (OpenAI Compatible)
@@ -246,7 +263,9 @@ response = client.chat.completions.create(
 | POST | `/v1/embeddings` | Generate embeddings |
 | POST | `/v1/audio/speech` | Text-to-speech |
 | POST | `/v1/audio/transcriptions` | Speech-to-text |
+| POST | `/v1/audio/translations` | Speech-to-text (translation) |
 | POST | `/v1/images/generations` | Image generation |
+| POST | `/v1/responses` | Responses API |
 
 #### Proxy Endpoints (Anthropic Compatible)
 
@@ -312,6 +331,7 @@ Squirrel can proxy requests to any OpenAI or Anthropic compatible API:
 | Provider | Protocol | Notes |
 |----------|----------|-------|
 | OpenAI | OpenAI | Full support including GPT-4, GPT-3.5, embeddings, audio, images |
+| OpenAI | OpenAI Responses | Responses API via `/v1/responses` |
 | Anthropic | Anthropic | Claude models via Messages API |
 | Azure OpenAI | OpenAI | Use Azure endpoint URL |
 | Local Models | OpenAI | Ollama, vLLM, LocalAI, etc. |
@@ -337,6 +357,7 @@ llm-gateway/
 │   │   └── common/        # Utilities
 │   ├── migrations/        # Alembic migrations
 │   └── tests/             # Test suite
+├── llm_api_converter/     # Protocol conversion SDK (OpenAI/Responses/Anthropic)
 ├── frontend/
 │   └── src/
 │       ├── app/           # Next.js App Router pages
@@ -372,6 +393,7 @@ alembic upgrade head
 - [Architecture Design](docs/architecture.md)
 - [API Reference](docs/api.md)
 - [Module Details](docs/modules.md)
+- [Protocol Conversion](docs/protocol_conversion.md)
 - [Requirements](docs/req.md)
 
 ---

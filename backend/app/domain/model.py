@@ -87,6 +87,8 @@ class ModelMappingResponse(ModelMapping):
     
     # Associated Provider Count
     provider_count: int = Field(0, description="Associated Provider Count")
+    # Associated Active Provider Count
+    active_provider_count: int = Field(0, description="Associated Active Provider Count")
     # Associated Provider List (Returned in detail query)
     providers: Optional[list["ModelMappingProviderResponse"]] = None
     

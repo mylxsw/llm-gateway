@@ -593,14 +593,19 @@ class ModelService:
         Returns:
             ModelMappingResponse: Response model
         """
-        provider_count = await self.model_repo.get_provider_count(
-            mapping.requested_model
-        )
-        
         providers = None
         if include_providers:
             providers = await self.model_repo.get_provider_mappings(
                 requested_model=mapping.requested_model
+            )
+            provider_count = len(providers)
+            active_provider_count = sum(1 for provider in providers if provider.is_active)
+        else:
+            provider_count = await self.model_repo.get_provider_count(
+                mapping.requested_model
+            )
+            active_provider_count = await self.model_repo.get_active_provider_count(
+                mapping.requested_model
             )
         
         return ModelMappingResponse(
@@ -614,5 +619,6 @@ class ModelService:
             created_at=mapping.created_at,
             updated_at=mapping.updated_at,
             provider_count=provider_count,
+            active_provider_count=active_provider_count,
             providers=providers,
         )

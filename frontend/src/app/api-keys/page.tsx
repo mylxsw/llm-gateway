@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,16 +19,54 @@ import {
   useDeleteApiKey,
 } from '@/lib/hooks';
 import { ApiKey, ApiKeyCreate, ApiKeyUpdate } from '@/types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { parseNumberParam, setParam } from '@/lib/utils';
 
 /**
  * API Key Management Page Component
  */
 export default function ApiKeysPage() {
+  return (
+    <Suspense fallback={null}>
+      <ApiKeysContent />
+    </Suspense>
+  );
+}
+
+function ApiKeysContent() {
   const t = useTranslations('apiKeys');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const buildStateFromParams = useCallback(() => {
+    const parsedPage = parseNumberParam(searchParams.get('page'), { min: 1 }) ?? 1;
+    const parsedPageSize = parseNumberParam(searchParams.get('page_size'), { min: 1 }) ?? 20;
+    return { parsedPage, parsedPageSize };
+  }, [searchParams]);
 
   // Pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(() => buildStateFromParams().parsedPage);
+  const [pageSize, setPageSize] = useState(() => buildStateFromParams().parsedPageSize);
+
+  useEffect(() => {
+    const { parsedPage, parsedPageSize } = buildStateFromParams();
+    setPage((prev) => (prev === parsedPage ? prev : parsedPage));
+    setPageSize((prev) => (prev === parsedPageSize ? prev : parsedPageSize));
+  }, [buildStateFromParams]);
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (page !== 1) setParam(params, 'page', page);
+    if (pageSize !== 20) setParam(params, 'page_size', pageSize);
+    return params.toString();
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    const currentQuery = searchParams.toString();
+    if (queryString === currentQuery) return;
+    const nextUrl = queryString ? `/api-keys?${queryString}` : '/api-keys';
+    router.replace(nextUrl, { scroll: false });
+  }, [queryString, router, searchParams]);
 
   // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
