@@ -309,6 +309,7 @@
         "type": "类型",
         "strategy": "策略",
         "providerCount": "供应商数量",
+        "providerCountHint": "前面是活跃供应商数量，后面是总数",
         "avgResponse": "平均响应（7天）",
         "avgFirstToken": "平均首 token（7天）",
         "status": "状态",

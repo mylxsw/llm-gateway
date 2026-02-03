@@ -98,6 +98,11 @@ export function ModelList({
         {models.map((model) => {
           const status = getActiveStatus(model.is_active);
           const stats = statsByModel?.[model.requested_model];
+          const providerCount = model.provider_count ?? model.providers?.length ?? 0;
+          const activeProviderCount =
+            model.active_provider_count ??
+            model.providers?.filter((provider) => provider.is_active).length ??
+            0;
           return (
             <TableRow key={model.requested_model}>
               <TableCell className="font-medium font-mono">
@@ -112,7 +117,12 @@ export function ModelList({
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">{model.provider_count || 0}</Badge>
+                <Badge
+                  variant="secondary"
+                  title={t('list.columns.providerCountHint')}
+                >
+                  {activeProviderCount}/{providerCount}
+                </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 <div className="flex flex-col gap-1">

@@ -309,6 +309,7 @@
         "type": "Type",
         "strategy": "Strategy",
         "providerCount": "Provider Count",
+        "providerCountHint": "Active providers first, total providers second",
         "avgResponse": "Avg Response (7d)",
         "avgFirstToken": "Avg First Token (7d)",
         "status": "Status",
