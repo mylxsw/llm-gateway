@@ -3,33 +3,31 @@
  * Configures global fonts, styles, and Providers
  */
 
-import type { Metadata } from "next";
-import Script from "next/script";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Providers } from "./providers";
-import { Sidebar } from "@/components/common/Sidebar";
-import { AuthGate } from "@/components/auth";
-import { ThemeToggle } from "@/components/common/ThemeToggle";
-import { LanguageSwitcher } from "@/components/common/LanguageSwitcher";
-import { IntlProvider } from "@/components/common/IntlProvider";
+import type { Metadata } from 'next';
+import Script from 'next/script';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { Providers } from './providers';
+import { AuthGate } from '@/components/auth';
+import { IntlProvider } from '@/components/common/IntlProvider';
+import { AppShell } from '@/components/common/AppShell';
 
 // Configure Sans-serif Font
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
 });
 
 // Configure Monospace Font
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
 });
 
 // Page Metadata
 export const metadata: Metadata = {
-  title: "LLM Gateway Admin Panel",
-  description: "Model Routing & Proxy Service Admin Panel",
+  title: 'LLM Gateway Admin Panel',
+  description: 'Model Routing & Proxy Service Admin Panel',
 };
 
 /**
@@ -69,18 +67,7 @@ export default function RootLayout({
         <IntlProvider>
           <Providers>
             <AuthGate />
-            <div className="flex min-h-screen">
-              {/* Sidebar Navigation */}
-              <Sidebar />
-              {/* Main Content Area */}
-              <main className="flex-1 overflow-auto bg-muted/30 p-6">
-                {children}
-              </main>
-            </div>
-            <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
-              <LanguageSwitcher />
-              <ThemeToggle inline />
-            </div>
+            <AppShell>{children}</AppShell>
           </Providers>
         </IntlProvider>
       </body>

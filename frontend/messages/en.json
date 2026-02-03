@@ -66,7 +66,11 @@
       "login": "Login",
       "loginDescription": "Username and password are required to access the admin panel.",
       "username": "Username",
-      "password": "Password"
+      "password": "Password",
+      "loggingIn": "Logging in...",
+      "checking": "Checking authentication status...",
+      "authDisabled": "Authentication is not enabled. You can continue without logging in.",
+      "back": "Go back"
     }
   },
   "sidebar": {
@@ -76,6 +80,8 @@
     "models": "Models",
     "apiKeys": "API Keys",
     "logs": "Logs",
+    "logout": "Log out",
+    "logoutConfirm": "Are you sure you want to log out?",
     "expand": "Expand sidebar",
     "collapse": "Collapse sidebar",
     "version": "Squirrel LLM Gateway v1.0.0"
