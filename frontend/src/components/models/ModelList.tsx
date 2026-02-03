@@ -31,6 +31,8 @@ interface ModelListProps {
   onDelete: (model: ModelMapping) => void;
   /** Test callback */
   onTest: (model: ModelMapping) => void;
+  /** Return URL for detail navigation */
+  returnTo?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function ModelList({
   onEdit,
   onDelete,
   onTest,
+  returnTo,
 }: ModelListProps) {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
@@ -140,7 +143,9 @@ export function ModelList({
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Link
-                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}`}
+                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}${
+                      returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ''
+                    }`}
                   >
                     <Button variant="ghost" size="icon" title={t('list.viewDetails')}>
                       <Server className="h-4 w-4" suppressHydrationWarning />
