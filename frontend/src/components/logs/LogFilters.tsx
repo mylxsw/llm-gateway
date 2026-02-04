@@ -211,12 +211,12 @@ export function LogFilters({
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
             <Label>{t('filters.startTime')}</Label>
-            <Input type="datetime-local" {...register('start_time')} />
+            <Input type="datetime-local" className="min-w-0" {...register('start_time')} />
           </div>
 
           <div className="space-y-2">
             <Label>{t('filters.endTime')}</Label>
-            <Input type="datetime-local" {...register('end_time')} />
+            <Input type="datetime-local" className="min-w-0" {...register('end_time')} />
           </div>
 
           <div className="space-y-2">
