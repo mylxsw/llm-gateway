@@ -515,7 +515,7 @@
       "inputTokens": "Input Tokens",
       "inputTokensError": "Please enter a valid input token count.",
       "headers": "Headers",
-      "headersPlaceholder": "{\n  \"x-priority\": \"high\"\n}",
+      "headersPlaceholder": "{{\n  \"x-priority\": \"high\"\n}}",
       "headersHint": "Use JSON or key: value per line.",
       "headersInvalid": "Invalid headers format. Use JSON or key: value per line.",
       "apiKey": "API Key",
