@@ -3,28 +3,28 @@
  * Icon button with dropdown for language selection
  */
 
-'use client';
+"use client";
 
-import React from 'react';
-import { useLocale, useTranslations } from 'next-intl';
-import { Languages } from 'lucide-react';
+import React from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { Languages } from "lucide-react";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select';
-import { locales, type Locale } from '@/i18n/config';
-import { setLocale } from './IntlProvider';
+} from "@/components/ui/select";
+import { locales, type Locale } from "@/i18n/config";
+import { setLocale } from "./IntlProvider";
 
 const localeLabels: Record<Locale, string> = {
-  en: 'English',
-  zh: '中文',
+  en: "English",
+  zh: "中文",
 };
 
 export function LanguageSwitcher() {
   const locale = useLocale() as Locale;
-  const t = useTranslations('common');
+  const t = useTranslations("common");
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -38,7 +38,7 @@ export function LanguageSwitcher() {
     setLocale(value as Locale);
   };
 
-  const label = t('language');
+  const label = t("language");
 
   return (
     <Select value={locale} onValueChange={handleChange}>

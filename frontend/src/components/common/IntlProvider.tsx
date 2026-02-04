@@ -61,7 +61,7 @@ export function IntlProvider({ children }: IntlProviderProps) {
   const messages = messagesMap[locale];
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
       {children}
     </NextIntlClientProvider>
   );

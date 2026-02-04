@@ -82,49 +82,6 @@ Built with **Next.js 16** + **TypeScript** + **shadcn/ui**:
 
 ---
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Client Applications                       │
-│              (OpenAI SDK, Anthropic SDK, HTTP Clients)           │
-└─────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        Squirrel Gateway                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    Proxy API Layer                         │  │
-│  │         /v1/chat/completions, /v1/messages, etc.          │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    Service Layer                           │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐  │  │
-│  │  │ Rule Engine │ │  Strategy   │ │  Protocol Converter │  │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────┘  │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐  │  │
-│  │  │Token Counter│ │ Log Service │ │   Retry Handler     │  │  │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                   Data Access Layer                        │  │
-│  │               SQLite / PostgreSQL Database                 │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Upstream LLM Providers                       │
-│    ┌──────────┐   ┌───────────┐   ┌────────────────────────┐    │
-│    │  OpenAI  │   │ Anthropic │   │ OpenAI-Compatible APIs │    │
-│    └──────────┘   └───────────┘   └────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
-
----
-
 ## Quick Start
 
 ### Docker Compose (Recommended)
@@ -307,6 +264,8 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 | `LOG_RETENTION_DAYS` | 7 | Log retention period |
 | `LOG_CLEANUP_HOUR` | 4 | Log cleanup time (UTC hour) |
 | `LLM_GATEWAY_PORT` | 8000 | Host port for Docker Compose |
+| `KV_STORE_TYPE` | database | KV store backend: `database` or `redis` |
+| `REDIS_URL` | - | Redis connection URL (when using Redis KV store) |
 
 ### Database Configuration
 

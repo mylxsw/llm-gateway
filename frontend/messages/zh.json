@@ -515,7 +515,7 @@
       "inputTokens": "输入 tokens",
       "inputTokensError": "请输入有效的输入 token 数。",
       "headers": "请求头",
-      "headersPlaceholder": "{\n  \"x-priority\": \"high\"\n}",
+      "headersPlaceholder": "{{\n  \"x-priority\": \"high\"\n}}",
       "headersHint": "使用 JSON 或每行 key: value。",
       "headersInvalid": "请求头格式无效，请使用 JSON 或每行 key: value。",
       "apiKey": "API Key",
