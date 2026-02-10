@@ -17,6 +17,8 @@ class ProviderBase(BaseModel):
     
     # Provider Name
     name: str = Field(..., min_length=1, max_length=100, description="Provider Name")
+    # Remark
+    remark: Optional[str] = Field(None, max_length=500, description="Provider Remark")
     # Base URL
     base_url: str = Field(..., description="Base URL")
     # Protocol Type (frontend protocol)
@@ -48,6 +50,7 @@ class ProviderUpdate(BaseModel):
     """Update Provider Request Model (All fields optional)"""
     
     name: Optional[str] = Field(None, min_length=1, max_length=100)
+    remark: Optional[str] = Field(None, max_length=500)
     base_url: Optional[str] = None
     protocol: Optional[str] = Field(None, pattern=FRONTEND_PROTOCOL_PATTERN)
     api_type: Optional[str] = None

@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
-import { Plus, Trash2 } from 'lucide-react';
+import { CircleHelp, Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -27,6 +28,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
 import { isValidUrl, isNotEmpty } from '@/lib/utils';
 import {
@@ -50,12 +57,14 @@ interface ProviderFormProps {
 /** Form Field Definition */
 interface FormData {
   name: string;
+  remark: string;
   base_url: string;
   protocol: ProtocolType;
   api_key: string;
   is_active: boolean;
   proxy_enabled: boolean;
   proxy_url: string;
+  no_suffix: boolean;
 }
 
 const DEFAULT_PARAMETER_OPTIONS = [
@@ -87,16 +96,18 @@ export function ProviderForm({
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<FormData>({
     defaultValues: {
       name: '',
+      remark: '',
       base_url: '',
       protocol: 'openai',
       api_key: '',
       is_active: true,
       proxy_enabled: false,
       proxy_url: '',
+      no_suffix: false,
     },
   });
 
@@ -105,6 +116,7 @@ export function ProviderForm({
   const baseUrl = watch('base_url');
   const isActive = watch('is_active');
   const proxyEnabled = watch('proxy_enabled');
+  const noSuffix = watch('no_suffix');
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const protocolConfig = getProviderProtocolConfig(protocol, protocolConfigs);
   
@@ -185,12 +197,14 @@ export function ProviderForm({
     if (provider) {
       reset({
         name: provider.name,
+        remark: provider.remark ?? '',
         base_url: provider.base_url,
         protocol: provider.protocol,
         api_key: '', // API Key not echoed
         is_active: provider.is_active,
         proxy_enabled: provider.proxy_enabled ?? false,
         proxy_url: '',
+        no_suffix: provider.provider_options?.no_suffix ?? false,
       });
       lastAutoBaseUrl.current =
         getProviderProtocolConfig(provider.protocol, protocolConfigs)?.base_url ?? null;
@@ -225,12 +239,14 @@ export function ProviderForm({
     } else {
       reset({
         name: '',
+        remark: '',
         base_url: '',
         protocol: 'openai',
         api_key: '',
         is_active: true,
         proxy_enabled: false,
         proxy_url: '',
+        no_suffix: false,
       });
       lastAutoBaseUrl.current = getProviderProtocolConfig('openai', protocolConfigs)?.base_url ?? null;
       setExtraHeaders([]);
@@ -252,15 +268,17 @@ export function ProviderForm({
   useEffect(() => {
     if (!protocolConfig) return;
     const nextBaseUrl = protocolConfig.base_url;
+    const baseUrlDirty = !!dirtyFields.base_url;
     const shouldAutoFill =
-      !baseUrl || (lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
+      (!baseUrl && !baseUrlDirty) ||
+      (!baseUrlDirty && lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
 
     if (shouldAutoFill && baseUrl !== nextBaseUrl) {
       setValue('base_url', nextBaseUrl, { shouldDirty: true });
     }
 
     lastAutoBaseUrl.current = nextBaseUrl;
-  }, [baseUrl, protocolConfig, setValue]);
+  }, [baseUrl, dirtyFields.base_url, protocolConfig, setValue]);
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
@@ -282,17 +300,23 @@ export function ProviderForm({
       }
     });
 
+    const shouldIncludeOptions =
+      data.no_suffix || !!provider?.provider_options?.no_suffix || Object.keys(params).length > 0;
+
     // Filter out empty strings
     const submitData: ProviderCreate | ProviderUpdate = {
       name: data.name,
+      remark: data.remark,
       base_url: data.base_url,
       protocol: data.protocol,
       is_active: data.is_active,
       extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
-      provider_options:
-        Object.keys(params).length > 0
-          ? { default_parameters: params }
-          : undefined,
+      provider_options: shouldIncludeOptions
+        ? {
+            default_parameters: Object.keys(params).length > 0 ? params : undefined,
+            no_suffix: data.no_suffix,
+          }
+        : undefined,
       proxy_enabled: data.proxy_enabled,
     };
     
@@ -357,9 +381,37 @@ export function ProviderForm({
 
           {/* Base URL */}
           <div className="space-y-2">
-            <Label htmlFor="base_url">
-              {t('form.baseUrl.label')} <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="base_url">
+                {t('form.baseUrl.label')} <span className="text-destructive">*</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="no_suffix" className="text-xs text-muted-foreground">
+                  {t('form.noSuffix.label')}
+                </Label>
+                <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                        aria-label={t('form.noSuffix.help')}
+                      >
+                        <CircleHelp className="h-4 w-4" suppressHydrationWarning />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[240px]">
+                      {t('form.noSuffix.help')}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <Switch
+                  id="no_suffix"
+                  checked={noSuffix}
+                  onCheckedChange={(checked) => setValue('no_suffix', checked)}
+                />
+              </div>
+            </div>
             <Input
               id="base_url"
               placeholder={protocolConfig?.base_url || 'https://api.openai.com'}
@@ -386,6 +438,17 @@ export function ProviderForm({
                 isEdit ? t('form.apiKey.placeholderEdit') : t('form.apiKey.placeholderNew')
               }
               {...register('api_key')}
+            />
+          </div>
+
+          {/* Remark */}
+          <div className="space-y-2">
+            <Label htmlFor="remark">{t('form.remark.label')}</Label>
+            <Textarea
+              id="remark"
+              rows={3}
+              placeholder={t('form.remark.placeholder')}
+              {...register('remark')}
             />
           </div>
 

@@ -44,6 +44,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         return Provider(
             id=entity.id,
             name=entity.name,
+            remark=entity.remark,
             base_url=entity.base_url,
             protocol=entity.protocol,
             api_type=entity.api_type,
@@ -61,6 +62,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         """Create Provider"""
         entity = ServiceProvider(
             name=data.name,
+            remark=data.remark,
             base_url=data.base_url,
             protocol=data.protocol,
             api_type=data.api_type,
