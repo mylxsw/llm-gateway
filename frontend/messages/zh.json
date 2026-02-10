@@ -252,6 +252,10 @@
         "required": "请输入基础 URL",
         "invalid": "请输入有效的 URL"
       },
+      "noSuffix": {
+        "label": "No Suffix",
+        "help": "启用后将直接使用此 Base URL 转发请求，不会再拼接大模型厂商的推理接口后缀。"
+      },
       "apiKey": {
         "label": "API Key",
         "optional": "（可选）",

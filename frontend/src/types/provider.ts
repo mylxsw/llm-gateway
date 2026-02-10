@@ -9,6 +9,7 @@ export type ProtocolType = string;
 
 export interface ProviderOptions {
   default_parameters?: Record<string, unknown>;
+  no_suffix?: boolean;
 }
 
 /** Provider Entity */

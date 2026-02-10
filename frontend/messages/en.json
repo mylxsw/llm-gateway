@@ -252,6 +252,10 @@
         "required": "Base URL is required",
         "invalid": "Please enter a valid URL"
       },
+      "noSuffix": {
+        "label": "No Suffix",
+        "help": "When enabled, requests will use the base URL exactly and will not append the provider's inference endpoint path."
+      },
       "apiKey": {
         "label": "API Key",
         "optional": "(Optional)",

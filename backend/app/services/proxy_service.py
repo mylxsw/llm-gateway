@@ -212,6 +212,12 @@ class ProxyService:
             return None
         return {"default_parameters": default_params}
 
+    @staticmethod
+    def _use_no_suffix(provider_options: Optional[dict[str, Any]]) -> bool:
+        if not isinstance(provider_options, dict):
+            return False
+        return bool(provider_options.get("no_suffix"))
+
     async def _resolve_candidates(
         self,
         requested_model: str,
@@ -488,6 +494,8 @@ class ProxyService:
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
+                if self._use_no_suffix(candidate.provider_options):
+                    supplier_path = ""
                 hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
                     request_protocol,
