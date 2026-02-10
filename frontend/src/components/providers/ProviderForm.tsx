@@ -87,7 +87,7 @@ export function ProviderForm({
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<FormData>({
     defaultValues: {
       name: '',
@@ -252,15 +252,17 @@ export function ProviderForm({
   useEffect(() => {
     if (!protocolConfig) return;
     const nextBaseUrl = protocolConfig.base_url;
+    const baseUrlDirty = !!dirtyFields.base_url;
     const shouldAutoFill =
-      !baseUrl || (lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
+      (!baseUrl && !baseUrlDirty) ||
+      (!baseUrlDirty && lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
 
     if (shouldAutoFill && baseUrl !== nextBaseUrl) {
       setValue('base_url', nextBaseUrl, { shouldDirty: true });
     }
 
     lastAutoBaseUrl.current = nextBaseUrl;
-  }, [baseUrl, protocolConfig, setValue]);
+  }, [baseUrl, dirtyFields.base_url, protocolConfig, setValue]);
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
