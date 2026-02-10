@@ -45,6 +45,8 @@ class ServiceProvider(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Provider Name, unique
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    # Remark
+    remark: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Base URL, e.g., https://api.openai.com
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     # Protocol type: openai or anthropic

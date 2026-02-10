@@ -242,6 +242,10 @@
         "required": "Name is required",
         "empty": "Name cannot be empty"
       },
+      "remark": {
+        "label": "Remark",
+        "placeholder": "Enter provider remark"
+      },
       "protocol": {
         "label": "Protocol Type",
         "placeholder": "Select Protocol Type"

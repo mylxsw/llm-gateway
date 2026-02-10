@@ -16,6 +16,7 @@ export interface ProviderOptions {
 export interface Provider {
   id: number;
   name: string;
+  remark?: string;
   base_url: string;
   protocol: ProtocolType;
   api_key?: string;          // Sanitized display
@@ -31,6 +32,7 @@ export interface Provider {
 /** Create Provider Request */
 export interface ProviderCreate {
   name: string;
+  remark?: string;
   base_url: string;
   protocol: ProtocolType;
   api_key?: string;
@@ -44,6 +46,7 @@ export interface ProviderCreate {
 /** Update Provider Request */
 export interface ProviderUpdate {
   name?: string;
+  remark?: string;
   base_url?: string;
   protocol?: ProtocolType;
   api_key?: string;

@@ -242,6 +242,10 @@
         "required": "请输入名称",
         "empty": "名称不能为空"
       },
+      "remark": {
+        "label": "备注",
+        "placeholder": "输入供应商备注信息"
+      },
       "protocol": {
         "label": "协议类型",
         "placeholder": "选择协议类型"

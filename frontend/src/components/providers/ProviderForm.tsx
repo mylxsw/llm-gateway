@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ interface ProviderFormProps {
 /** Form Field Definition */
 interface FormData {
   name: string;
+  remark: string;
   base_url: string;
   protocol: ProtocolType;
   api_key: string;
@@ -98,6 +100,7 @@ export function ProviderForm({
   } = useForm<FormData>({
     defaultValues: {
       name: '',
+      remark: '',
       base_url: '',
       protocol: 'openai',
       api_key: '',
@@ -194,6 +197,7 @@ export function ProviderForm({
     if (provider) {
       reset({
         name: provider.name,
+        remark: provider.remark ?? '',
         base_url: provider.base_url,
         protocol: provider.protocol,
         api_key: '', // API Key not echoed
@@ -235,6 +239,7 @@ export function ProviderForm({
     } else {
       reset({
         name: '',
+        remark: '',
         base_url: '',
         protocol: 'openai',
         api_key: '',
@@ -301,6 +306,7 @@ export function ProviderForm({
     // Filter out empty strings
     const submitData: ProviderCreate | ProviderUpdate = {
       name: data.name,
+      remark: data.remark,
       base_url: data.base_url,
       protocol: data.protocol,
       is_active: data.is_active,
@@ -432,6 +438,17 @@ export function ProviderForm({
                 isEdit ? t('form.apiKey.placeholderEdit') : t('form.apiKey.placeholderNew')
               }
               {...register('api_key')}
+            />
+          </div>
+
+          {/* Remark */}
+          <div className="space-y-2">
+            <Label htmlFor="remark">{t('form.remark.label')}</Label>
+            <Textarea
+              id="remark"
+              rows={3}
+              placeholder={t('form.remark.placeholder')}
+              {...register('remark')}
             />
           </div>
 

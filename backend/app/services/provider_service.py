@@ -185,6 +185,7 @@ class ProviderService:
             export_list.append(
                 ProviderCreate(
                     name=p.name,
+                    remark=p.remark,
                     base_url=p.base_url,
                     protocol=p.protocol,
                     api_type=p.api_type,
@@ -325,6 +326,7 @@ class ProviderService:
         return ProviderResponse(
             id=provider.id,
             name=provider.name,
+            remark=provider.remark,
             base_url=provider.base_url,
             protocol=provider.protocol,
             api_type=provider.api_type,
