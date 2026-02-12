@@ -7,7 +7,7 @@ Provides concrete database operation implementation for request logs.
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select, and_, or_, delete, case, Integer, cast
+from sqlalchemy import func, select, and_, or_, delete, case, Integer, cast, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
@@ -172,20 +172,20 @@ class SQLAlchemyLogRepository(LogRepository):
         
         # Has error
         if query.has_error is not None:
+            has_error_condition = or_(
+                and_(
+                    RequestLogORM.error_info.isnot(None),
+                    RequestLogORM.error_info != "",
+                ),
+                and_(
+                    RequestLogORM.response_status.isnot(None),
+                    RequestLogORM.response_status != 200,
+                ),
+            )
             if query.has_error:
-                conditions.append(
-                    or_(
-                        RequestLogORM.error_info.isnot(None),
-                        RequestLogORM.error_info != "",
-                    )
-                )
+                conditions.append(has_error_condition)
             else:
-                conditions.append(
-                    or_(
-                        RequestLogORM.error_info.is_(None),
-                        RequestLogORM.error_info == "",
-                    )
-                )
+                conditions.append(not_(has_error_condition))
         
         # API Key filter
         if query.api_key_id:
