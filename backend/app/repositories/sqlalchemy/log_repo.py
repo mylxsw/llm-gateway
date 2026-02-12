@@ -7,7 +7,7 @@ Provides concrete database operation implementation for request logs.
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select, and_, or_, delete, case
+from sqlalchemy import func, select, and_, or_, delete, case, Integer, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
@@ -330,7 +330,28 @@ class SQLAlchemyLogRepository(LogRepository):
         # 1) shift request_time (UTC) into "local" (UTC + offset)
         # 2) truncate to bucket boundary in that local clock
         # 3) shift the bucket start back to UTC for stable API output
-        if query.bucket == "hour":
+        if query.bucket == "minute":
+            bucket_minutes = int(query.bucket_minutes or 1)
+            if bucket_minutes < 1:
+                bucket_minutes = 1
+            if bucket_minutes > 1440:
+                bucket_minutes = 1440
+
+            if dialect_name == "sqlite":
+                epoch_seconds = cast(func.strftime("%s", shifted_time_expr), Integer)
+                bucket_seconds = bucket_minutes * 60
+                bucket_local_start_expr = func.datetime(
+                    (epoch_seconds / bucket_seconds) * bucket_seconds,
+                    "unixepoch",
+                )
+            else:
+                minutes_since_hour = func.extract("minute", shifted_time_expr)
+                bucket_index = func.floor(minutes_since_hour / bucket_minutes)
+                bucket_minute = bucket_index * bucket_minutes
+                bucket_local_start_expr = func.date_trunc("hour", shifted_time_expr) + _pg_make_interval_minutes(
+                    bucket_minute  # type: ignore[arg-type]
+                )
+        elif query.bucket == "hour":
             if dialect_name == "sqlite":
                 bucket_local_start_expr = func.strftime(
                     "%Y-%m-%d %H:00:00", shifted_time_expr

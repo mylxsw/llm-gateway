@@ -58,10 +58,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Log Cleanup Config
-    # Log retention days (default 7 days)
-    LOG_RETENTION_DAYS: int = 7
-    # Log cleanup execution hour (0-23, default 4 AM)
-    LOG_CLEANUP_HOUR: int = 4
+    # Log retention days (default 90 days)
+    LOG_RETENTION_DAYS: int = 90
+    # Log cleanup interval in hours (default 24 hours)
+    LOG_CLEANUP_INTERVAL_HOURS: int = 24
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -569,10 +569,27 @@
     "title": "日志",
     "description": "查看代理请求日志，支持多条件筛选",
     "unknown": "未知",
-    "actions": {
-      "refresh": "刷新"
-    },
-    "toasts": {
+  "actions": {
+    "refresh": "刷新"
+  },
+  "timeline": {
+    "title": "请求时间轴",
+    "hint": "点击柱体进行筛选，悬停查看时间范围。",
+    "success": "成功",
+    "error": "失败",
+    "empty": "暂无时间轴数据",
+    "rangeSelect": "选择时间范围",
+    "rangeCustom": "当前筛选",
+    "range1h": "近1小时",
+    "range3h": "近3小时",
+    "range6h": "近6小时",
+    "range12h": "近12小时",
+    "range24h": "近24小时",
+    "range1w": "近1周",
+    "clear": "清除范围",
+    "refresh": "刷新时间轴"
+  },
+  "toasts": {
       "refreshSuccess": "已刷新",
       "refreshFailed": "刷新失败"
     },

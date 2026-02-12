@@ -180,8 +180,15 @@ class LogCostStatsQuery(BaseModel):
     provider_id: Optional[int] = Field(None, description="Provider ID")
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
-    # Bucket granularity: hour/day
-    bucket: str = Field("day", pattern="^(hour|day)$", description="Trend bucket")
+    # Bucket granularity: minute/hour/day
+    bucket: str = Field("day", pattern="^(minute|hour|day)$", description="Trend bucket")
+    # Minute bucket size (only used when bucket="minute")
+    bucket_minutes: Optional[int] = Field(
+        None,
+        ge=1,
+        le=1440,
+        description="Minute bucket size (used when bucket=minute)",
+    )
     # Timezone offset (minutes) applied to request_time before bucketing.
     # Example: UTC+8 => 480, UTC-8 => -480.
     tz_offset_minutes: int = Field(
