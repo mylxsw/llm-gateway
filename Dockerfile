@@ -1,11 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM node:22-bookworm-slim AS frontend-builder
+FROM node:current-bookworm-slim AS frontend-builder
 WORKDIR /build/frontend
 
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install -g npm@11.10.0 \
-    && npm ci
+RUN npm ci
 
 COPY frontend/ ./
 ENV NEXT_PUBLIC_API_BASE_URL=
@@ -35,8 +34,8 @@ COPY backend/app /app/backend/app
 COPY --from=frontend-builder /build/frontend/out /app/static
 
 RUN useradd -m -u 10001 appuser \
-  && mkdir -p /data \
-  && chown -R appuser:appuser /app /data
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
 
 USER appuser
 
