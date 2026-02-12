@@ -27,8 +27,9 @@ from app.domain.log import (
 from app.repositories.log_repo import LogRepository
 
 
-def _pg_make_interval_minutes(minutes: int):
-    return func.make_interval(0, 0, 0, 0, 0, minutes, 0)
+def _pg_make_interval_minutes(minutes):
+    # Use 6-arg signature (without seconds) and cast minutes to integer for PostgreSQL.
+    return func.make_interval(0, 0, 0, 0, 0, cast(minutes, Integer))
 
 
 class SQLAlchemyLogRepository(LogRepository):
