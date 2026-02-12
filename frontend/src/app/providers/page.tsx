@@ -7,14 +7,16 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Download, Upload } from 'lucide-react';
+import { Plus, Download, Upload, ExternalLink } from 'lucide-react';
 import { ProviderFilters, ProviderFiltersState, ProviderForm, ProviderList } from '@/components/providers';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useProviders,
+  useModelProviders,
   useCreateProvider,
   useUpdateProvider,
   useDeleteProvider,
@@ -69,6 +71,8 @@ function ProvidersContent() {
   const [modelList, setModelList] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [usedModelsDialogOpen, setUsedModelsDialogOpen] = useState(false);
+  const [usedModelsProvider, setUsedModelsProvider] = useState<Provider | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ProviderFiltersState>(
@@ -115,6 +119,25 @@ function ProvidersContent() {
     protocol: filters.protocol === 'all' ? undefined : (filters.protocol as ProtocolType),
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
   });
+  const { data: modelProviderMappings } = useModelProviders();
+
+  const usedModelNamesByProvider = useMemo(() => {
+    const grouped = new Map<number, Set<string>>();
+    for (const mapping of modelProviderMappings?.items ?? []) {
+      const normalizedModelName = mapping.target_model_name.trim();
+      if (!normalizedModelName) continue;
+      if (!grouped.has(mapping.provider_id)) {
+        grouped.set(mapping.provider_id, new Set<string>());
+      }
+      grouped.get(mapping.provider_id)?.add(normalizedModelName);
+    }
+    return Object.fromEntries(
+      Array.from(grouped.entries(), ([providerId, modelNames]) => [
+        providerId,
+        Array.from(modelNames).sort((a, b) => a.localeCompare(b)),
+      ])
+    );
+  }, [modelProviderMappings?.items]);
 
   // Mutations
   const createMutation = useCreateProvider();
@@ -166,6 +189,15 @@ function ProvidersContent() {
       setModelLoading(false);
     }
   };
+
+  const handleOpenUsedModels = (provider: Provider) => {
+    setUsedModelsProvider(provider);
+    setUsedModelsDialogOpen(true);
+  };
+
+  const usedModelList = usedModelsProvider
+    ? usedModelNamesByProvider[usedModelsProvider.id] ?? []
+    : [];
 
   // Submit form
   const handleSubmit = async (formData: ProviderCreate | ProviderUpdate) => {
@@ -312,8 +344,10 @@ function ProvidersContent() {
             <>
               <ProviderList
                 providers={data.items}
+                usedModelNamesByProvider={usedModelNamesByProvider}
                 onEdit={handleEdit}
                 onFetchModels={handleFetchModels}
+                onOpenUsedModels={handleOpenUsedModels}
                 onDelete={handleDelete}
               />
               <Pagination
@@ -383,6 +417,52 @@ function ProvidersContent() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={usedModelsDialogOpen} onOpenChange={setUsedModelsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('usedModels.title')}</DialogTitle>
+            <DialogDescription>
+              {usedModelsProvider
+                ? t('usedModels.description', { name: usedModelsProvider.name })
+                : t('usedModels.noProviderSelected')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[360px] overflow-auto rounded-md border p-3">
+            {usedModelList.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                {t('usedModels.empty')}
+              </div>
+            ) : (
+              <ol className="space-y-2 text-sm">
+                {usedModelList.map((modelName, index) => (
+                  <li
+                    key={modelName}
+                    className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="w-5 text-xs text-muted-foreground">{index + 1}.</span>
+                      <span className="truncate font-mono" title={modelName}>
+                        {modelName}
+                      </span>
+                    </div>
+                    <Link
+                      href={`/models?target_model_name=${encodeURIComponent(modelName)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
+                      title={t('list.actions.viewModelList')}
+                    >
+                      <span>{t('list.actions.viewModelList')}</span>
+                      <ExternalLink className="h-3.5 w-3.5" suppressHydrationWarning />
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

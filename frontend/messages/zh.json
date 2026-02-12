@@ -195,6 +195,12 @@
       "empty": "上游未返回模型。",
       "description": "供应商提供的模型列表。"
     },
+    "usedModels": {
+      "title": "在用模型",
+      "description": "供应商「{name}」已绑定的供应商模型名称，点击可在新页面打开模型列表并自动带入筛选。",
+      "noProviderSelected": "未选择供应商",
+      "empty": "当前供应商暂无绑定模型。"
+    },
     "filters": {
       "name": {
         "label": "供应商名称",
@@ -222,11 +228,13 @@
         "baseUrl": "基础 URL",
         "protocol": "协议",
         "status": "状态",
+        "usedModels": "在用模型",
         "updatedAt": "更新时间",
         "actions": "操作"
       },
       "actions": {
         "fetchModels": "获取模型",
+        "viewModelList": "查看模型列表",
         "edit": "编辑",
         "delete": "删除"
       }

@@ -195,6 +195,12 @@
       "empty": "No models returned from upstream.",
       "description": "List of models available from the selected provider."
     },
+    "usedModels": {
+      "title": "In-use Models",
+      "description": "Supplier model names bound to provider \"{name}\". Click to open Model List in a new page with Supplier Model Name prefilled.",
+      "noProviderSelected": "No provider selected",
+      "empty": "No bound models for the current provider."
+    },
     "filters": {
       "name": {
         "label": "Provider Name",
@@ -222,11 +228,13 @@
         "baseUrl": "Base URL",
         "protocol": "Protocol",
         "status": "Status",
+        "usedModels": "In-use Models",
         "updatedAt": "Updated At",
         "actions": "Actions"
       },
       "actions": {
         "fetchModels": "Fetch Models",
+        "viewModelList": "View Model List",
         "edit": "Edit",
         "delete": "Delete"
       }

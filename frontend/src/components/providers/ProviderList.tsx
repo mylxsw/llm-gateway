@@ -25,10 +25,14 @@ import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/prov
 interface ProviderListProps {
   /** Provider list data */
   providers: Provider[];
+  /** Used supplier model names grouped by provider id */
+  usedModelNamesByProvider: Record<number, string[]>;
   /** Edit callback */
   onEdit: (provider: Provider) => void;
   /** Fetch models callback */
   onFetchModels: (provider: Provider) => void;
+  /** Open used models dialog callback */
+  onOpenUsedModels: (provider: Provider) => void;
   /** Delete callback */
   onDelete: (provider: Provider) => void;
 }
@@ -38,8 +42,10 @@ interface ProviderListProps {
  */
 export function ProviderList({
   providers,
+  usedModelNamesByProvider,
   onEdit,
   onFetchModels,
+  onOpenUsedModels,
   onDelete,
 }: ProviderListProps) {
   const t = useTranslations('providers');
@@ -52,6 +58,7 @@ export function ProviderList({
           <TableHead>{t('list.columns.name')}</TableHead>
           <TableHead>{t('list.columns.baseUrl')}</TableHead>
           <TableHead>{t('list.columns.protocol')}</TableHead>
+          <TableHead>{t('list.columns.usedModels')}</TableHead>
           <TableHead>{t('list.columns.status')}</TableHead>
           <TableHead>{t('list.columns.updatedAt')}</TableHead>
           <TableHead className="text-right">{t('list.columns.actions')}</TableHead>
@@ -63,6 +70,7 @@ export function ProviderList({
           const statusText = provider.is_active
             ? t('filters.status.active')
             : t('filters.status.inactive');
+          const usedModelCount = usedModelNamesByProvider[provider.id]?.length ?? 0;
           return (
             <TableRow key={provider.id}>
               <TableCell className="font-mono text-sm">
@@ -78,6 +86,25 @@ export function ProviderList({
                 <Badge variant="outline">
                   {getProviderProtocolLabel(provider.protocol, protocolConfigs)}
                 </Badge>
+              </TableCell>
+              <TableCell>
+                {usedModelCount > 0 ? (
+                  <Button
+                    variant="ghost"
+                    className="h-auto p-0"
+                    onClick={() => onOpenUsedModels(provider)}
+                    title={t('list.actions.viewModelList')}
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="cursor-pointer hover:bg-secondary/80"
+                    >
+                      {usedModelCount}
+                    </Badge>
+                  </Button>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
               </TableCell>
               <TableCell>
                 <Badge className={status.className}>{statusText}</Badge>
