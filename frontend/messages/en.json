@@ -413,6 +413,7 @@
       "actions": "Actions",
       "protocolTitle": "Protocol: {protocol}",
       "configured": "Configured",
+      "providerDisabledTooltip": "The provider for this model is currently disabled",
       "noProviders": "No providers configured, click button above to add",
       "providerStats": "Provider Stats (Last 7 Days)",
       "avgResponse": "Avg Response",

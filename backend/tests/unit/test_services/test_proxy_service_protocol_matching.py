@@ -122,3 +122,143 @@ async def test_resolve_candidates_does_not_filter_by_request_protocol_anymore():
     assert anthropic_protocol == "anthropic"
     assert {c.provider_id for c in anthropic_candidates} == {1, 2}
     assert {c.protocol for c in anthropic_candidates} == {"openai", "anthropic"}
+
+
+@pytest.mark.asyncio
+async def test_resolve_candidates_filters_inactive_providers():
+    now = utc_now()
+    model_mapping = ModelMapping(
+        requested_model="test-model",
+        strategy="round_robin",
+        matching_rules=None,
+        capabilities=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    provider_mappings = [
+        ModelMappingProviderResponse(
+            id=1,
+            requested_model="test-model",
+            provider_id=1,
+            provider_name="p-active",
+            target_model_name="gpt-4o-mini",
+            provider_rules=None,
+            priority=0,
+            weight=1,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+        ModelMappingProviderResponse(
+            id=2,
+            requested_model="test-model",
+            provider_id=2,
+            provider_name="p-inactive",
+            target_model_name="claude-3-5-sonnet",
+            provider_rules=None,
+            priority=0,
+            weight=1,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+
+    providers = {
+        1: Provider(
+            id=1,
+            name="p-active",
+            base_url="https://example.com",
+            protocol="openai",
+            api_type="chat",
+            api_key="sk-openai",
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        ),
+        2: Provider(
+            id=2,
+            name="p-inactive",
+            base_url="https://example.com",
+            protocol="anthropic",
+            api_type="chat",
+            api_key="sk-anthropic",
+            is_active=False,
+            created_at=now,
+            updated_at=now,
+        ),
+    }
+
+    service = ProxyService(
+        model_repo=FakeModelRepo(model_mapping, provider_mappings),
+        provider_repo=FakeProviderRepo(providers),
+        log_repo=AsyncMock(),
+    )
+
+    _, candidates, _, _, _ = await service._resolve_candidates(
+        requested_model="test-model",
+        request_protocol="openai",
+        headers={},
+        body={"model": "test-model", "messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert [c.provider_id for c in candidates] == [1]
+
+
+@pytest.mark.asyncio
+async def test_resolve_candidates_raises_when_all_providers_inactive():
+    now = utc_now()
+    model_mapping = ModelMapping(
+        requested_model="test-model",
+        strategy="round_robin",
+        matching_rules=None,
+        capabilities=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    provider_mappings = [
+        ModelMappingProviderResponse(
+            id=1,
+            requested_model="test-model",
+            provider_id=1,
+            provider_name="p-inactive",
+            target_model_name="gpt-4o-mini",
+            provider_rules=None,
+            priority=0,
+            weight=1,
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+    ]
+
+    providers = {
+        1: Provider(
+            id=1,
+            name="p-inactive",
+            base_url="https://example.com",
+            protocol="openai",
+            api_type="chat",
+            api_key="sk-openai",
+            is_active=False,
+            created_at=now,
+            updated_at=now,
+        )
+    }
+
+    service = ProxyService(
+        model_repo=FakeModelRepo(model_mapping, provider_mappings),
+        provider_repo=FakeProviderRepo(providers),
+        log_repo=AsyncMock(),
+    )
+
+    with pytest.raises(ServiceError) as exc_info:
+        await service._resolve_candidates(
+            requested_model="test-model",
+            request_protocol="openai",
+            headers={},
+            body={"model": "test-model", "messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert exc_info.value.code == "no_available_provider"

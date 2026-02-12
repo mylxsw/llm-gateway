@@ -140,9 +140,11 @@ class ModelService:
                 providers[pm.provider_id] = provider
 
         eligible_provider_mappings = [
-            pm for pm in provider_mappings if providers.get(pm.provider_id) is not None
+            pm
+            for pm in provider_mappings
+            if (provider := providers.get(pm.provider_id)) is not None and provider.is_active
         ]
-        eligible_providers = {pid: p for pid, p in providers.items()}
+        eligible_providers = {pid: p for pid, p in providers.items() if p.is_active}
 
         if not eligible_provider_mappings:
             raise ServiceError(message="No available providers", code="no_available_provider")

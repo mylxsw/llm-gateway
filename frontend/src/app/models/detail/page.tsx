@@ -13,6 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   Table,
   TableBody,
   TableCell,
@@ -423,7 +429,25 @@ function ModelDetailContent() {
               </TableHeader>
               <TableBody>
                 {model.providers.map((mapping) => {
-                  const mappingStatus = getActiveStatus(mapping.is_active);
+                  const providerIsActive =
+                    mapping.provider_is_active ??
+                    providersById.get(mapping.provider_id)?.is_active ??
+                    true;
+                  const isProviderDisabledWhileMappingActive =
+                    mapping.is_active && !providerIsActive;
+                  const mappingStatusText = mapping.is_active
+                    ? t('filters.active')
+                    : t('filters.inactive');
+                  const mappingStatus = isProviderDisabledWhileMappingActive
+                    ? {
+                        text: mappingStatusText,
+                        className:
+                          'border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300',
+                      }
+                    : {
+                        ...getActiveStatus(mapping.is_active),
+                        text: mappingStatusText,
+                      };
                   const protocol =
                     mapping.provider_protocol ??
                     providersById.get(mapping.provider_id)?.protocol;
@@ -468,9 +492,24 @@ function ModelDetailContent() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge className={mappingStatus.className}>
-                          {mapping.is_active ? t('filters.active') : t('filters.inactive')}
-                        </Badge>
+                        {isProviderDisabledWhileMappingActive ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge className={mappingStatus.className}>
+                                  {mappingStatus.text}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t('detail.providerDisabledTooltip')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Badge className={mappingStatus.className}>
+                            {mappingStatus.text}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
