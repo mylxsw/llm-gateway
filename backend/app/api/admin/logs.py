@@ -55,8 +55,14 @@ async def get_log_cost_stats(
     api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
     bucket: Optional[str] = Query(
         None,
-        pattern="^(hour|day)$",
-        description="Trend bucket override (hour/day). If omitted, server picks a default.",
+        pattern="^(minute|hour|day)$",
+        description="Trend bucket override (minute/hour/day). If omitted, server picks a default.",
+    ),
+    bucket_minutes: Optional[int] = Query(
+        None,
+        ge=1,
+        le=1440,
+        description="Minute bucket size (used when bucket=minute)",
     ),
     tz_offset_minutes: int = Query(
         0,
@@ -92,6 +98,7 @@ async def get_log_cost_stats(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
             bucket=resolved_bucket,
+            bucket_minutes=bucket_minutes,
             tz_offset_minutes=tz_offset_minutes,
             group_by=group_by,
         )

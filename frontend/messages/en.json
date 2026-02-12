@@ -413,6 +413,7 @@
       "actions": "Actions",
       "protocolTitle": "Protocol: {protocol}",
       "configured": "Configured",
+      "providerDisabledTooltip": "The provider for this model is currently disabled",
       "noProviders": "No providers configured, click button above to add",
       "providerStats": "Provider Stats (Last 7 Days)",
       "avgResponse": "Avg Response",
@@ -569,10 +570,27 @@
     "title": "Logs",
     "description": "View proxy request logs, supports multi-condition filtering",
     "unknown": "Unknown",
-    "actions": {
-      "refresh": "Refresh"
-    },
-    "toasts": {
+  "actions": {
+    "refresh": "Refresh"
+  },
+  "timeline": {
+    "title": "Request Timeline",
+    "hint": "Click a bar to focus; hover to see the exact time range.",
+    "success": "Success",
+    "error": "Error",
+    "empty": "No timeline data",
+    "rangeSelect": "Select time range",
+    "rangeCustom": "Current filter",
+    "range1h": "Last 1 hour",
+    "range3h": "Last 3 hours",
+    "range6h": "Last 6 hours",
+    "range12h": "Last 12 hours",
+    "range24h": "Last 24 hours",
+    "range1w": "Last 1 week",
+    "clear": "Clear range",
+    "refresh": "Refresh timeline"
+  },
+  "toasts": {
       "refreshSuccess": "Refreshed",
       "refreshFailed": "Refresh failed"
     },

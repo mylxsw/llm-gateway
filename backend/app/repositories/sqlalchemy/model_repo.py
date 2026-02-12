@@ -64,6 +64,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         entity: ModelMappingProviderORM,
         provider_name: str = "",
         provider_protocol: str | None = None,
+        provider_is_active: bool | None = None,
     ) -> ModelMappingProviderResponse:
         """Convert Model-Provider Mapping ORM entity to domain model"""
         return ModelMappingProviderResponse(
@@ -72,6 +73,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             provider_id=entity.provider_id,
             provider_name=provider_name,
             provider_protocol=provider_protocol,
+            provider_is_active=provider_is_active,
             target_model_name=entity.target_model_name,
             provider_rules=entity.provider_rules,
             input_price=float(entity.input_price) if entity.input_price is not None else None,
@@ -249,8 +251,11 @@ class SQLAlchemyModelRepository(ModelRepository):
         provider = provider_result.scalar_one_or_none()
         provider_name = provider.name if provider else ""
         provider_protocol = provider.protocol if provider else None
-        
-        return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
+        provider_is_active = provider.is_active if provider else None
+
+        return self._provider_mapping_to_domain(
+            entity, provider_name, provider_protocol, provider_is_active
+        )
     
     async def get_provider_mapping(self, id: int) -> Optional[ModelMappingProvider]:
         """Get Model-Provider Mapping by ID"""
@@ -266,7 +271,10 @@ class SQLAlchemyModelRepository(ModelRepository):
         
         provider_name = entity.provider.name if entity.provider else ""
         provider_protocol = entity.provider.protocol if entity.provider else None
-        return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
+        provider_is_active = entity.provider.is_active if entity.provider else None
+        return self._provider_mapping_to_domain(
+            entity, provider_name, provider_protocol, provider_is_active
+        )
     
     async def get_provider_mappings(
         self,
@@ -312,6 +320,7 @@ class SQLAlchemyModelRepository(ModelRepository):
                 e,
                 e.provider.name if e.provider else "",
                 e.provider.protocol if e.provider else None,
+                e.provider.is_active if e.provider else None,
             )
             for e in entities
         ]

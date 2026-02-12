@@ -34,6 +34,7 @@ export interface ModelMappingProvider {
   provider_id: number;
   provider_name: string;              // Obtained via join
   provider_protocol?: ProtocolType | null; // Obtained via join
+  provider_is_active?: boolean | null; // Obtained via join
   target_model_name: string;          // Target model name for this provider
   provider_rules?: RuleSet | null;    // Provider level rules
   // Provider override pricing (USD per 1,000,000 tokens)

@@ -56,7 +56,8 @@ export interface LogQueryParams {
   tz_offset_minutes?: number;
 
   // Trend bucketing hint for stats (hour/day)
-  bucket?: 'hour' | 'day';
+  bucket?: 'minute' | 'hour' | 'day';
+  bucket_minutes?: number;
 
   // Group by dimension for model stats
   group_by?: 'request_model' | 'provider_model';

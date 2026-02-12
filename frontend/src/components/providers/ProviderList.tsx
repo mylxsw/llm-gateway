@@ -60,6 +60,9 @@ export function ProviderList({
       <TableBody>
         {providers.map((provider) => {
           const status = getActiveStatus(provider.is_active);
+          const statusText = provider.is_active
+            ? t('filters.status.active')
+            : t('filters.status.inactive');
           return (
             <TableRow key={provider.id}>
               <TableCell className="font-mono text-sm">
@@ -77,7 +80,7 @@ export function ProviderList({
                 </Badge>
               </TableCell>
               <TableCell>
-                <Badge className={status.className}>{status.text}</Badge>
+                <Badge className={status.className}>{statusText}</Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDateTime(provider.updated_at)}

@@ -9,6 +9,7 @@ from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
 from app.db.session import get_db
@@ -89,10 +90,10 @@ def start_scheduler():
     # Create scheduler
     _scheduler = AsyncIOScheduler()
 
-    # Add log cleanup task (Executes daily at configured time)
+    # Add log cleanup task (Executes every configured interval)
     _scheduler.add_job(
         cleanup_logs_task,
-        trigger=CronTrigger(hour=settings.LOG_CLEANUP_HOUR, minute=0),
+        trigger=IntervalTrigger(hours=settings.LOG_CLEANUP_INTERVAL_HOURS),
         id="cleanup_old_logs",
         name="Clean up old logs",
         replace_existing=True,
@@ -118,7 +119,8 @@ def start_scheduler():
         else ", KV store cleanup skipped (using Redis)"
     )
     logger.info(
-        f"Scheduler started: log cleanup scheduled daily at {settings.LOG_CLEANUP_HOUR}:00"
+        "Scheduler started: log cleanup scheduled every "
+        f"{settings.LOG_CLEANUP_INTERVAL_HOURS} hours"
         + kv_cleanup_msg
     )
 

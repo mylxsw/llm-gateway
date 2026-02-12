@@ -8,15 +8,22 @@
 import React, { useState, useCallback, useEffect, useMemo, Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LogFilters, LogList } from '@/components/logs';
+import { LogFilters, LogList, LogTimeline } from '@/components/logs';
 import { Pagination, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
-import { useApiKeys, useLogs, useModels, useProviders } from '@/lib/hooks';
+import { useApiKeys, useLogs, useLogCostStats, useModels, useProviders } from '@/lib/hooks';
 import { LogQueryParams, RequestLog } from '@/types';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { parseBooleanParam, parseNumberParam, parseStringParam, setParam } from '@/lib/utils';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 /** Default Filter Parameters */
 const DEFAULT_FILTERS: LogQueryParams = {
@@ -25,6 +32,40 @@ const DEFAULT_FILTERS: LogQueryParams = {
   sort_by: 'request_time',
   sort_order: 'desc',
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function resolveBucket(
+  start?: string,
+  end?: string,
+  bars = 60
+): { bucket: 'minute' | 'hour' | 'day'; bucketMinutes?: number } {
+  if (!start || !end) return { bucket: 'hour' };
+  const startMs = new Date(start).getTime();
+  const endMs = new Date(end).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return { bucket: 'hour' };
+  }
+  const rangeMs = endMs - startMs;
+  if (rangeMs <= 7 * DAY_MS) {
+    return { bucket: 'minute', bucketMinutes: 1 };
+  }
+  const binMs = rangeMs / Math.max(1, bars);
+  if (binMs < DAY_MS) return { bucket: 'hour' };
+  return { bucket: 'day' };
+}
+
+type TimelinePreset = 'custom' | '1h' | '3h' | '6h' | '12h' | '24h' | '1w';
+
+const TIMELINE_PRESETS: Array<{ value: TimelinePreset; minutes?: number }> = [
+  { value: 'custom' },
+  { value: '1h', minutes: 60 },
+  { value: '3h', minutes: 180 },
+  { value: '6h', minutes: 360 },
+  { value: '12h', minutes: 720 },
+  { value: '24h', minutes: 1440 },
+  { value: '1w', minutes: 10080 },
+];
 
 /**
  * Request Log Page Component
@@ -39,10 +80,21 @@ export default function LogsPage() {
 
 function LogsContent() {
   const t = useTranslations('logs');
+  const tTimeline = useTranslations('logs.timeline');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const defaultRangeRef = React.useRef<{ start: string; end: string } | null>(null);
+  if (!defaultRangeRef.current) {
+    const now = new Date();
+    defaultRangeRef.current = {
+      end: now.toISOString(),
+      start: new Date(now.getTime() - DAY_MS).toISOString(),
+    };
+  }
 
   const buildFiltersFromParams = useCallback((): LogQueryParams => {
+    const defaultEnd = defaultRangeRef.current?.end;
+    const defaultStart = defaultRangeRef.current?.start;
     const parsed: LogQueryParams = {
       page: parseNumberParam(searchParams.get('page'), { min: 1 }) ?? DEFAULT_FILTERS.page,
       page_size:
@@ -51,8 +103,8 @@ function LogsContent() {
       sort_order:
         (parseStringParam(searchParams.get('sort_order')) as LogQueryParams['sort_order']) ??
         DEFAULT_FILTERS.sort_order,
-      start_time: parseStringParam(searchParams.get('start_time')),
-      end_time: parseStringParam(searchParams.get('end_time')),
+      start_time: parseStringParam(searchParams.get('start_time')) ?? defaultStart,
+      end_time: parseStringParam(searchParams.get('end_time')) ?? defaultEnd,
       requested_model: parseStringParam(searchParams.get('requested_model')),
       target_model: parseStringParam(searchParams.get('target_model')),
       provider_id: parseNumberParam(searchParams.get('provider_id'), { min: 1 }),
@@ -80,6 +132,66 @@ function LogsContent() {
   const { data: providersData } = useProviders({ is_active: true, page: 1, page_size: 1000 });
   const { data: modelsData } = useModels({ is_active: true, page: 1, page_size: 1000 });
   const { data: apiKeysData } = useApiKeys({ is_active: true, page: 1, page_size: 1000 });
+  const [timelinePreset, setTimelinePreset] = useState<TimelinePreset>('24h');
+  const tzOffsetMinutes = useMemo(() => -new Date().getTimezoneOffset(), []);
+  const { bucket: timelineBucket, bucketMinutes } = useMemo(
+    () => resolveBucket(filters.start_time, filters.end_time, 60),
+    [filters.end_time, filters.start_time]
+  );
+  const timelineParams = useMemo<LogQueryParams>(
+    () => ({
+      start_time: filters.start_time,
+      end_time: filters.end_time,
+      requested_model: filters.requested_model,
+      provider_id: filters.provider_id,
+      api_key_id: filters.api_key_id,
+      api_key_name: filters.api_key_name,
+      tz_offset_minutes: tzOffsetMinutes,
+      bucket: timelineBucket,
+      bucket_minutes: bucketMinutes,
+      group_by: 'request_model',
+    }),
+    [
+      filters.api_key_id,
+      filters.api_key_name,
+      filters.end_time,
+      filters.provider_id,
+      filters.requested_model,
+      filters.start_time,
+      bucketMinutes,
+      timelineBucket,
+      tzOffsetMinutes,
+    ]
+  );
+  const {
+    data: timelineStats,
+    isLoading: timelineLoading,
+    isFetching: timelineFetching,
+    refetch: refetchTimeline,
+  } = useLogCostStats(timelineParams);
+
+  useEffect(() => {
+    if (!filters.start_time || !filters.end_time) {
+      setTimelinePreset('custom');
+      return;
+    }
+    const startMs = new Date(filters.start_time).getTime();
+    const endMs = new Date(filters.end_time).getTime();
+    if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+      setTimelinePreset('custom');
+      return;
+    }
+    const now = Date.now();
+    const diffToNow = Math.abs(endMs - now);
+    const durationMinutes = Math.round((endMs - startMs) / (60 * 1000));
+    const matched = TIMELINE_PRESETS.find(
+      (preset) =>
+        preset.minutes !== undefined &&
+        Math.abs((preset.minutes ?? 0) - durationMinutes) <= 1 &&
+        diffToNow <= 2 * 60 * 1000
+    );
+    setTimelinePreset(matched?.value ?? 'custom');
+  }, [filters.end_time, filters.start_time]);
 
   const areLogQueryParamsEqual = useCallback((a: LogQueryParams, b: LogQueryParams) => {
     const keys: Array<keyof LogQueryParams> = [
@@ -192,6 +304,64 @@ function LogsContent() {
           {t('description')}
         </p>
       </div>
+
+      {/* Timeline */}
+      <LogTimeline
+        stats={timelineStats}
+        loading={timelineLoading}
+        refreshing={timelineFetching}
+        bucket={timelineBucket}
+        bucketMinutes={bucketMinutes}
+        maxBars={60}
+        selectedStart={filters.start_time}
+        selectedEnd={filters.end_time}
+        onRangeChange={(range) => {
+          if (range) {
+            handleFilterChange({ start_time: range.start_time, end_time: range.end_time });
+            return;
+          }
+          const fallback = defaultRangeRef.current;
+          if (fallback) {
+            handleFilterChange({ start_time: fallback.start, end_time: fallback.end });
+            return;
+          }
+          const now = new Date();
+          const start = new Date(now.getTime() - DAY_MS);
+          handleFilterChange({ start_time: start.toISOString(), end_time: now.toISOString() });
+        }}
+        onRefresh={refetchTimeline}
+        headerActions={
+          <Select
+            value={timelinePreset}
+            onValueChange={(value) => {
+              const preset = value as TimelinePreset;
+              setTimelinePreset(preset);
+              if (preset === 'custom') return;
+              const match = TIMELINE_PRESETS.find((p) => p.value === preset);
+              const minutes = match?.minutes ?? 60;
+              const now = new Date();
+              const start = new Date(now.getTime() - minutes * 60 * 1000);
+              handleFilterChange({
+                start_time: start.toISOString(),
+                end_time: now.toISOString(),
+              });
+            }}
+          >
+            <SelectTrigger className="h-8 w-[180px]">
+              <SelectValue placeholder={tTimeline('rangeSelect')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="custom">{tTimeline('rangeCustom')}</SelectItem>
+              <SelectItem value="1h">{tTimeline('range1h')}</SelectItem>
+              <SelectItem value="3h">{tTimeline('range3h')}</SelectItem>
+              <SelectItem value="6h">{tTimeline('range6h')}</SelectItem>
+              <SelectItem value="12h">{tTimeline('range12h')}</SelectItem>
+              <SelectItem value="24h">{tTimeline('range24h')}</SelectItem>
+              <SelectItem value="1w">{tTimeline('range1w')}</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
 
       {/* Filters */}
       <LogFilters

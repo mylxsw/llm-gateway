@@ -34,8 +34,8 @@ COPY backend/app /app/backend/app
 COPY --from=frontend-builder /build/frontend/out /app/static
 
 RUN useradd -m -u 10001 appuser \
-  && mkdir -p /data \
-  && chown -R appuser:appuser /app /data
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
 
 USER appuser
 

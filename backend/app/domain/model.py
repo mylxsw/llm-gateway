@@ -219,6 +219,8 @@ class ModelMappingProviderResponse(ModelMappingProvider):
     provider_name: str = Field("", description="Provider Name")
     # Provider Protocol Type: openai or anthropic
     provider_protocol: Optional[str] = Field(None, description="Provider Protocol Type")
+    # Provider Active Status
+    provider_is_active: Optional[bool] = Field(None, description="Provider Active Status")
     
     model_config = ConfigDict(from_attributes=True)
 
