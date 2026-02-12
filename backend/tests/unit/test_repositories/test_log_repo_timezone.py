@@ -40,5 +40,7 @@ async def test_log_request_time_is_utc_aware(db_session):
 
 def test_pg_make_interval_minutes_compiles():
     stmt = select(_pg_make_interval_minutes(480).label("iv"))
-    compiled = str(stmt.compile(dialect=postgresql.dialect()))
-    assert "make_interval" in compiled
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    compiled_sql = str(compiled)
+    assert "make_interval" in compiled_sql
+    assert len(compiled.params) == 6
