@@ -390,6 +390,39 @@ def test_convert_request_openai_responses_to_anthropic_without_max_output_tokens
     assert isinstance(out_body.get("messages"), list)
 
 
+def test_convert_request_openai_responses_to_openai_accepts_string_tool_choice():
+    """Test Responses tool_choice as string is normalized before SDK conversion."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai_responses",
+        supplier_protocol="openai",
+        path="/v1/responses",
+        body={
+            "model": "any",
+            "tool_choice": "none",
+            "tools": [],
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": "You are offering command line completion suggestions and descriptions.",
+                }
+            ],
+            "max_output_tokens": 128000,
+            "stream": False,
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert out_body["model"] == "gpt-5-mini"
+    assert isinstance(out_body.get("messages"), list)
+    assert out_body["messages"][0]["role"] == "user"
+    assert out_body["messages"][0]["content"] == (
+        "You are offering command line completion suggestions and descriptions."
+    )
+    assert out_body.get("tool_choice") == "none"
+
+
 def test_convert_response_openai_responses_to_openai():
     converted = convert_response_for_user(
         request_protocol="openai",

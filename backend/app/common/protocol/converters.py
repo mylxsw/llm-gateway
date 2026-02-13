@@ -119,6 +119,78 @@ def _normalize_openai_tooling_fields(body: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _normalize_openai_responses_tooling_fields(body: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize OpenAI Responses tooling fields to the shape expected by SDK decoder.
+
+    The upstream SDK decoder currently expects:
+    - tool_choice: {"type": "..."} or {"type":"function","name":"..."}
+    - tools.function: {"type":"function","name":"...","parameters":...}
+    """
+    out = copy.deepcopy(body)
+
+    if "tool_choice" in out:
+        raw_tool_choice = out.get("tool_choice")
+        normalized_tool_choice: Optional[Dict[str, Any]] = None
+
+        if isinstance(raw_tool_choice, str):
+            normalized_tool_choice = {"type": raw_tool_choice}
+        elif isinstance(raw_tool_choice, dict):
+            choice_type = raw_tool_choice.get("type")
+            if (
+                choice_type == "function"
+                and isinstance(raw_tool_choice.get("function"), dict)
+                and isinstance(raw_tool_choice["function"].get("name"), str)
+                and raw_tool_choice["function"]["name"]
+            ):
+                normalized_tool_choice = {
+                    "type": "function",
+                    "name": raw_tool_choice["function"]["name"],
+                }
+            else:
+                normalized_tool_choice = raw_tool_choice
+
+        if normalized_tool_choice is None:
+            del out["tool_choice"]
+        else:
+            out["tool_choice"] = normalized_tool_choice
+
+    if isinstance(out.get("tools"), list):
+        normalized_tools: List[Dict[str, Any]] = []
+        for tool in out["tools"]:
+            if not isinstance(tool, dict):
+                continue
+
+            tool_type = tool.get("type", "function")
+            if tool_type != "function":
+                normalized_tools.append(tool)
+                continue
+
+            # Chat Completions-style function tool.
+            if isinstance(tool.get("function"), dict):
+                fn = tool["function"]
+                name = fn.get("name")
+                if not isinstance(name, str) or not name:
+                    continue
+                normalized_tool: Dict[str, Any] = {"type": "function", "name": name}
+                if isinstance(fn.get("description"), str):
+                    normalized_tool["description"] = fn.get("description")
+                if isinstance(fn.get("parameters"), dict):
+                    normalized_tool["parameters"] = fn.get("parameters")
+                if isinstance(fn.get("strict"), bool):
+                    normalized_tool["strict"] = fn.get("strict")
+                normalized_tools.append(normalized_tool)
+                continue
+
+            # Responses-style function tool.
+            if isinstance(tool.get("name"), str) and tool.get("name"):
+                normalized_tools.append(tool)
+
+        out["tools"] = normalized_tools
+
+    return out
+
+
 class SDKRequestConverter(IRequestConverter):
     """
     Request converter using llm_api_converter SDK.
@@ -167,6 +239,8 @@ class SDKRequestConverter(IRequestConverter):
             # Normalize OpenAI request
             if self._source == Protocol.OPENAI:
                 body = _normalize_openai_tooling_fields(body)
+            elif self._source == Protocol.OPENAI_RESPONSES:
+                body = _normalize_openai_responses_tooling_fields(body)
 
             # Determine if streaming
             stream = body.get("stream", False)
