@@ -16,6 +16,7 @@ import {
   ModelExport,
   ModelStats,
   ModelProviderStats,
+  ModelProviderPricingHistoryItem,
   ModelMatchRequest,
   ModelMatchProvider,
   ModelTestRequest,
@@ -88,6 +89,15 @@ export async function getModelProviders(
   return get<{ items: ModelMappingProvider[]; total: number }>(
     MODEL_PROVIDERS_URL,
     params as Record<string, unknown>
+  );
+}
+
+export async function getModelProviderPricingHistory(
+  targetModelName: string
+): Promise<{ items: ModelProviderPricingHistoryItem[]; total: number }> {
+  return get<{ items: ModelProviderPricingHistoryItem[]; total: number }>(
+    `${MODEL_PROVIDERS_URL}/pricing-history`,
+    { target_model_name: targetModelName }
   );
 }
 

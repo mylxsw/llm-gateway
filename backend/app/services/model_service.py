@@ -395,6 +395,39 @@ class ModelService:
             provider_id=provider_id,
             is_active=is_active,
         )
+
+    async def get_provider_pricing_history(
+        self,
+        target_model_name: str,
+    ) -> list[ModelMappingProviderResponse]:
+        """
+        Get pricing history candidates by target model name.
+
+        Results are grouped by (provider_id, target_model_name) and only
+        the latest updated item in each group is returned.
+        """
+        normalized_target_model = target_model_name.strip()
+        if not normalized_target_model:
+            return []
+
+        items = await self.model_repo.get_all_provider_mappings(
+            target_model_name=normalized_target_model
+        )
+        if not items:
+            return []
+
+        latest_by_group: dict[tuple[int, str], ModelMappingProviderResponse] = {}
+        for item in items:
+            group_key = (item.provider_id, item.target_model_name.strip().lower())
+            existing = latest_by_group.get(group_key)
+            if existing is None or item.updated_at > existing.updated_at:
+                latest_by_group[group_key] = item
+
+        return sorted(
+            latest_by_group.values(),
+            key=lambda item: item.updated_at,
+            reverse=True,
+        )
     
     async def update_provider_mapping(
         self, id: int, data: ModelMappingProviderUpdate

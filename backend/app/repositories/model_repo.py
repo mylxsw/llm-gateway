@@ -90,6 +90,7 @@ class ModelRepository(ABC):
         self,
         requested_model: Optional[str] = None,
         provider_id: Optional[int] = None,
+        target_model_name: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> List[ModelMappingProviderResponse]:
         """Get all model-provider mappings (supports filtering)"""

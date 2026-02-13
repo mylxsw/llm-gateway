@@ -290,6 +290,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         self,
         requested_model: Optional[str] = None,
         provider_id: Optional[int] = None,
+        target_model_name: Optional[str] = None,
         is_active: Optional[bool] = None,
     ) -> list[ModelMappingProviderResponse]:
         """Get Model-Provider Mapping list"""
@@ -303,6 +304,11 @@ class SQLAlchemyModelRepository(ModelRepository):
             )
         if provider_id is not None:
             query = query.where(ModelMappingProviderORM.provider_id == provider_id)
+        if target_model_name is not None:
+            normalized_target = target_model_name.strip()
+            query = query.where(
+                ModelMappingProviderORM.target_model_name.ilike(f"%{normalized_target}%")
+            )
         if is_active is not None:
             query = query.where(ModelMappingProviderORM.is_active == is_active)
         

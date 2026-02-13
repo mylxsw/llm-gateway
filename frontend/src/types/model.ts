@@ -134,6 +134,8 @@ export interface ModelProviderListParams {
   is_active?: boolean;
 }
 
+export type ModelProviderPricingHistoryItem = ModelMappingProvider;
+
 /** Model Provider Export Entity */
 export interface ModelProviderExport {
   provider_name: string;

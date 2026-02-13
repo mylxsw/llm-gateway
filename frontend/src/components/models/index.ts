@@ -8,3 +8,4 @@ export * from './ModelProviderForm';
 export * from './ModelFilters';
 export * from './ModelMatchDialog';
 export * from './ModelTestDialog';
+export * from './BillingDisplay';

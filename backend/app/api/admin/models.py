@@ -61,6 +61,13 @@ class ModelProviderListResponse(BaseModel):
     total: int
 
 
+class ModelProviderPricingHistoryResponse(BaseModel):
+    """Model pricing history candidates by target model name"""
+
+    items: list[ModelMappingProviderResponse]
+    total: int
+
+
 class ImportModelResponse(BaseModel):
     """Import Model Response"""
 
@@ -529,6 +536,27 @@ async def list_model_providers(
             requested_model, provider_id, is_active
         )
         return ModelProviderListResponse(
+            items=items,
+            total=len(items),
+        )
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get(
+    "/model-providers/pricing-history",
+    response_model=ModelProviderPricingHistoryResponse,
+)
+async def get_model_provider_pricing_history(
+    service: ModelServiceDep,
+    target_model_name: str = Query(..., min_length=1, description="Target model name"),
+):
+    """
+    Get historical pricing candidates by target model name.
+    """
+    try:
+        items = await service.get_provider_pricing_history(target_model_name)
+        return ModelProviderPricingHistoryResponse(
             items=items,
             total=len(items),
         )
