@@ -357,6 +357,36 @@ class SQLAlchemyModelRepository(ModelRepository):
         provider_name = entity.provider.name if entity.provider else ""
         provider_protocol = entity.provider.protocol if entity.provider else None
         return self._provider_mapping_to_domain(entity, provider_name, provider_protocol)
+
+    async def bulk_update_provider_mappings(
+        self,
+        provider_id: int,
+        current_target_model_name: str,
+        data: ModelMappingProviderUpdate,
+    ) -> int:
+        """Bulk update mappings by provider and exact target model name (case-insensitive)."""
+        normalized_target = current_target_model_name.strip().lower()
+        result = await self.session.execute(
+            select(ModelMappingProviderORM)
+            .where(ModelMappingProviderORM.provider_id == provider_id)
+            .where(
+                func.lower(func.trim(ModelMappingProviderORM.target_model_name))
+                == normalized_target
+            )
+        )
+        entities = result.scalars().all()
+        if not entities:
+            return 0
+
+        update_data = data.model_dump(exclude_unset=True)
+        now = to_utc_naive(utc_now())
+        for entity in entities:
+            for key, value in update_data.items():
+                setattr(entity, key, value)
+            entity.updated_at = now
+
+        await self.session.commit()
+        return len(entities)
     
     async def delete_provider_mapping(self, id: int) -> bool:
         """Delete Model-Provider Mapping"""

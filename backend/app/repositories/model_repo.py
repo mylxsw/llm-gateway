@@ -110,6 +110,16 @@ class ModelRepository(ABC):
     async def update_provider_mapping(self, id: int, data: ModelMappingProviderUpdate) -> Optional[ModelMappingProvider]:
         """Update Model-Provider Mapping"""
         pass
+
+    @abstractmethod
+    async def bulk_update_provider_mappings(
+        self,
+        provider_id: int,
+        current_target_model_name: str,
+        data: ModelMappingProviderUpdate,
+    ) -> int:
+        """Bulk update mappings by provider and exact target model name"""
+        pass
     
     @abstractmethod
     async def delete_provider_mapping(self, id: int) -> bool:

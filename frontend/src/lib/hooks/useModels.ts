@@ -14,6 +14,7 @@ import {
   getModelProviders,
   createModelProvider,
   updateModelProvider,
+  bulkUpgradeModelProviders,
   deleteModelProvider,
   getModelStats,
   getModelProviderStats,
@@ -32,6 +33,7 @@ import {
   ModelProviderListParams,
   ModelMatchRequest,
   ModelTestRequest,
+  ModelProviderBulkUpgradeRequest,
 } from '@/types';
 
 /** Query Keys */
@@ -201,6 +203,25 @@ export function useUpdateModelProvider() {
       id: number;
       data: ModelMappingProviderUpdate;
     }) => updateModelProvider(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelProviders });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });
+      toast.success('Saved successfully');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'Save failed'));
+    },
+  });
+}
+
+/**
+ * Bulk upgrade provider mappings by provider + target model.
+ */
+export function useBulkUpgradeModelProviders() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ModelProviderBulkUpgradeRequest) => bulkUpgradeModelProviders(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.modelProviders });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.models });

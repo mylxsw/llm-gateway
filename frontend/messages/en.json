@@ -199,7 +199,20 @@
       "title": "In-use Models",
       "description": "Supplier model names bound to provider \"{name}\". Click to open Model List in a new page with Supplier Model Name prefilled.",
       "noProviderSelected": "No provider selected",
-      "empty": "No bound models for the current provider."
+      "empty": "No bound models for the current provider.",
+      "upgrade": {
+        "action": "Upgrade",
+        "title": "Bulk Model Upgrade",
+        "description": "Bulk upgrade provider \"{provider}\" model \"{model}\" to a new target model and pricing.",
+        "newModelLabel": "New Model Name",
+        "newModelPlaceholder": "Enter the new provider model name",
+        "confirm": "Confirm Update",
+        "columns": {
+          "requestedModel": "Requested Model",
+          "currentModel": "Current Provider Model",
+          "currentBilling": "Current Billing"
+        }
+      }
     },
     "filters": {
       "name": {

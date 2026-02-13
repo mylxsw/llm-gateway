@@ -83,18 +83,17 @@ function LogsContent() {
   const tTimeline = useTranslations('logs.timeline');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const defaultRangeRef = React.useRef<{ start: string; end: string } | null>(null);
-  if (!defaultRangeRef.current) {
+  const defaultRange = useMemo(() => {
     const now = new Date();
-    defaultRangeRef.current = {
+    return {
       end: now.toISOString(),
       start: new Date(now.getTime() - DAY_MS).toISOString(),
     };
-  }
+  }, []);
 
   const buildFiltersFromParams = useCallback((): LogQueryParams => {
-    const defaultEnd = defaultRangeRef.current?.end;
-    const defaultStart = defaultRangeRef.current?.start;
+    const defaultEnd = defaultRange.end;
+    const defaultStart = defaultRange.start;
     const parsed: LogQueryParams = {
       page: parseNumberParam(searchParams.get('page'), { min: 1 }) ?? DEFAULT_FILTERS.page,
       page_size:
@@ -122,7 +121,7 @@ function LogsContent() {
     };
 
     return parsed;
-  }, [searchParams]);
+  }, [defaultRange.end, defaultRange.start, searchParams]);
 
   // Filter parameters state
   const [filters, setFilters] = useState<LogQueryParams>(() => buildFiltersFromParams());
@@ -172,12 +171,14 @@ function LogsContent() {
 
   useEffect(() => {
     if (!filters.start_time || !filters.end_time) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimelinePreset('custom');
       return;
     }
     const startMs = new Date(filters.start_time).getTime();
     const endMs = new Date(filters.end_time).getTime();
     if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimelinePreset('custom');
       return;
     }
@@ -190,6 +191,7 @@ function LogsContent() {
         Math.abs((preset.minutes ?? 0) - durationMinutes) <= 1 &&
         diffToNow <= 2 * 60 * 1000
     );
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimelinePreset(matched?.value ?? 'custom');
   }, [filters.end_time, filters.start_time]);
 
@@ -222,6 +224,7 @@ function LogsContent() {
 
   useEffect(() => {
     const nextFilters = buildFiltersFromParams();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilters((prev) => (areLogQueryParamsEqual(prev, nextFilters) ? prev : nextFilters));
   }, [areLogQueryParamsEqual, buildFiltersFromParams]);
 
@@ -320,7 +323,7 @@ function LogsContent() {
             handleFilterChange({ start_time: range.start_time, end_time: range.end_time });
             return;
           }
-          const fallback = defaultRangeRef.current;
+          const fallback = defaultRange;
           if (fallback) {
             handleFilterChange({ start_time: fallback.start, end_time: fallback.end });
             return;

@@ -73,13 +73,17 @@ export function ModelTestDialog({
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResult(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(null);
       if (availableProtocols.length > 0) {
         if (!protocol || !availableProtocols.includes(protocol)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setProtocol(availableProtocols[0]);
         }
       } else if (protocol) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setProtocol('');
       }
     }

@@ -17,6 +17,8 @@ import {
   ModelStats,
   ModelProviderStats,
   ModelProviderPricingHistoryItem,
+  ModelProviderBulkUpgradeRequest,
+  ModelProviderBulkUpgradeResponse,
   ModelMatchRequest,
   ModelMatchProvider,
   ModelTestRequest,
@@ -121,6 +123,12 @@ export async function updateModelProvider(
   data: ModelMappingProviderUpdate
 ): Promise<ModelMappingProvider> {
   return put<ModelMappingProvider>(`${MODEL_PROVIDERS_URL}/${id}`, data);
+}
+
+export async function bulkUpgradeModelProviders(
+  data: ModelProviderBulkUpgradeRequest
+): Promise<ModelProviderBulkUpgradeResponse> {
+  return post<ModelProviderBulkUpgradeResponse>(`${MODEL_PROVIDERS_URL}/bulk-upgrade`, data);
 }
 
 /**
