@@ -98,16 +98,8 @@
 # 克隆仓库
 git clone https://github.com/mylxsw/llm-gateway.git
 cd llm-gateway
-
-# 配置环境
-cp .env.example .env
-# 按需编辑 .env（可选：设置 ADMIN_USERNAME 和 ADMIN_PASSWORD）
-
 # 启动服务
-./start-docker.sh
-
-# 停止服务
-./stop-docker.sh
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 访问管理面板：**http://localhost:8000**

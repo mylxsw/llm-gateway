@@ -97,16 +97,8 @@ The fastest way to get started with PostgreSQL:
 # Clone the repository
 git clone https://github.com/mylxsw/llm-gateway.git
 cd llm-gateway
-
-# Configure environment
-cp .env.example .env
-# Edit .env if needed (optional: set ADMIN_USERNAME, ADMIN_PASSWORD, LLM_GATEWAY_PORT)
-
 # Start services
-./start-docker.sh
-
-# Stop services
-./stop-docker.sh
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Access the dashboard at **http://localhost:8000** (or the port you set in `LLM_GATEWAY_PORT`)
