@@ -26,11 +26,11 @@
 
 **Squirrel** is a high-performance, production-ready proxy service that unifies access to multiple Large Language Model (LLM) providers. It acts as an intelligent gateway between your applications and LLM services, providing seamless failover, load balancing, comprehensive observability, and a modern management dashboard — now with first-class OpenAI Responses support and smooth protocol conversion across OpenAI Chat, OpenAI Responses, and Anthropic Messages.
 
-![home](./docs/assets/home.png)
-
-![logs](./docs/assets/logs.png)
-
-![insight](./docs/assets/insight.png)
+<p align="center">
+  <img src="./docs/assets/home.png" width="32%" />
+  <img src="./docs/assets/logs.png" width="32%" />
+  <img src="./docs/assets/insight.png" width="32%" />
+</p>
 
 ### Why Squirrel?
 

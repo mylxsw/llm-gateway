@@ -26,11 +26,11 @@
 
 **Squirrel** 是一个高性能、生产就绪的代理服务，用于统一管理和访问多个大语言模型（LLM）供应商。它作为应用程序与 LLM 服务之间的智能网关，提供无缝的故障转移、负载均衡、全面的可观测性以及现代化的管理面板——现已原生支持 OpenAI Responses，并可在 OpenAI Chat、OpenAI Responses 与 Anthropic Messages 之间平滑转换。
 
-![home](./docs/assets/home.png)
-
-![logs](./docs/assets/logs.png)
-
-![insight](./docs/assets/insight.png)
+<p align="center">
+  <img src="./docs/assets/home.png" width="32%" />
+  <img src="./docs/assets/logs.png" width="32%" />
+  <img src="./docs/assets/insight.png" width="32%" />
+</p>
 
 ### 为什么选择 Squirrel？
 
