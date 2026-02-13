@@ -1,3 +1,5 @@
+![cover](docs/assets/cover.jpg)
+
 <p align="center">
   <h1 align="center">Squirrel</h1>
   <p align="center">
@@ -20,9 +22,6 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
 </p>
 
-![cover](docs/assets/cover.jpg)
-
----
 
 ## 概述
 
