@@ -193,6 +193,36 @@ class ModelMappingProviderUpdate(BaseModel):
     tiered_pricing: Optional[list[TokenTierPrice]] = None
 
 
+class ModelProviderBulkUpgradeRequest(BaseModel):
+    """Bulk upgrade request for provider model mappings."""
+
+    provider_id: int = Field(..., ge=1, description="Provider ID")
+    current_target_model_name: str = Field(
+        ..., min_length=1, max_length=100, description="Current target model name"
+    )
+    new_target_model_name: str = Field(
+        ..., min_length=1, max_length=100, description="New target model name"
+    )
+    billing_mode: BillingMode = Field("token_flat", description="Billing mode")
+    input_price: Optional[float] = Field(None, description="Input price override ($/1M tokens)")
+    output_price: Optional[float] = Field(None, description="Output price override ($/1M tokens)")
+    per_request_price: Optional[float] = Field(None, ge=0, description="Per-request price ($)")
+    tiered_pricing: Optional[list[TokenTierPrice]] = Field(
+        None, description="Tiered pricing (based on input tokens)"
+    )
+
+    @model_validator(mode="after")
+    def _validate_billing(self) -> "ModelProviderBulkUpgradeRequest":
+        if self.billing_mode == "per_request" and self.per_request_price is None:
+            raise ValueError("per_request_price is required when billing_mode=per_request")
+        if self.billing_mode == "token_tiered" and not self.tiered_pricing:
+            raise ValueError("tiered_pricing is required when billing_mode=token_tiered")
+        if self.billing_mode == "token_flat":
+            if self.input_price is None or self.output_price is None:
+                raise ValueError("input_price and output_price are required when billing_mode=token_flat")
+        return self
+
+
 class ModelMappingProvider(ModelMappingProviderBase):
     """Model-Provider Mapping Complete Model"""
     

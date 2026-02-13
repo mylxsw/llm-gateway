@@ -29,8 +29,6 @@ interface ProviderListProps {
   usedModelNamesByProvider: Record<number, string[]>;
   /** Edit callback */
   onEdit: (provider: Provider) => void;
-  /** Fetch models callback */
-  onFetchModels: (provider: Provider) => void;
   /** Open used models dialog callback */
   onOpenUsedModels: (provider: Provider) => void;
   /** Delete callback */
@@ -44,7 +42,6 @@ export function ProviderList({
   providers,
   usedModelNamesByProvider,
   onEdit,
-  onFetchModels,
   onOpenUsedModels,
   onDelete,
 }: ProviderListProps) {
@@ -117,8 +114,8 @@ export function ProviderList({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => onFetchModels(provider)}
-                    title={t('list.actions.fetchModels')}
+                    onClick={() => onOpenUsedModels(provider)}
+                    title={t('usedModels.title')}
                   >
                     <Sparkles className="h-4 w-4" suppressHydrationWarning />
                   </Button>

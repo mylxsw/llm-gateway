@@ -6,7 +6,7 @@ Provides business logic processing for Model Mappings and Model-Provider Mapping
 
 from typing import Any, Optional
 
-from app.common.errors import ConflictError, NotFoundError, ServiceError
+from app.common.errors import ConflictError, NotFoundError, ServiceError, ValidationError
 from app.domain.model import (
     ModelMapping,
     ModelMappingCreate,
@@ -16,6 +16,7 @@ from app.domain.model import (
     ModelMatchProviderResponse,
     ModelMappingProvider,
     ModelMappingProviderCreate,
+    ModelProviderBulkUpgradeRequest,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
 )
@@ -395,6 +396,39 @@ class ModelService:
             provider_id=provider_id,
             is_active=is_active,
         )
+
+    async def get_provider_pricing_history(
+        self,
+        target_model_name: str,
+    ) -> list[ModelMappingProviderResponse]:
+        """
+        Get pricing history candidates by target model name.
+
+        Results are grouped by (provider_id, target_model_name) and only
+        the latest updated item in each group is returned.
+        """
+        normalized_target_model = target_model_name.strip()
+        if not normalized_target_model:
+            return []
+
+        items = await self.model_repo.get_all_provider_mappings(
+            target_model_name=normalized_target_model
+        )
+        if not items:
+            return []
+
+        latest_by_group: dict[tuple[int, str], ModelMappingProviderResponse] = {}
+        for item in items:
+            group_key = (item.provider_id, item.target_model_name.strip().lower())
+            existing = latest_by_group.get(group_key)
+            if existing is None or item.updated_at > existing.updated_at:
+                latest_by_group[group_key] = item
+
+        return sorted(
+            latest_by_group.values(),
+            key=lambda item: item.updated_at,
+            reverse=True,
+        )
     
     async def update_provider_mapping(
         self, id: int, data: ModelMappingProviderUpdate
@@ -442,6 +476,93 @@ class ModelService:
         
         result = await self.model_repo.update_provider_mapping(id, data)
         return result  # type: ignore
+
+    async def bulk_upgrade_provider_model(
+        self, data: ModelProviderBulkUpgradeRequest
+    ) -> int:
+        """
+        Bulk upgrade provider mappings matched by provider + current target model.
+        """
+        provider = await self.provider_repo.get_by_id(data.provider_id)
+        if not provider:
+            raise NotFoundError(
+                message=f"Provider with id {data.provider_id} not found",
+                code="provider_not_found",
+            )
+
+        normalized_current = data.current_target_model_name.strip()
+        normalized_new = data.new_target_model_name.strip()
+        if not normalized_current:
+            raise ValidationError(
+                message="Current target model name is required",
+                code="validation_error",
+            )
+        if not normalized_new:
+            raise ValidationError(
+                message="New target model name is required",
+                code="validation_error",
+            )
+
+        items = await self.model_repo.get_all_provider_mappings(provider_id=data.provider_id)
+        matched_items = [
+            item
+            for item in items
+            if item.target_model_name.strip().lower() == normalized_current.lower()
+        ]
+        if not matched_items:
+            raise NotFoundError(
+                message=(
+                    f"No model-provider mappings found for provider {data.provider_id} "
+                    f"and model '{normalized_current}'"
+                ),
+                code="mapping_not_found",
+            )
+
+        update_data = ModelMappingProviderUpdate(
+            target_model_name=normalized_new,
+            billing_mode=data.billing_mode,
+            input_price=data.input_price,
+            output_price=data.output_price,
+            per_request_price=data.per_request_price,
+            tiered_pricing=data.tiered_pricing,
+        )
+
+        # Validate merged billing config before writing.
+        from app.domain.model import ModelMappingProviderCreate
+
+        for existing in matched_items:
+            merged = {
+                "requested_model": existing.requested_model,
+                "provider_id": existing.provider_id,
+                "target_model_name": existing.target_model_name,
+                "provider_rules": existing.provider_rules,
+                "priority": existing.priority,
+                "weight": existing.weight,
+                "is_active": existing.is_active,
+                "input_price": existing.input_price,
+                "output_price": existing.output_price,
+                "billing_mode": existing.billing_mode or "token_flat",
+                "per_request_price": existing.per_request_price,
+                "tiered_pricing": existing.tiered_pricing,
+            }
+            merged.update(update_data.model_dump(exclude_unset=True))
+            ModelMappingProviderCreate(**merged)
+
+        updated_count = await self.model_repo.bulk_update_provider_mappings(
+            provider_id=data.provider_id,
+            current_target_model_name=normalized_current,
+            data=update_data,
+        )
+        if updated_count <= 0:
+            raise NotFoundError(
+                message=(
+                    f"No model-provider mappings found for provider {data.provider_id} "
+                    f"and model '{normalized_current}'"
+                ),
+                code="mapping_not_found",
+            )
+
+        return updated_count
     
     async def delete_provider_mapping(self, id: int) -> None:
         """

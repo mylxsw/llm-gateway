@@ -199,7 +199,20 @@
       "title": "在用模型",
       "description": "供应商「{name}」已绑定的供应商模型名称，点击可在新页面打开模型列表并自动带入筛选。",
       "noProviderSelected": "未选择供应商",
-      "empty": "当前供应商暂无绑定模型。"
+      "empty": "当前供应商暂无绑定模型。",
+      "upgrade": {
+        "action": "升级",
+        "title": "模型一键升级",
+        "description": "将供应商「{provider}」当前模型「{model}」批量升级到新模型及新价格配置。",
+        "newModelLabel": "新模型名称",
+        "newModelPlaceholder": "输入新的供应商模型名称",
+        "confirm": "确认修改",
+        "columns": {
+          "requestedModel": "请求模型",
+          "currentModel": "当前供应商模型",
+          "currentBilling": "当前价格"
+        }
+      }
     },
     "filters": {
       "name": {
@@ -459,6 +472,13 @@
       "selectProviderFirst": "请先选择供应商",
       "loadProviderModelsFailed": "加载供应商模型失败",
       "loadHistoryFailed": "加载模型历史价格失败",
+      "loadHistoryAction": "加载历史价格建议",
+      "noHistoryCandidates": "未找到该模型的历史价格建议",
+      "historyDialogTitle": "选择历史价格建议",
+      "historyDialogDescription": "请选择一条应用，或取消后手动填写。",
+      "use": "使用",
+      "sourceModel": "来源请求模型",
+      "useSelectedPricing": "使用所选价格",
       "loadingHistory": "正在加载该模型的历史价格...",
       "billing": "计费",
       "billingMode": "计费方式",

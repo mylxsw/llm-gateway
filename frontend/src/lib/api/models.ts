@@ -16,6 +16,9 @@ import {
   ModelExport,
   ModelStats,
   ModelProviderStats,
+  ModelProviderPricingHistoryItem,
+  ModelProviderBulkUpgradeRequest,
+  ModelProviderBulkUpgradeResponse,
   ModelMatchRequest,
   ModelMatchProvider,
   ModelTestRequest,
@@ -91,6 +94,15 @@ export async function getModelProviders(
   );
 }
 
+export async function getModelProviderPricingHistory(
+  targetModelName: string
+): Promise<{ items: ModelProviderPricingHistoryItem[]; total: number }> {
+  return get<{ items: ModelProviderPricingHistoryItem[]; total: number }>(
+    `${MODEL_PROVIDERS_URL}/pricing-history`,
+    { target_model_name: targetModelName }
+  );
+}
+
 /**
  * Create Model-Provider Mapping
  * @param data - Creation data
@@ -111,6 +123,12 @@ export async function updateModelProvider(
   data: ModelMappingProviderUpdate
 ): Promise<ModelMappingProvider> {
   return put<ModelMappingProvider>(`${MODEL_PROVIDERS_URL}/${id}`, data);
+}
+
+export async function bulkUpgradeModelProviders(
+  data: ModelProviderBulkUpgradeRequest
+): Promise<ModelProviderBulkUpgradeResponse> {
+  return post<ModelProviderBulkUpgradeResponse>(`${MODEL_PROVIDERS_URL}/bulk-upgrade`, data);
 }
 
 /**

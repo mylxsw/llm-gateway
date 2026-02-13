@@ -102,6 +102,48 @@ class TestRoundRobinStrategy:
             self.candidates, "test-model", current
         )
         assert next_provider.provider_id == 1
+
+    @pytest.mark.asyncio
+    async def test_get_next_with_same_provider_different_target_model(self):
+        """Use candidate identity instead of provider_id for failover."""
+        same_provider_candidates = [
+            CandidateProvider(
+                provider_mapping_id=101,
+                provider_id=1,
+                provider_name="Provider1-A",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model-a",
+                priority=1,
+            ),
+            CandidateProvider(
+                provider_mapping_id=102,
+                provider_id=1,
+                provider_name="Provider1-B",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model-b",
+                priority=1,
+            ),
+            CandidateProvider(
+                provider_mapping_id=103,
+                provider_id=2,
+                provider_name="Provider2",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="model-c",
+                priority=2,
+            ),
+        ]
+        current = same_provider_candidates[0]
+        next_provider = await self.strategy.get_next(
+            same_provider_candidates, "test-model", current
+        )
+        assert next_provider is not None
+        assert next_provider.provider_mapping_id == 102
     
     @pytest.mark.asyncio
     async def test_get_next_single_candidate(self):

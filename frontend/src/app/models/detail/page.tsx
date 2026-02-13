@@ -27,7 +27,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
-import { ModelProviderForm, ModelMatchDialog, ModelTestDialog } from '@/components/models';
+import {
+  BillingDisplay,
+  ModelProviderForm,
+  ModelMatchDialog,
+  ModelTestDialog,
+} from '@/components/models';
 import { ConfirmDialog, LoadingSpinner, ErrorState } from '@/components/common';
 import {
   useModel,
@@ -73,23 +78,11 @@ function formatPrice(value: number | null | undefined) {
   return formatUsdCeil4(value);
 }
 
-function isAllZero(values: number[]) {
-  return values.every((v) => v === 0);
-}
-
 function formatRate(value: number | null | undefined) {
   if (value === null || value === undefined) return '-';
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function resolveInheritedPrice(
-  override: number | null | undefined,
-  fallback: number | null | undefined
-) {
-  if (override !== null && override !== undefined) return override;
-  if (fallback !== null && fallback !== undefined) return fallback;
-  return 0;
-}
 
 export default function ModelDetailPage() {
   return (
@@ -205,60 +198,6 @@ function ModelDetailContent() {
       default:
         return t('filters.chat');
     }
-  };
-
-  const formatUsdOrFree = (value: number) => {
-    return value === 0 ? t('detail.billingDisplay.free') : formatUsdCeil4(value);
-  };
-
-  const formatBilling = (
-    mapping: ModelMappingProvider,
-    fallbackPrices?: { input_price?: number | null; output_price?: number | null }
-  ) => {
-    const mode = mapping.billing_mode ?? 'token_flat';
-    if (mode === 'per_request') {
-      if (mapping.per_request_price === null || mapping.per_request_price === undefined) {
-        return t('detail.billingDisplay.perRequestEmpty');
-      }
-      if (mapping.per_request_price === 0) return t('detail.billingDisplay.free');
-      return t('detail.billingDisplay.perRequest', {
-        price: formatUsdCeil4(mapping.per_request_price),
-      });
-    }
-    if (mode === 'token_tiered') {
-      const tiers = mapping.tiered_pricing ?? [];
-      if (!tiers.length) return t('detail.billingDisplay.tieredEmpty');
-      if (isAllZero(tiers.flatMap((tier) => [tier.input_price, tier.output_price]))) {
-        return t('detail.billingDisplay.free');
-      }
-      const preview = tiers
-        .slice(0, 2)
-        .map((tier) => {
-          const max =
-            tier.max_input_tokens === null || tier.max_input_tokens === undefined
-              ? '∞'
-              : String(tier.max_input_tokens);
-          return t('detail.billingDisplay.tieredEntry', {
-            max,
-            input: formatUsdOrFree(tier.input_price),
-            output: formatUsdOrFree(tier.output_price),
-          });
-        })
-        .join(', ');
-      const more =
-        tiers.length > 2
-          ? t('detail.billingDisplay.tieredPreviewMore', { count: tiers.length - 2 })
-          : '';
-      return t('detail.billingDisplay.tieredPreview', { preview, more });
-    }
-    // token_flat (default)
-    const effectiveInput = resolveInheritedPrice(mapping.input_price, fallbackPrices?.input_price);
-    const effectiveOutput = resolveInheritedPrice(mapping.output_price, fallbackPrices?.output_price);
-    if (effectiveInput === 0 && effectiveOutput === 0) return t('detail.billingDisplay.free');
-    return t('detail.billingDisplay.tokenFlat', {
-      input: formatUsdOrFree(effectiveInput),
-      output: formatUsdOrFree(effectiveOutput),
-    });
   };
 
   if (!requestedModel) {
@@ -472,12 +411,15 @@ function ModelDetailContent() {
                       </TableCell>
                       {supportsBilling && (
                         <TableCell className="text-sm">
-                          <span className="font-mono">
-                            {formatBilling(mapping, {
-                              input_price: model.input_price,
-                              output_price: model.output_price,
-                            })}
-                          </span>
+                          <BillingDisplay
+                            billingMode={mapping.billing_mode}
+                            inputPrice={mapping.input_price}
+                            outputPrice={mapping.output_price}
+                            perRequestPrice={mapping.per_request_price}
+                            tieredPricing={mapping.tiered_pricing}
+                            fallbackInputPrice={model.input_price}
+                            fallbackOutputPrice={model.output_price}
+                          />
                         </TableCell>
                       )}
                       <TableCell>{mapping.priority}</TableCell>

@@ -158,3 +158,47 @@ class TestRetryHandler:
         
         assert result.success is False
         assert result.response.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_switch_between_same_provider_multiple_target_models(self):
+        """Failover should work for multiple mappings under one provider."""
+        self.strategy.reset()
+        candidates = [
+            CandidateProvider(
+                provider_mapping_id=201,
+                provider_id=1,
+                provider_name="Provider1",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model-a",
+                priority=1,
+            ),
+            CandidateProvider(
+                provider_mapping_id=202,
+                provider_id=1,
+                provider_name="Provider1",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model-b",
+                priority=2,
+            ),
+        ]
+        called_models: list[str] = []
+
+        async def forward_fn(candidate):
+            called_models.append(candidate.target_model)
+            if candidate.target_model == "model-a":
+                return ProviderResponse(status_code=400, error="Bad request")
+            return ProviderResponse(status_code=200, body={"result": "ok"})
+
+        result = await self.handler.execute_with_retry(
+            candidates=candidates,
+            requested_model="test",
+            forward_fn=forward_fn,
+        )
+
+        assert result.success is True
+        assert result.final_provider.provider_mapping_id == 202
+        assert called_models == ["model-a", "model-b"]

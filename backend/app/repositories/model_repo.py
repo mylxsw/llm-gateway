@@ -90,6 +90,7 @@ class ModelRepository(ABC):
         self,
         requested_model: Optional[str] = None,
         provider_id: Optional[int] = None,
+        target_model_name: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> List[ModelMappingProviderResponse]:
         """Get all model-provider mappings (supports filtering)"""
@@ -108,6 +109,16 @@ class ModelRepository(ABC):
     @abstractmethod
     async def update_provider_mapping(self, id: int, data: ModelMappingProviderUpdate) -> Optional[ModelMappingProvider]:
         """Update Model-Provider Mapping"""
+        pass
+
+    @abstractmethod
+    async def bulk_update_provider_mappings(
+        self,
+        provider_id: int,
+        current_target_model_name: str,
+        data: ModelMappingProviderUpdate,
+    ) -> int:
+        """Bulk update mappings by provider and exact target model name"""
         pass
     
     @abstractmethod

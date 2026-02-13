@@ -29,6 +29,7 @@ from app.domain.log import ModelProviderStats, ModelStats
 from app.domain.model import (
     ModelExport,
     ModelMappingCreate,
+    ModelProviderBulkUpgradeRequest,
     ModelMappingProviderCreate,
     ModelMappingProviderResponse,
     ModelMappingProviderUpdate,
@@ -59,6 +60,19 @@ class ModelProviderListResponse(BaseModel):
 
     items: list[ModelMappingProviderResponse]
     total: int
+
+
+class ModelProviderPricingHistoryResponse(BaseModel):
+    """Model pricing history candidates by target model name"""
+
+    items: list[ModelMappingProviderResponse]
+    total: int
+
+
+class ModelProviderBulkUpgradeResponse(BaseModel):
+    """Bulk upgrade response."""
+
+    updated_count: int
 
 
 class ImportModelResponse(BaseModel):
@@ -536,6 +550,27 @@ async def list_model_providers(
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
+@router.get(
+    "/model-providers/pricing-history",
+    response_model=ModelProviderPricingHistoryResponse,
+)
+async def get_model_provider_pricing_history(
+    service: ModelServiceDep,
+    target_model_name: str = Query(..., min_length=1, description="Target model name"),
+):
+    """
+    Get historical pricing candidates by target model name.
+    """
+    try:
+        items = await service.get_provider_pricing_history(target_model_name)
+        return ModelProviderPricingHistoryResponse(
+            items=items,
+            total=len(items),
+        )
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
 @router.post(
     "/model-providers",
     response_model=ModelMappingProviderResponse,
@@ -550,6 +585,24 @@ async def create_model_provider(
     """
     try:
         return await service.create_provider_mapping(data)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.post(
+    "/model-providers/bulk-upgrade",
+    response_model=ModelProviderBulkUpgradeResponse,
+)
+async def bulk_upgrade_model_providers(
+    data: ModelProviderBulkUpgradeRequest,
+    service: ModelServiceDep,
+):
+    """
+    Bulk upgrade provider mappings by provider and current target model name.
+    """
+    try:
+        updated_count = await service.bulk_upgrade_provider_model(data)
+        return ModelProviderBulkUpgradeResponse(updated_count=updated_count)
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 

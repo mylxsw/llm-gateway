@@ -50,7 +50,9 @@ function ApiKeysContent() {
 
   useEffect(() => {
     const { parsedPage, parsedPageSize } = buildStateFromParams();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage((prev) => (prev === parsedPage ? prev : parsedPage));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPageSize((prev) => (prev === parsedPageSize ? prev : parsedPageSize));
   }, [buildStateFromParams]);
 

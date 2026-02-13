@@ -125,3 +125,4 @@ class CandidateProvider:
     tiered_pricing: Optional[list[Any]] = None
     model_input_price: Optional[float] = None
     model_output_price: Optional[float] = None
+    provider_mapping_id: Optional[int] = None

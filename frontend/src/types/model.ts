@@ -116,6 +116,26 @@ export interface ModelMappingProviderUpdate {
   is_active?: boolean;
 }
 
+/** Bulk upgrade provider mappings by provider + current target model name */
+export interface ModelProviderBulkUpgradeRequest {
+  provider_id: number;
+  current_target_model_name: string;
+  new_target_model_name: string;
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request';
+  input_price?: number | null;
+  output_price?: number | null;
+  per_request_price?: number | null;
+  tiered_pricing?: Array<{
+    max_input_tokens?: number | null;
+    input_price: number;
+    output_price: number;
+  }> | null;
+}
+
+export interface ModelProviderBulkUpgradeResponse {
+  updated_count: number;
+}
+
 /** Model Mapping List Query Params */
 export interface ModelListParams {
   is_active?: boolean;
@@ -133,6 +153,8 @@ export interface ModelProviderListParams {
   provider_id?: number;
   is_active?: boolean;
 }
+
+export type ModelProviderPricingHistoryItem = ModelMappingProvider;
 
 /** Model Provider Export Entity */
 export interface ModelProviderExport {

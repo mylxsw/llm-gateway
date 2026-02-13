@@ -15,6 +15,12 @@ from app.common.costs import resolve_billing, calculate_cost_from_billing
 logger = logging.getLogger(__name__)
 
 
+def _candidate_key(candidate: CandidateProvider) -> tuple[str, int] | tuple[str, int, str]:
+    if candidate.provider_mapping_id is not None:
+        return ("mapping", candidate.provider_mapping_id)
+    return ("provider_target", candidate.provider_id, candidate.target_model)
+
+
 class SelectionStrategy(ABC):
     """
     Provider Selection Strategy Abstract Base Class
@@ -168,7 +174,7 @@ class RoundRobinStrategy(SelectionStrategy):
         # Find index of current provider
         current_index = -1
         for i, c in enumerate(candidates):
-            if c.provider_id == current.provider_id:
+            if _candidate_key(c) == _candidate_key(current):
                 current_index = i
                 break
         
@@ -224,7 +230,14 @@ class PriorityStrategy(SelectionStrategy):
         for candidate in candidates:
             grouped.setdefault(candidate.priority, []).append(candidate)
         for priority, group in grouped.items():
-            grouped[priority] = sorted(group, key=lambda c: c.provider_id)
+            grouped[priority] = sorted(
+                group,
+                key=lambda c: (
+                    c.provider_id,
+                    c.target_model,
+                    c.provider_mapping_id or 0,
+                ),
+            )
         return grouped
 
     async def _select_from_group(
@@ -326,13 +339,13 @@ class PriorityStrategy(SelectionStrategy):
             rotation_start = self._last_selected_index.get(key)
             if rotation_start is None or rotation_start >= len(group):
                 rotation_start = next(
-                    (i for i, c in enumerate(group) if c.provider_id == current.provider_id),
+                    (i for i, c in enumerate(group) if _candidate_key(c) == _candidate_key(current)),
                     0,
                 )
 
             rotated = group[rotation_start:] + group[:rotation_start]
             current_index = next(
-                (i for i, c in enumerate(rotated) if c.provider_id == current.provider_id),
+                (i for i, c in enumerate(rotated) if _candidate_key(c) == _candidate_key(current)),
                 -1,
             )
             if current_index != -1 and current_index + 1 < len(rotated):
@@ -456,7 +469,15 @@ class CostFirstStrategy(SelectionStrategy):
                 candidates_with_cost.append((candidate, float('inf')))
 
         # Sort by cost (lowest first), then by priority, then by provider_id
-        candidates_with_cost.sort(key=lambda x: (x[1], x[0].priority, x[0].provider_id))
+        candidates_with_cost.sort(
+            key=lambda x: (
+                x[1],
+                x[0].priority,
+                x[0].provider_id,
+                x[0].target_model,
+                x[0].provider_mapping_id or 0,
+            )
+        )
 
         # Find all candidates with the same lowest cost
         min_cost = candidates_with_cost[0][1]
@@ -515,7 +536,7 @@ class CostFirstStrategy(SelectionStrategy):
             # Find index of current provider
             current_index = -1
             for i, c in enumerate(candidates):
-                if c.provider_id == current.provider_id:
+                if _candidate_key(c) == _candidate_key(current):
                     current_index = i
                     break
 
@@ -542,12 +563,20 @@ class CostFirstStrategy(SelectionStrategy):
                 candidates_with_cost.append((candidate, float('inf')))
 
         # Sort by cost, then priority, then provider_id
-        candidates_with_cost.sort(key=lambda x: (x[1], x[0].priority, x[0].provider_id))
+        candidates_with_cost.sort(
+            key=lambda x: (
+                x[1],
+                x[0].priority,
+                x[0].provider_id,
+                x[0].target_model,
+                x[0].provider_mapping_id or 0,
+            )
+        )
 
         # Find current provider in the sorted list
         current_index = -1
         for i, (c, _) in enumerate(candidates_with_cost):
-            if c.provider_id == current.provider_id:
+            if _candidate_key(c) == _candidate_key(current):
                 current_index = i
                 break
 

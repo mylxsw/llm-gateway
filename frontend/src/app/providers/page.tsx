@@ -12,18 +12,30 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Download, Upload, ExternalLink } from 'lucide-react';
-import { ProviderFilters, ProviderFiltersState, ProviderForm, ProviderList } from '@/components/providers';
+import {
+  ProviderFilters,
+  ProviderFiltersState,
+  ProviderForm,
+  ProviderList,
+  ProviderModelBulkUpgradeDialog,
+} from '@/components/providers';
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useProviders,
   useModelProviders,
+  useBulkUpgradeModelProviders,
   useCreateProvider,
   useUpdateProvider,
   useDeleteProvider,
 } from '@/lib/hooks';
-import { exportProviders, importProviders, getProviderModels } from '@/lib/api';
-import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
-import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
+import { exportProviders, importProviders } from '@/lib/api';
+import {
+  ModelProviderBulkUpgradeRequest,
+  ProtocolType,
+  Provider,
+  ProviderCreate,
+  ProviderUpdate,
+} from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { parseNumberParam, parseStringParam, setParam } from '@/lib/utils';
 
@@ -65,14 +77,10 @@ function ProvidersContent() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
 
-  // Provider model list dialog state
-  const [modelDialogOpen, setModelDialogOpen] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
-  const [modelList, setModelList] = useState<string[]>([]);
-  const [modelLoading, setModelLoading] = useState(false);
-  const [modelError, setModelError] = useState<string | null>(null);
   const [usedModelsDialogOpen, setUsedModelsDialogOpen] = useState(false);
   const [usedModelsProvider, setUsedModelsProvider] = useState<Provider | null>(null);
+  const [bulkUpgradeDialogOpen, setBulkUpgradeDialogOpen] = useState(false);
+  const [bulkUpgradeModelName, setBulkUpgradeModelName] = useState<string | null>(null);
 
   // Filter state
   const [filters, setFilters] = useState<ProviderFiltersState>(
@@ -143,7 +151,7 @@ function ProvidersContent() {
   const createMutation = useCreateProvider();
   const updateMutation = useUpdateProvider();
   const deleteMutation = useDeleteProvider();
-  const { configs: protocolConfigs } = useProviderProtocolConfigs();
+  const bulkUpgradeMutation = useBulkUpgradeModelProviders();
 
   // File Input Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,38 +174,36 @@ function ProvidersContent() {
     setDeleteDialogOpen(true);
   };
 
-  const handleFetchModels = async (provider: Provider) => {
-    setSelectedProvider(provider);
-    setModelDialogOpen(true);
-    setModelLoading(true);
-    setModelError(null);
-    setModelList([]);
-    try {
-      const result = await getProviderModels(provider.id);
-      if (!result.success) {
-        const message = result.error?.message || t('errors.fetchModelsFailed');
-        setModelError(message);
-        return;
-      }
-      setModelList(result.models || []);
-    } catch (error) {
-      console.error('Fetch models failed:', error);
-      const message =
-        error instanceof Error ? error.message : t('errors.fetchModelsFailed');
-      setModelError(message);
-    } finally {
-      setModelLoading(false);
-    }
-  };
-
   const handleOpenUsedModels = (provider: Provider) => {
     setUsedModelsProvider(provider);
     setUsedModelsDialogOpen(true);
   };
 
+  const handleOpenBulkUpgrade = (modelName: string) => {
+    setBulkUpgradeModelName(modelName);
+    setBulkUpgradeDialogOpen(true);
+  };
+
   const usedModelList = usedModelsProvider
     ? usedModelNamesByProvider[usedModelsProvider.id] ?? []
     : [];
+
+  const bulkUpgradeMappings = useMemo(() => {
+    if (!usedModelsProvider || !bulkUpgradeModelName) {
+      return [];
+    }
+    const expectedTarget = bulkUpgradeModelName.trim().toLowerCase();
+    return (modelProviderMappings?.items ?? []).filter((mapping) => (
+      mapping.provider_id === usedModelsProvider.id
+      && mapping.target_model_name.trim().toLowerCase() === expectedTarget
+    ));
+  }, [bulkUpgradeModelName, modelProviderMappings?.items, usedModelsProvider]);
+
+  const handleBulkUpgradeSubmit = async (data: ModelProviderBulkUpgradeRequest) => {
+    await bulkUpgradeMutation.mutateAsync(data);
+    setBulkUpgradeDialogOpen(false);
+    setBulkUpgradeModelName(null);
+  };
 
   // Submit form
   const handleSubmit = async (formData: ProviderCreate | ProviderUpdate) => {
@@ -346,7 +352,6 @@ function ProvidersContent() {
                 providers={data.items}
                 usedModelNamesByProvider={usedModelNamesByProvider}
                 onEdit={handleEdit}
-                onFetchModels={handleFetchModels}
                 onOpenUsedModels={handleOpenUsedModels}
                 onDelete={handleDelete}
               />
@@ -383,43 +388,6 @@ function ProvidersContent() {
         loading={deleteMutation.isPending}
       />
 
-      <Dialog open={modelDialogOpen} onOpenChange={setModelDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{t('models.title')}</DialogTitle>
-            <DialogDescription>
-              {selectedProvider
-                ? t('models.description', {
-                    name: selectedProvider.name,
-                    protocol: getProviderProtocolLabel(selectedProvider.protocol, protocolConfigs),
-                  })
-                : t('models.noProviderSelected')}
-            </DialogDescription>
-          </DialogHeader>
-          {modelLoading && <LoadingSpinner />}
-          {!modelLoading && modelError && (
-            <div className="text-sm text-destructive">{modelError}</div>
-          )}
-          {!modelLoading && !modelError && (
-            <div className="max-h-[360px] overflow-auto rounded-md border p-3">
-              {modelList.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  {t('models.empty')}
-                </div>
-              ) : (
-                <ul className="space-y-1 text-sm">
-                  {modelList.map((model) => (
-                    <li key={model} className="font-mono">
-                      {model}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={usedModelsDialogOpen} onOpenChange={setUsedModelsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -448,16 +416,26 @@ function ProvidersContent() {
                         {modelName}
                       </span>
                     </div>
-                    <Link
-                      href={`/models?target_model_name=${encodeURIComponent(modelName)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
-                      title={t('list.actions.viewModelList')}
-                    >
-                      <span>{t('list.actions.viewModelList')}</span>
-                      <ExternalLink className="h-3.5 w-3.5" suppressHydrationWarning />
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/models?target_model_name=${encodeURIComponent(modelName)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 whitespace-nowrap text-primary hover:underline"
+                        title={t('list.actions.viewModelList')}
+                      >
+                        <span>{t('list.actions.viewModelList')}</span>
+                        <ExternalLink className="h-3.5 w-3.5" suppressHydrationWarning />
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenBulkUpgrade(modelName)}
+                      >
+                        {t('usedModels.upgrade.action')}
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ol>
@@ -465,6 +443,16 @@ function ProvidersContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProviderModelBulkUpgradeDialog
+        open={bulkUpgradeDialogOpen}
+        onOpenChange={setBulkUpgradeDialogOpen}
+        provider={usedModelsProvider}
+        currentModelName={bulkUpgradeModelName}
+        mappings={bulkUpgradeMappings}
+        loading={bulkUpgradeMutation.isPending}
+        onSubmit={handleBulkUpgradeSubmit}
+      />
     </div>
   );
 }

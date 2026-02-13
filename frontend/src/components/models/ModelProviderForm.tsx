@@ -5,13 +5,14 @@
 
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -27,15 +28,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { RuleBuilder } from '@/components/common';
+import { BillingDisplay } from '@/components/models/BillingDisplay';
+import { ModelProviderBillingFields } from '@/components/models/ModelProviderBillingFields';
 import { toast } from 'sonner';
-import { getModelProviders } from '@/lib/api';
+import { getModelProviderPricingHistory } from '@/lib/api';
 import { useProviderModels } from '@/lib/hooks';
 import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
 import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
   ModelMappingProviderUpdate,
+  ModelProviderPricingHistoryItem,
   ModelType,
   Provider,
   RuleSet,
@@ -139,13 +151,12 @@ export function ModelProviderForm({
   const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
   const [selectedProviderModel, setSelectedProviderModel] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
-  const lastSyncedTarget = useRef<string>('');
-  const providerModelQuery = useProviderModels(Number(providerId), { enabled: false });
-
-  const normalizedTargetModel = useMemo(
-    () => targetModelName.trim().toLowerCase(),
-    [targetModelName]
+  const [priceHistoryDialogOpen, setPriceHistoryDialogOpen] = useState(false);
+  const [priceHistoryItems, setPriceHistoryItems] = useState<ModelProviderPricingHistoryItem[]>(
+    []
   );
+  const [selectedPriceHistoryId, setSelectedPriceHistoryId] = useState<number | null>(null);
+  const providerModelQuery = useProviderModels(Number(providerId), { enabled: false });
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -203,7 +214,6 @@ export function ModelProviderForm({
         weight: mapping.weight,
         is_active: mapping.is_active,
       });
-      lastSyncedTarget.current = mapping.target_model_name?.trim() || '';
     } else {
       const fallbackInputPrice =
         defaultPrices?.input_price === null || defaultPrices?.input_price === undefined
@@ -232,65 +242,8 @@ export function ModelProviderForm({
         weight: 1,
         is_active: true,
       });
-      lastSyncedTarget.current = '';
     }
   }, [defaultPrices?.input_price, defaultPrices?.output_price, mapping, reset]);
-
-  useEffect(() => {
-    if (!supportsBilling) return;
-    if (!normalizedTargetModel) return;
-    if (normalizedTargetModel === lastSyncedTarget.current.toLowerCase()) return;
-
-    const timeoutId = setTimeout(async () => {
-      setHistoryLoading(true);
-      try {
-        const result = await getModelProviders();
-        const matches = result.items.filter(
-          (item) => item.target_model_name.trim().toLowerCase() === normalizedTargetModel
-        );
-        if (matches.length === 0) {
-          return;
-        }
-
-        const match = matches.sort((a, b) => {
-          const aTime = new Date(a.updated_at).getTime();
-          const bTime = new Date(b.updated_at).getTime();
-          return bTime - aTime;
-        })[0];
-
-        const resolvedBillingMode =
-          (match.billing_mode || 'token_flat') as FormData['billing_mode'];
-
-        setValue('billing_mode', resolvedBillingMode);
-        if (resolvedBillingMode === 'per_request') {
-          setValue('per_request_price', String(match.per_request_price ?? 0));
-        } else if (resolvedBillingMode === 'token_tiered') {
-          const tiers =
-            match.tiered_pricing && match.tiered_pricing.length > 0
-              ? match.tiered_pricing.map((tier) => ({
-                  max_input_tokens:
-                    tier.max_input_tokens === null || tier.max_input_tokens === undefined
-                      ? ''
-                      : String(tier.max_input_tokens),
-                  input_price: String(tier.input_price ?? 0),
-                  output_price: String(tier.output_price ?? 0),
-                }))
-              : [{ max_input_tokens: '', input_price: '0', output_price: '0' }];
-          setValue('tiers', tiers);
-        } else {
-          setValue('input_price', String(match.input_price ?? 0));
-          setValue('output_price', String(match.output_price ?? 0));
-        }
-      } catch (error) {
-        toast.error(t('providerForm.loadHistoryFailed'));
-      } finally {
-        lastSyncedTarget.current = targetModelName.trim();
-        setHistoryLoading(false);
-      }
-    }, 400);
-
-    return () => clearTimeout(timeoutId);
-  }, [normalizedTargetModel, setValue, supportsBilling, targetModelName]);
 
   const handleOpenProviderModelDialog = async () => {
     if (!providerId) {
@@ -322,6 +275,68 @@ export function ModelProviderForm({
       shouldDirty: true,
     });
     setProviderModelDialogOpen(false);
+  };
+
+  const applyPriceHistory = (item: ModelProviderPricingHistoryItem) => {
+    const resolvedBillingMode = (item.billing_mode || 'token_flat') as FormData['billing_mode'];
+    setValue('billing_mode', resolvedBillingMode);
+    if (resolvedBillingMode === 'per_request') {
+      setValue('per_request_price', String(item.per_request_price ?? 0));
+      return;
+    }
+    if (resolvedBillingMode === 'token_tiered') {
+      const tiers =
+        item.tiered_pricing && item.tiered_pricing.length > 0
+          ? item.tiered_pricing.map((tier) => ({
+              max_input_tokens:
+                tier.max_input_tokens === null || tier.max_input_tokens === undefined
+                  ? ''
+                  : String(tier.max_input_tokens),
+              input_price: String(tier.input_price ?? 0),
+              output_price: String(tier.output_price ?? 0),
+            }))
+          : [{ max_input_tokens: '', input_price: '0', output_price: '0' }];
+      setValue('tiers', tiers);
+      return;
+    }
+    setValue('input_price', String(item.input_price ?? 0));
+    setValue('output_price', String(item.output_price ?? 0));
+  };
+
+  const handleLoadPriceHistory = async () => {
+    const normalizedTargetModel = targetModelName.trim();
+    if (!normalizedTargetModel) {
+      toast.error(t('providerForm.targetModelRequired'));
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      const result = await getModelProviderPricingHistory(normalizedTargetModel);
+      if (result.items.length === 0) {
+        toast.info(t('providerForm.noHistoryCandidates'));
+        return;
+      }
+      setPriceHistoryItems(result.items);
+      setSelectedPriceHistoryId(result.items[0].id);
+      setPriceHistoryDialogOpen(true);
+    } catch {
+      toast.error(t('providerForm.loadHistoryFailed'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleApplyPriceHistory = () => {
+    if (selectedPriceHistoryId === null) {
+      return;
+    }
+    const selected = priceHistoryItems.find((item) => item.id === selectedPriceHistoryId);
+    if (!selected) {
+      return;
+    }
+    applyPriceHistory(selected);
+    setPriceHistoryDialogOpen(false);
   };
 
   // Submit form
@@ -528,149 +543,24 @@ export function ModelProviderForm({
                 {errors.target_model_name.message}
               </p>
             )}
-            {historyLoading && (
-              <p className="text-xs text-muted-foreground">
-                {t('providerForm.loadingHistory')}
-              </p>
-            )}
           </div>
 
           {/* Billing / Pricing */}
           {supportsBilling && (
-            <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-              <div className="text-sm font-medium">{t('providerForm.billing')}</div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{t('providerForm.billingMode')}</Label>
-                  <Select
-                    value={billingMode}
-                    onValueChange={(value) =>
-                      setValue('billing_mode', value as FormData['billing_mode'])
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('providerForm.billingModePlaceholder')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="per_request">
-                        {t('providerForm.billingModePerRequest')}
-                      </SelectItem>
-                      <SelectItem value="token_flat">
-                        {t('providerForm.billingModeTokenFlat')}
-                      </SelectItem>
-                      <SelectItem value="token_tiered">
-                        {t('providerForm.billingModeTokenTiered')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {billingMode === 'per_request' ? (
-                <div className="space-y-2">
-                  <Label htmlFor="per_request_price">
-                    {t('providerForm.pricePerRequest')}
-                  </Label>
-                  <Input
-                    id="per_request_price"
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    {...register('per_request_price')}
-                  />
-                </div>
-              ) : billingMode === 'token_tiered' ? (
-                <div className="space-y-3">
-                  <div className="text-xs text-muted-foreground">
-                    {t('providerForm.tieredHint')}
-                  </div>
-                  <div className="space-y-2">
-                    {tierFields.map((field, idx) => (
-                      <div key={field.id} className="grid grid-cols-7 gap-2 items-end">
-                        <div className="col-span-2 space-y-1">
-                          <Label>{t('providerForm.maxInputTokens')}</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder={t('providerForm.tierMaxPlaceholder')}
-                            {...register(`tiers.${idx}.max_input_tokens` as const)}
-                          />
-                        </div>
-                        <div className="col-span-2 space-y-1">
-                          <Label>{t('providerForm.tierInputPrice')}</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.0001"
-                            placeholder={t('providerForm.tierInputPlaceholder')}
-                            {...register(`tiers.${idx}.input_price` as const)}
-                          />
-                        </div>
-                        <div className="col-span-2 space-y-1">
-                          <Label>{t('providerForm.tierOutputPrice')}</Label>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.0001"
-                            placeholder={t('providerForm.tierOutputPlaceholder')}
-                            {...register(`tiers.${idx}.output_price` as const)}
-                          />
-                        </div>
-                        <div className="col-span-1 flex gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => removeTier(idx)}
-                            disabled={tierFields.length <= 1}
-                          >
-                            {t('providerForm.removeTier')}
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        appendTier({ max_input_tokens: '', input_price: '', output_price: '' })
-                      }
-                    >
-                      {t('providerForm.addTier')}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="input_price">{t('providerForm.inputPrice')}</Label>
-                      <Input
-                        id="input_price"
-                        type="number"
-                        min={0}
-                        step="0.0001"
-                        {...register('input_price')}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="output_price">{t('providerForm.outputPrice')}</Label>
-                      <Input
-                        id="output_price"
-                        type="number"
-                        min={0}
-                        step="0.0001"
-                        {...register('output_price')}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <p className="text-xs text-muted-foreground">
-                {t('providerForm.billingHint')}
-              </p>
-            </div>
+            <ModelProviderBillingFields
+              t={t}
+              billingMode={billingMode}
+              setBillingMode={(value) =>
+                setValue('billing_mode', value as FormData['billing_mode'])
+              }
+              register={register}
+              tierFields={tierFields}
+              appendTier={appendTier}
+              removeTier={removeTier}
+              historyLoading={historyLoading}
+              onLoadHistory={handleLoadPriceHistory}
+              showHistoryButton
+            />
           )}
 
           {/* Priority and Weight */}
@@ -789,6 +679,78 @@ export function ModelProviderForm({
               disabled={!selectedProviderModel}
             >
               {t('providerForm.useSelectedModel')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={priceHistoryDialogOpen} onOpenChange={setPriceHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>{t('providerForm.historyDialogTitle')}</DialogTitle>
+            <DialogDescription>{t('providerForm.historyDialogDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[360px] overflow-y-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[56px]">{t('providerForm.use')}</TableHead>
+                  <TableHead>{t('providerForm.provider')}</TableHead>
+                  <TableHead>{t('providerForm.targetModel')}</TableHead>
+                  <TableHead>{t('providerForm.billingMode')}</TableHead>
+                  <TableHead>{t('providerForm.sourceModel')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {priceHistoryItems.map((item) => (
+                  <TableRow
+                    key={item.id}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedPriceHistoryId(item.id)}
+                  >
+                    <TableCell>
+                      <input
+                        type="radio"
+                        name="price-history-candidate"
+                        checked={selectedPriceHistoryId === item.id}
+                        onChange={() => setSelectedPriceHistoryId(item.id)}
+                        aria-label={item.provider_name}
+                      />
+                    </TableCell>
+                    <TableCell>{item.provider_name}</TableCell>
+                    <TableCell>
+                      <code className="text-xs">{item.target_model_name}</code>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <BillingDisplay
+                        billingMode={item.billing_mode}
+                        inputPrice={item.input_price}
+                        outputPrice={item.output_price}
+                        perRequestPrice={item.per_request_price}
+                        tieredPricing={item.tiered_pricing}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <code className="text-xs">{item.requested_model}</code>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPriceHistoryDialogOpen(false)}
+            >
+              {tCommon('cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleApplyPriceHistory}
+              disabled={selectedPriceHistoryId === null}
+            >
+              {t('providerForm.useSelectedPricing')}
             </Button>
           </DialogFooter>
         </DialogContent>
