@@ -76,6 +76,14 @@ class RetryHandler:
         # Retry interval (ms)
         self.retry_delay_ms = settings.RETRY_DELAY_MS
 
+    @staticmethod
+    def _candidate_key(
+        candidate: CandidateProvider,
+    ) -> tuple[str, int] | tuple[str, int, str]:
+        if candidate.provider_mapping_id is not None:
+            return ("mapping", candidate.provider_mapping_id)
+        return ("provider_target", candidate.provider_id, candidate.target_model)
+
     async def get_ordered_candidates(
         self,
         candidates: list[CandidateProvider],
@@ -92,24 +100,25 @@ class RetryHandler:
             return []
 
         ordered: list[CandidateProvider] = []
-        tried_providers: set[int] = set()
+        tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
         while current_provider is not None:
-            if current_provider.provider_id in tried_providers:
+            current_key = self._candidate_key(current_provider)
+            if current_key in tried_candidates:
                 break
             ordered.append(current_provider)
-            tried_providers.add(current_provider.provider_id)
-            if len(tried_providers) >= len(candidates):
+            tried_candidates.add(current_key)
+            if len(tried_candidates) >= len(candidates):
                 break
             current_provider = await self._get_next_untried_provider(
-                candidates, tried_providers, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens
             )
 
         if len(ordered) == len(candidates):
             return ordered
 
         for candidate in candidates:
-            if candidate.provider_id not in tried_providers:
+            if self._candidate_key(candidate) not in tried_candidates:
                 ordered.append(candidate)
 
         return ordered
@@ -147,8 +156,8 @@ class RetryHandler:
                 attempts=[],
             )
         
-        # Track tried providers
-        tried_providers: set[int] = set()
+        # Track tried candidates
+        tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         total_retry_count = 0
         last_response: Optional[ProviderResponse] = None
         last_provider: Optional[CandidateProvider] = None
@@ -160,7 +169,7 @@ class RetryHandler:
         
         while current_provider is not None:
             # Record current provider as tried
-            tried_providers.add(current_provider.provider_id)
+            tried_candidates.add(self._candidate_key(current_provider))
             last_provider = current_provider
             
             # Same provider retry count
@@ -243,7 +252,7 @@ class RetryHandler:
             
             # Try to switch to the next provider
             next_provider = await self._get_next_untried_provider(
-                candidates, tried_providers, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens
             )
             
             if next_provider is None:
@@ -292,7 +301,7 @@ class RetryHandler:
             ), None, 0
             return
             
-        tried_providers: set[int] = set()
+        tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         total_retry_count = 0
         last_chunk: bytes = b""
         last_response: Optional[ProviderResponse] = None
@@ -302,7 +311,7 @@ class RetryHandler:
         current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
         
         while current_provider is not None:
-            tried_providers.add(current_provider.provider_id)
+            tried_candidates.add(self._candidate_key(current_provider))
             last_provider = current_provider
             same_provider_retries = 0
             pending_attempt_record: Optional[AttemptRecord] = None
@@ -429,7 +438,7 @@ class RetryHandler:
                         break
             
             next_provider = await self._get_next_untried_provider(
-                candidates, tried_providers, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens
             )
             if next_provider is None:
                 break
@@ -444,7 +453,7 @@ class RetryHandler:
     async def _get_next_untried_provider(
         self,
         candidates: list[CandidateProvider],
-        tried_providers: set[int],
+        tried_candidates: set[tuple[str, int] | tuple[str, int, str]],
         requested_model: str,
         current_provider: CandidateProvider,
         input_tokens: Optional[int] = None,
@@ -454,7 +463,7 @@ class RetryHandler:
 
         Args:
             candidates: List of candidate providers
-            tried_providers: Set of tried provider IDs
+            tried_candidates: Set of tried candidate keys
             requested_model: Requested model name
             current_provider: Current provider
             input_tokens: Number of input tokens (for cost-based selection)
@@ -462,8 +471,8 @@ class RetryHandler:
         Returns:
             Optional[CandidateProvider]: Next provider
         """
-        candidate_provider_ids = {c.provider_id for c in candidates}
-        if candidate_provider_ids and candidate_provider_ids.issubset(tried_providers):
+        candidate_keys = {self._candidate_key(c) for c in candidates}
+        if candidate_keys and candidate_keys.issubset(tried_candidates):
             return None
 
         # Use the strategy to get the next provider
@@ -473,10 +482,10 @@ class RetryHandler:
 
         # Keep trying until we find an untried provider or run out of options.
         # Some strategies can cycle indefinitely; cap iterations to avoid infinite loops.
-        for _ in range(max(1, len(candidate_provider_ids))):
+        for _ in range(max(1, len(candidate_keys))):
             if next_provider is None:
                 return None
-            if next_provider.provider_id not in tried_providers:
+            if self._candidate_key(next_provider) not in tried_candidates:
                 return next_provider
             next_provider = await self.strategy.get_next(
                 candidates, requested_model, next_provider, input_tokens

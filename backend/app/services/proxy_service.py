@@ -47,6 +47,7 @@ from app.services.strategy import (
 logger = logging.getLogger(__name__)
 
 MAX_LOG_TEXT_LENGTH = 10000
+CandidateKey = tuple[str, int] | tuple[str, int, str]
 
 
 def _truncate_log_text(text: str) -> str:
@@ -148,6 +149,24 @@ class ProxyService:
             return self._round_robin_strategy
 
     @staticmethod
+    def _provider_mapping_key(
+        provider_id: int,
+        target_model_name: str,
+        provider_mapping_id: Optional[int] = None,
+    ) -> CandidateKey:
+        if provider_mapping_id is not None:
+            return ("mapping", provider_mapping_id)
+        return ("provider_target", provider_id, target_model_name)
+
+    @classmethod
+    def _candidate_key(cls, candidate: CandidateProvider) -> CandidateKey:
+        return cls._provider_mapping_key(
+            provider_id=candidate.provider_id,
+            target_model_name=candidate.target_model,
+            provider_mapping_id=candidate.provider_mapping_id,
+        )
+
+    @staticmethod
     def _serialize_response_body(body: Any) -> str | None:
         if body is None:
             return None
@@ -229,7 +248,7 @@ class ProxyService:
         list[CandidateProvider],
         int,
         str,
-        dict[int, ModelMappingProviderResponse],
+        dict[CandidateKey, ModelMappingProviderResponse],
     ]:
         """
         Resolve model and provider candidate list
@@ -282,7 +301,12 @@ class ProxyService:
             )
 
         provider_mapping_by_id = {
-            pm.provider_id: pm for pm in eligible_provider_mappings
+            self._provider_mapping_key(
+                provider_id=pm.provider_id,
+                target_model_name=pm.target_model_name,
+                provider_mapping_id=pm.id,
+            ): pm
+            for pm in eligible_provider_mappings
         }
 
         token_counter = get_token_counter(request_protocol)
@@ -402,7 +426,9 @@ class ProxyService:
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
             nonlocal failed_attempt_logged
-            provider_mapping = provider_mapping_by_id.get(attempt.provider.provider_id)
+            provider_mapping = provider_mapping_by_id.get(
+                self._candidate_key(attempt.provider)
+            )
             billing = resolve_billing(
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
@@ -648,12 +674,9 @@ class ProxyService:
                 }
 
         # 10. Record log
-        final_provider_id = (
-            result.final_provider.provider_id if result.final_provider else None
-        )
         provider_mapping = (
-            provider_mapping_by_id.get(final_provider_id)
-            if final_provider_id is not None
+            provider_mapping_by_id.get(self._candidate_key(result.final_provider))
+            if result.final_provider is not None
             else None
         )
         billing = resolve_billing(
@@ -1019,7 +1042,9 @@ class ProxyService:
             return wrapped()
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
-            provider_mapping = provider_mapping_by_id.get(attempt.provider.provider_id)
+            provider_mapping = provider_mapping_by_id.get(
+                self._candidate_key(attempt.provider)
+            )
             billing = resolve_billing(
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
@@ -1168,12 +1193,9 @@ class ProxyService:
 
                 # 10. Record log (after stream ends)
                 # Record the raw stream response (SSE) plus a reconstructed summary in one field.
-                final_provider_id = (
-                    final_provider.provider_id if final_provider else None
-                )
                 provider_mapping = (
-                    provider_mapping_by_id.get(final_provider_id)
-                    if final_provider_id is not None
+                    provider_mapping_by_id.get(self._candidate_key(final_provider))
+                    if final_provider is not None
                     else None
                 )
                 billing = resolve_billing(

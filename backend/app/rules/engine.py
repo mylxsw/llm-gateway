@@ -89,11 +89,19 @@ class RuleEngine:
                         tiered_pricing=pm.tiered_pricing,
                         model_input_price=model_mapping.input_price,
                         model_output_price=model_mapping.output_price,
+                        provider_mapping_id=pm.id,
                     )
                 )
         
         # 3. Sort by priority (lower value means higher priority)
-        candidates.sort(key=lambda c: (c.priority, c.provider_id))
+        candidates.sort(
+            key=lambda c: (
+                c.priority,
+                c.provider_id,
+                c.target_model,
+                c.provider_mapping_id or 0,
+            )
+        )
         
         return candidates
     
@@ -143,10 +151,18 @@ class RuleEngine:
                         tiered_pricing=pm.tiered_pricing,
                         model_input_price=model_mapping.input_price,
                         model_output_price=model_mapping.output_price,
+                        provider_mapping_id=pm.id,
                     )
                 )
         
         # Sort by priority (lower value means higher priority)
-        candidates.sort(key=lambda c: (c.priority, c.provider_id))
+        candidates.sort(
+            key=lambda c: (
+                c.priority,
+                c.provider_id,
+                c.target_model,
+                c.provider_mapping_id or 0,
+            )
+        )
 
         return candidates
