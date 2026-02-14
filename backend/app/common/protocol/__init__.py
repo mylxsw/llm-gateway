@@ -121,6 +121,25 @@ def _register_all_converters(registry: ConverterRegistry) -> None:
     registry.register_request_converter(
         SDKRequestConverter(Protocol.ANTHROPIC, Protocol.OPENAI_RESPONSES)
     )
+    # Gemini <-> Others
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.OPENAI, Protocol.GEMINI)
+    )
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.GEMINI, Protocol.OPENAI)
+    )
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.OPENAI_RESPONSES, Protocol.GEMINI)
+    )
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.GEMINI, Protocol.OPENAI_RESPONSES)
+    )
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.ANTHROPIC, Protocol.GEMINI)
+    )
+    registry.register_request_converter(
+        SDKRequestConverter(Protocol.GEMINI, Protocol.ANTHROPIC)
+    )
 
     # Response converters
     # OpenAI <-> Anthropic
@@ -146,6 +165,25 @@ def _register_all_converters(registry: ConverterRegistry) -> None:
     registry.register_response_converter(
         SDKResponseConverter(Protocol.ANTHROPIC, Protocol.OPENAI_RESPONSES)
     )
+    # Gemini <-> Others
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.OPENAI, Protocol.GEMINI)
+    )
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.GEMINI, Protocol.OPENAI)
+    )
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.OPENAI_RESPONSES, Protocol.GEMINI)
+    )
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.GEMINI, Protocol.OPENAI_RESPONSES)
+    )
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.ANTHROPIC, Protocol.GEMINI)
+    )
+    registry.register_response_converter(
+        SDKResponseConverter(Protocol.GEMINI, Protocol.ANTHROPIC)
+    )
 
     # Stream converters
     # OpenAI <-> Anthropic
@@ -170,6 +208,25 @@ def _register_all_converters(registry: ConverterRegistry) -> None:
     )
     registry.register_stream_converter(
         SDKStreamConverter(Protocol.ANTHROPIC, Protocol.OPENAI_RESPONSES)
+    )
+    # Gemini <-> Others
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.OPENAI, Protocol.GEMINI)
+    )
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.GEMINI, Protocol.OPENAI)
+    )
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.OPENAI_RESPONSES, Protocol.GEMINI)
+    )
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.GEMINI, Protocol.OPENAI_RESPONSES)
+    )
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.ANTHROPIC, Protocol.GEMINI)
+    )
+    registry.register_stream_converter(
+        SDKStreamConverter(Protocol.GEMINI, Protocol.ANTHROPIC)
     )
 
     logger.debug("Registered all protocol converters")

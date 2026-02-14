@@ -1015,3 +1015,388 @@ class TestImageDefaultResponseFormat:
             target_model="gpt-4",
         )
         assert "response_format" not in body
+
+
+def test_convert_request_openai_to_gemini_chat():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/chat/completions",
+        body={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Hello Gemini"}],
+            "max_tokens": 64,
+        },
+        target_model="gemini-2.0-flash",
+    )
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    assert out_body["contents"][0]["role"] == "user"
+    assert out_body["contents"][0]["parts"][0]["text"] == "Hello Gemini"
+    assert out_body["generationConfig"]["maxOutputTokens"] == 64
+
+
+def test_convert_request_openai_completion_to_gemini():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/completions",
+        body={"model": "gpt-3.5-turbo-instruct", "prompt": "Say hi"},
+        target_model="gemini-2.0-flash",
+    )
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    assert out_body["contents"][0]["parts"][0]["text"] == "Say hi"
+
+
+def test_convert_request_openai_embeddings_to_gemini_batch():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/embeddings",
+        body={"model": "text-embedding-3-small", "input": ["a", "b"], "dimensions": 8},
+        target_model="gemini-embedding-001",
+    )
+    assert path == "/v1beta/models/gemini-embedding-001:batchEmbedContents"
+    assert len(out_body["requests"]) == 2
+    assert out_body["requests"][0]["outputDimensionality"] == 8
+
+
+def test_convert_request_openai_images_to_gemini_generate_content():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/images/generations",
+        body={"model": "gpt-image-1", "prompt": "A cat", "size": "1024x1024"},
+        target_model="gemini-2.5-flash-image",
+    )
+    assert path == "/v1beta/models/gemini-2.5-flash-image:generateContent"
+    assert out_body["generationConfig"]["responseModalities"] == ["IMAGE"]
+    assert out_body["generationConfig"]["imageConfig"]["aspectRatio"] == "1:1"
+
+
+def test_convert_response_gemini_to_openai_chat():
+    converted = convert_response_for_user(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        target_model="gemini-2.0-flash",
+        body={
+            "responseId": "resp-1",
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"text": "Hello from Gemini"}]},
+                    "finishReason": "STOP",
+                    "index": 0,
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 3,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 8,
+            },
+        },
+    )
+    assert converted["object"] == "chat.completion"
+    assert converted["choices"][0]["message"]["content"] == "Hello from Gemini"
+    assert converted["usage"]["prompt_tokens"] == 3
+    assert converted["usage"]["completion_tokens"] == 5
+
+
+def test_convert_response_gemini_to_openai_embeddings():
+    converted = convert_response_for_user(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        target_model="gemini-embedding-001",
+        body={"embedding": {"values": [0.1, 0.2, 0.3]}},
+    )
+    assert converted["object"] == "list"
+    assert converted["data"][0]["object"] == "embedding"
+    assert converted["data"][0]["embedding"] == [0.1, 0.2, 0.3]
+
+
+def test_convert_response_gemini_to_openai_images():
+    converted = convert_response_for_user(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        target_model="gemini-2.5-flash-image",
+        body={
+            "candidates": [
+                {
+                    "content": {
+                        "role": "model",
+                        "parts": [
+                            {
+                                "inlineData": {
+                                    "mimeType": "image/jpeg",
+                                    "data": "0dHA6base64data",
+                                }
+                            }
+                        ],
+                    },
+                    "finishReason": "STOP",
+                    "index": 0,
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 6,
+                "candidatesTokenCount": 1220,
+                "totalTokenCount": 1377,
+                "promptTokensDetails": [
+                    {"modality": "TEXT", "tokenCount": 6}
+                ],
+                "candidatesTokensDetails": [
+                    {"modality": "IMAGE", "tokenCount": 1120}
+                ],
+                "thoughtsTokenCount": 151,
+            },
+        },
+    )
+    assert isinstance(converted.get("data"), list)
+    assert converted["data"][0]["b64_json"] == "0dHA6base64data"
+    assert converted["output_format"] == "jpeg"
+    # Verify usage
+    usage = converted.get("usage")
+    assert usage is not None
+    assert usage["input_tokens"] == 6
+    assert usage["output_tokens"] == 1220
+    assert usage["total_tokens"] == 1377
+    assert usage["input_tokens_details"] == {"text_tokens": 6}
+    assert usage["output_tokens_details"] == {"image_tokens": 1120}
+
+
+def test_convert_response_gemini_to_openai_images_png_no_usage():
+    """Image response with png mimeType and no usageMetadata."""
+    converted = convert_response_for_user(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        target_model="gemini-2.5-flash-image",
+        body={
+            "candidates": [
+                {
+                    "content": {
+                        "role": "model",
+                        "parts": [
+                            {
+                                "inlineData": {
+                                    "mimeType": "image/png",
+                                    "data": "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+                                }
+                            }
+                        ],
+                    },
+                    "finishReason": "STOP",
+                    "index": 0,
+                }
+            ]
+        },
+    )
+    assert isinstance(converted.get("data"), list)
+    assert converted["data"][0]["b64_json"] == "iVBORw0KGgoAAAANSUhEUgAAAAUA"
+    assert converted["output_format"] == "png"
+    assert "usage" not in converted
+
+
+@pytest.mark.asyncio
+async def test_convert_stream_gemini_to_openai():
+    upstream = _agen(
+        [
+            b'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]},"index":0}]}\n\n',
+            b'data: {"candidates":[{"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":3,"totalTokenCount":5}}\n\n',
+        ]
+    )
+
+    out = b""
+    async for chunk in convert_stream_for_user(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        upstream=upstream,
+        model="gemini-2.0-flash",
+    ):
+        out += chunk
+
+    decoder = SSEDecoder()
+    payloads = decoder.feed(out)
+    assert any('"chat.completion.chunk"' in payload for payload in payloads)
+    assert any('"usage"' in payload for payload in payloads if payload != "[DONE]")
+
+
+@pytest.mark.asyncio
+async def test_convert_stream_gemini_to_anthropic():
+    """Test chain conversion: Gemini -> OpenAI -> Anthropic stream."""
+    upstream = _agen(
+        [
+            b'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Bonjour"}]},"index":0}]}\n\n',
+            b'data: {"candidates":[{"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":4,"totalTokenCount":6}}\n\n',
+        ]
+    )
+
+    out = b""
+    async for chunk in convert_stream_for_user(
+        request_protocol="anthropic",
+        supplier_protocol="gemini",
+        upstream=upstream,
+        model="claude-3-5-sonnet",
+    ):
+        out += chunk
+
+    decoder = SSEDecoder()
+    payloads = decoder.feed(out)
+    events = [json.loads(p) for p in payloads if p.strip() != "[DONE]"]
+    event_types = [e.get("type") for e in events]
+    assert "message_start" in event_types
+    assert "content_block_delta" in event_types
+    assert "message_stop" in event_types
+    # Verify text content arrived
+    text_deltas = [
+        e for e in events
+        if e.get("type") == "content_block_delta"
+        and e.get("delta", {}).get("type") == "text_delta"
+    ]
+    assert len(text_deltas) > 0
+    assert text_deltas[0]["delta"]["text"] == "Bonjour"
+
+
+@pytest.mark.asyncio
+async def test_convert_stream_anthropic_to_gemini():
+    """Test chain conversion: Anthropic -> OpenAI -> Gemini stream."""
+    upstream_events = [
+        {
+            "type": "message_start",
+            "message": {
+                "id": "msg_1",
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": "claude-3-5-sonnet",
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": 1, "output_tokens": 0},
+            },
+        },
+        {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "text", "text": ""},
+        },
+        {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": "Hola"},
+        },
+        {"type": "content_block_stop", "index": 0},
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": "end_turn"},
+            "usage": {"output_tokens": 2},
+        },
+        {"type": "message_stop"},
+    ]
+    upstream = _agen([f"data: {json.dumps(e)}\n\n".encode() for e in upstream_events])
+
+    out = b""
+    async for chunk in convert_stream_for_user(
+        request_protocol="gemini",
+        supplier_protocol="anthropic",
+        upstream=upstream,
+        model="gemini-2.0-flash",
+    ):
+        out += chunk
+
+    decoder = SSEDecoder()
+    payloads = decoder.feed(out)
+    # Gemini stream format uses candidates[].content.parts[]
+    gemini_chunks = [json.loads(p) for p in payloads if p.strip() != "[DONE]"]
+    assert len(gemini_chunks) > 0
+    # Find chunk with text content
+    text_found = False
+    for chunk in gemini_chunks:
+        candidates = chunk.get("candidates", [])
+        for cand in candidates:
+            parts = cand.get("content", {}).get("parts", [])
+            for part in parts:
+                if isinstance(part.get("text"), str) and part["text"]:
+                    text_found = True
+    assert text_found, "Expected Gemini stream to contain text parts"
+
+
+def test_convert_request_openai_responses_to_gemini():
+    """Test OpenAI Responses -> Gemini request conversion."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai_responses",
+        supplier_protocol="gemini",
+        path="/v1/responses",
+        body={
+            "model": "any",
+            "input": "Hello from Responses",
+            "instructions": "Be helpful",
+            "max_output_tokens": 128,
+        },
+        target_model="gemini-2.0-flash",
+    )
+    assert "/v1beta/models/gemini-2.0-flash:" in path
+    assert isinstance(out_body.get("contents"), list)
+    assert len(out_body["contents"]) > 0
+
+
+def test_convert_request_anthropic_to_gemini():
+    """Test Anthropic -> Gemini request conversion."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="gemini",
+        path="/v1/messages",
+        body={
+            "model": "claude-3-5-sonnet",
+            "system": "You are helpful",
+            "messages": [{"role": "user", "content": "Greetings"}],
+            "max_tokens": 256,
+        },
+        target_model="gemini-2.0-flash",
+    )
+    assert "/v1beta/models/gemini-2.0-flash:" in path
+    assert isinstance(out_body.get("contents"), list)
+    assert len(out_body["contents"]) > 0
+
+
+def test_convert_request_gemini_to_anthropic():
+    """Test Gemini -> Anthropic request conversion."""
+    path, out_body = convert_request_for_supplier(
+        request_protocol="gemini",
+        supplier_protocol="anthropic",
+        path="/v1beta/models/gemini-2.0-flash:generateContent",
+        body={
+            "contents": [{"role": "user", "parts": [{"text": "Hi from Gemini"}]}],
+            "generationConfig": {"maxOutputTokens": 64},
+        },
+        target_model="claude-3-5-sonnet",
+    )
+    assert path == "/v1/messages"
+    assert out_body["model"] == "claude-3-5-sonnet"
+    assert isinstance(out_body.get("messages"), list)
+    assert "max_tokens" in out_body
+
+
+def test_convert_response_gemini_to_anthropic():
+    """Test Gemini -> Anthropic response conversion (chain: Gemini -> OpenAI -> Anthropic)."""
+    converted = convert_response_for_user(
+        request_protocol="anthropic",
+        supplier_protocol="gemini",
+        target_model="claude-3-5-sonnet",
+        body={
+            "responseId": "resp-1",
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": [{"text": "Hello from Gemini"}]},
+                    "finishReason": "STOP",
+                    "index": 0,
+                }
+            ],
+            "usageMetadata": {
+                "promptTokenCount": 3,
+                "candidatesTokenCount": 5,
+                "totalTokenCount": 8,
+            },
+        },
+    )
+    assert converted["type"] == "message"
+    assert converted["role"] == "assistant"
+    assert isinstance(converted["content"], list)
+    assert converted["content"][0]["type"] == "text"
+    assert "Hello from Gemini" in converted["content"][0]["text"]

@@ -67,6 +67,16 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
+_OPENAI_CHAT_PATH = "/v1/chat/completions"
+_OPENAI_COMPLETIONS_PATH = "/v1/completions"
+_OPENAI_EMBEDDINGS_PATH = "/v1/embeddings"
+_OPENAI_RESPONSES_PATH = "/v1/responses"
+_OPENAI_IMAGE_PATHS = {
+    "/v1/images/generations",
+    "/v1/images/edits",
+    "/v1/images/variations",
+}
+
 
 def _protocol_to_sdk(protocol: Protocol) -> "SDKProtocol":
     """Convert internal Protocol to SDK Protocol."""
@@ -75,6 +85,8 @@ def _protocol_to_sdk(protocol: Protocol) -> "SDKProtocol":
         Protocol.OPENAI_RESPONSES: SDKProtocol.OPENAI_RESPONSES,
         Protocol.ANTHROPIC: SDKProtocol.ANTHROPIC_MESSAGES,
     }
+    if protocol not in mapping:
+        raise ValueError(f"Protocol {protocol.value} is not available in SDK mapping")
     return mapping[protocol]
 
 
@@ -191,6 +203,905 @@ def _normalize_openai_responses_tooling_fields(body: Dict[str, Any]) -> Dict[str
     return out
 
 
+def _build_gemini_generate_path(model: str, stream: bool) -> str:
+    suffix = "streamGenerateContent?alt=sse" if stream else "generateContent"
+    return f"/v1beta/models/{model}:{suffix}"
+
+
+def _map_openai_finish_reason_to_gemini(reason: Optional[str]) -> Optional[str]:
+    mapping = {
+        "stop": "STOP",
+        "length": "MAX_TOKENS",
+        "tool_calls": "STOP",
+        "content_filter": "SAFETY",
+    }
+    if reason is None:
+        return None
+    return mapping.get(reason, "STOP")
+
+
+def _map_gemini_finish_reason_to_openai(reason: Optional[str]) -> Optional[str]:
+    mapping = {
+        "STOP": "stop",
+        "MAX_TOKENS": "length",
+        "SAFETY": "content_filter",
+        "RECITATION": "content_filter",
+    }
+    if reason is None:
+        return None
+    return mapping.get(reason, "stop")
+
+
+def _normalize_prompt_to_text(prompt: Any) -> str:
+    if isinstance(prompt, str):
+        return prompt
+    if isinstance(prompt, list):
+        parts: list[str] = []
+        for item in prompt:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, (int, float)):
+                parts.append(str(item))
+        return "\n".join([p for p in parts if p])
+    if prompt is None:
+        return ""
+    return str(prompt)
+
+
+def _openai_completions_to_chat_request(body: Dict[str, Any]) -> Dict[str, Any]:
+    prompt = _normalize_prompt_to_text(body.get("prompt"))
+    out: Dict[str, Any] = {
+        "model": body.get("model"),
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    passthrough = (
+        "temperature",
+        "top_p",
+        "n",
+        "stream",
+        "stop",
+        "max_tokens",
+        "presence_penalty",
+        "frequency_penalty",
+        "logprobs",
+        "user",
+    )
+    for key in passthrough:
+        if key in body:
+            out[key] = body[key]
+    return out
+
+
+def _safe_json_loads(text: Any) -> Any:
+    if not isinstance(text, str):
+        return text
+    try:
+        return json.loads(text)
+    except Exception:
+        return text
+
+
+def _normalize_openai_embedding_inputs(input_value: Any) -> list[str]:
+    if isinstance(input_value, str):
+        return [input_value]
+    if isinstance(input_value, list):
+        out: list[str] = []
+        for item in input_value:
+            if isinstance(item, str):
+                out.append(item)
+            elif isinstance(item, list) and all(isinstance(x, int) for x in item):
+                out.append(" ".join(str(x) for x in item))
+            elif isinstance(item, int):
+                out.append(str(item))
+            else:
+                out.append(str(item))
+        return out
+    if input_value is None:
+        return [""]
+    return [str(input_value)]
+
+
+def _openai_embeddings_to_gemini_request(
+    body: Dict[str, Any],
+    target_model: str,
+) -> ConversionResult:
+    inputs = _normalize_openai_embedding_inputs(body.get("input"))
+    output_dim = body.get("dimensions")
+
+    if len(inputs) <= 1:
+        payload: Dict[str, Any] = {
+            "content": {"parts": [{"text": inputs[0] if inputs else ""}]},
+        }
+        if isinstance(output_dim, int) and output_dim > 0:
+            payload["outputDimensionality"] = output_dim
+        return ConversionResult(
+            path=f"/v1beta/models/{target_model}:embedContent",
+            body=payload,
+        )
+
+    requests: list[Dict[str, Any]] = []
+    for text in inputs:
+        req: Dict[str, Any] = {
+            "model": f"models/{target_model}",
+            "content": {"parts": [{"text": text}]},
+        }
+        if isinstance(output_dim, int) and output_dim > 0:
+            req["outputDimensionality"] = output_dim
+        requests.append(req)
+
+    return ConversionResult(
+        path=f"/v1beta/models/{target_model}:batchEmbedContents",
+        body={"requests": requests},
+    )
+
+
+def _size_to_aspect_ratio(size: Any) -> Optional[str]:
+    mapping = {
+        "1024x1024": "1:1",
+        "1024x1536": "2:3",
+        "1536x1024": "3:2",
+        "1024x1792": "9:16",
+        "1792x1024": "16:9",
+    }
+    if isinstance(size, str):
+        return mapping.get(size)
+    return None
+
+
+def _openai_images_to_gemini_request(
+    body: Dict[str, Any],
+    target_model: str,
+    path: str,
+) -> ConversionResult:
+    prompt = body.get("prompt")
+    prompt_text = prompt if isinstance(prompt, str) else ""
+    parts: list[Dict[str, Any]] = []
+    if prompt_text:
+        parts.append({"text": prompt_text})
+
+    files = body.get("_files")
+    if isinstance(files, list):
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            data = item.get("data")
+            if not isinstance(data, (bytes, bytearray)):
+                continue
+            import base64
+
+            b64 = base64.b64encode(bytes(data)).decode("utf-8")
+            parts.append(
+                {
+                    "inlineData": {
+                        "mimeType": item.get("content_type") or "image/png",
+                        "data": b64,
+                    }
+                }
+            )
+
+    if not parts:
+        parts.append({"text": "Generate an image"})
+
+    payload: Dict[str, Any] = {
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": {"responseModalities": ["IMAGE"]},
+    }
+    aspect_ratio = _size_to_aspect_ratio(body.get("size"))
+    if aspect_ratio:
+        payload["generationConfig"]["imageConfig"] = {"aspectRatio": aspect_ratio}
+
+    return ConversionResult(
+        path=f"/v1beta/models/{target_model}:generateContent",
+        body=payload,
+    )
+
+
+def _openai_content_to_gemini_parts(content: Any) -> list[Dict[str, Any]]:
+    parts: list[Dict[str, Any]] = []
+    if isinstance(content, str):
+        if content:
+            parts.append({"text": content})
+        return parts
+
+    if isinstance(content, dict):
+        content = [content]
+
+    if not isinstance(content, list):
+        if content is not None:
+            parts.append({"text": str(content)})
+        return parts
+
+    for block in content:
+        if isinstance(block, str):
+            if block:
+                parts.append({"text": block})
+            continue
+        if not isinstance(block, dict):
+            continue
+
+        block_type = block.get("type")
+        if block_type in ("text", "input_text", "output_text"):
+            text = block.get("text") or block.get("content")
+            if isinstance(text, str) and text:
+                parts.append({"text": text})
+            continue
+
+        if block_type in ("image_url", "input_image"):
+            image_url = block.get("image_url")
+            url = None
+            if isinstance(image_url, dict):
+                url = image_url.get("url")
+            elif isinstance(image_url, str):
+                url = image_url
+            if isinstance(url, str) and url:
+                if url.startswith("data:") and ";base64," in url:
+                    prefix, encoded = url.split(";base64,", 1)
+                    mime = prefix[5:] if prefix.startswith("data:") else "image/png"
+                    parts.append(
+                        {
+                            "inlineData": {
+                                "mimeType": mime,
+                                "data": encoded,
+                            }
+                        }
+                    )
+                else:
+                    parts.append(
+                        {
+                            "fileData": {
+                                "mimeType": "image/*",
+                                "fileUri": url,
+                            }
+                        }
+                    )
+            continue
+
+        text = block.get("text")
+        if isinstance(text, str) and text:
+            parts.append({"text": text})
+
+    return parts
+
+
+def _openai_tools_to_gemini_tools(tools: Any) -> Optional[list[Dict[str, Any]]]:
+    if not isinstance(tools, list):
+        return None
+    declarations: list[Dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        if tool.get("type") != "function":
+            continue
+        fn = tool.get("function")
+        if not isinstance(fn, dict):
+            continue
+        name = fn.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        decl: Dict[str, Any] = {"name": name}
+        if isinstance(fn.get("description"), str):
+            decl["description"] = fn["description"]
+        params = fn.get("parameters")
+        if isinstance(params, dict):
+            decl["parameters"] = params
+        declarations.append(decl)
+
+    if not declarations:
+        return None
+    return [{"functionDeclarations": declarations}]
+
+
+def _openai_tool_choice_to_gemini_tool_config(choice: Any) -> Optional[Dict[str, Any]]:
+    if choice is None:
+        return None
+
+    if isinstance(choice, str):
+        mode = "AUTO"
+        if choice == "none":
+            mode = "NONE"
+        elif choice in ("required", "any"):
+            mode = "ANY"
+        return {"functionCallingConfig": {"mode": mode}}
+
+    if isinstance(choice, dict):
+        if choice.get("type") == "function":
+            fn = choice.get("function")
+            if isinstance(fn, dict) and isinstance(fn.get("name"), str):
+                return {
+                    "functionCallingConfig": {
+                        "mode": "ANY",
+                        "allowedFunctionNames": [fn["name"]],
+                    }
+                }
+        choice_type = choice.get("type")
+        if isinstance(choice_type, str):
+            mode = "AUTO"
+            if choice_type == "none":
+                mode = "NONE"
+            elif choice_type in ("required", "any"):
+                mode = "ANY"
+            return {"functionCallingConfig": {"mode": mode}}
+    return None
+
+
+def _openai_chat_to_gemini_request(
+    body: Dict[str, Any],
+    target_model: str,
+) -> ConversionResult:
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        raise ValidationError("messages", "OpenAI request missing messages array")
+
+    contents: list[Dict[str, Any]] = []
+    system_parts: list[Dict[str, Any]] = []
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+
+        role = msg.get("role") if isinstance(msg.get("role"), str) else "user"
+        if role == "system":
+            system_parts.extend(_openai_content_to_gemini_parts(msg.get("content")))
+            continue
+
+        parts = _openai_content_to_gemini_parts(msg.get("content"))
+
+        if role == "assistant":
+            tool_calls = msg.get("tool_calls")
+            if isinstance(tool_calls, list):
+                for tc in tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    fn = tc.get("function")
+                    if not isinstance(fn, dict):
+                        continue
+                    name = fn.get("name")
+                    if not isinstance(name, str) or not name:
+                        continue
+                    args = _safe_json_loads(fn.get("arguments"))
+                    if not isinstance(args, dict):
+                        args = {"value": args}
+                    parts.append({"functionCall": {"name": name, "args": args}})
+
+        if role == "tool":
+            response_name = msg.get("name") or "tool"
+            tool_payload: Any = msg.get("content")
+            if isinstance(tool_payload, str):
+                tool_payload = _safe_json_loads(tool_payload)
+            parts.append(
+                {
+                    "functionResponse": {
+                        "name": response_name,
+                        "response": {"content": tool_payload},
+                    }
+                }
+            )
+            role = "user"
+
+        contents.append(
+            {
+                "role": "model" if role == "assistant" else "user",
+                "parts": parts or [{"text": ""}],
+            }
+        )
+
+    out: Dict[str, Any] = {"contents": contents or [{"role": "user", "parts": [{"text": ""}]}]}
+
+    if system_parts:
+        out["systemInstruction"] = {"parts": system_parts}
+
+    tools = _openai_tools_to_gemini_tools(body.get("tools"))
+    if tools:
+        out["tools"] = tools
+
+    tool_config = _openai_tool_choice_to_gemini_tool_config(body.get("tool_choice"))
+    if tool_config:
+        out["toolConfig"] = tool_config
+
+    generation_config: Dict[str, Any] = {}
+    for src, dst in (
+        ("temperature", "temperature"),
+        ("top_p", "topP"),
+        ("top_k", "topK"),
+    ):
+        if body.get(src) is not None:
+            generation_config[dst] = body.get(src)
+
+    max_tokens = body.get("max_completion_tokens")
+    if max_tokens is None:
+        max_tokens = body.get("max_tokens")
+    if isinstance(max_tokens, int):
+        generation_config["maxOutputTokens"] = max_tokens
+
+    stop = body.get("stop")
+    if isinstance(stop, str):
+        generation_config["stopSequences"] = [stop]
+    elif isinstance(stop, list):
+        seqs = [x for x in stop if isinstance(x, str)]
+        if seqs:
+            generation_config["stopSequences"] = seqs
+
+    response_format = body.get("response_format")
+    if isinstance(response_format, dict):
+        r_type = response_format.get("type")
+        if r_type in ("json_object", "json_schema"):
+            generation_config["responseMimeType"] = "application/json"
+            schema_payload = response_format.get("json_schema")
+            if isinstance(schema_payload, dict):
+                schema = schema_payload.get("schema")
+                if isinstance(schema, dict):
+                    generation_config["responseSchema"] = schema
+
+    if generation_config:
+        out["generationConfig"] = generation_config
+
+    stream = bool(body.get("stream"))
+    return ConversionResult(
+        path=_build_gemini_generate_path(target_model, stream),
+        body=out,
+    )
+
+
+def _gemini_request_to_openai_chat(
+    path: str,
+    body: Dict[str, Any],
+    target_model: str,
+) -> ConversionResult:
+    if path.endswith(":embedContent") or path.endswith(":batchEmbedContents"):
+        requests = body.get("requests")
+        if isinstance(requests, list):
+            inputs: list[str] = []
+            for item in requests:
+                if not isinstance(item, dict):
+                    continue
+                content = item.get("content", {})
+                text = ""
+                if isinstance(content, dict):
+                    parts = content.get("parts")
+                    if isinstance(parts, list):
+                        for part in parts:
+                            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                                text += part["text"]
+                inputs.append(text)
+            return ConversionResult(
+                path=_OPENAI_EMBEDDINGS_PATH,
+                body={"model": target_model, "input": inputs},
+            )
+
+        content = body.get("content", {})
+        text = ""
+        if isinstance(content, dict):
+            parts = content.get("parts")
+            if isinstance(parts, list):
+                for part in parts:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        text += part["text"]
+        return ConversionResult(
+            path=_OPENAI_EMBEDDINGS_PATH,
+            body={"model": target_model, "input": text},
+        )
+
+    contents = body.get("contents")
+    if not isinstance(contents, list):
+        raise ValidationError("contents", "Gemini request missing contents array")
+
+    messages: list[Dict[str, Any]] = []
+    for content in contents:
+        if not isinstance(content, dict):
+            continue
+        role = content.get("role")
+        openai_role = "assistant" if role == "model" else "user"
+        parts = content.get("parts")
+        text_blocks: list[Dict[str, Any]] = []
+        tool_calls: list[Dict[str, Any]] = []
+        if isinstance(parts, list):
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                if isinstance(part.get("text"), str):
+                    text_blocks.append({"type": "text", "text": part["text"]})
+                fc = part.get("functionCall")
+                if isinstance(fc, dict) and isinstance(fc.get("name"), str):
+                    args = fc.get("args")
+                    tool_calls.append(
+                        {
+                            "id": f"call_{uuid.uuid4().hex}",
+                            "type": "function",
+                            "function": {
+                                "name": fc["name"],
+                                "arguments": json.dumps(args or {}, ensure_ascii=False),
+                            },
+                        }
+                    )
+                fr = part.get("functionResponse")
+                if isinstance(fr, dict):
+                    tool_name = fr.get("name") if isinstance(fr.get("name"), str) else "tool"
+                    tool_content = fr.get("response", {}).get("content")
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": json.dumps(tool_content, ensure_ascii=False),
+                        }
+                    )
+
+        msg: Dict[str, Any] = {"role": openai_role}
+        if tool_calls:
+            msg["tool_calls"] = tool_calls
+            msg["content"] = ""
+        else:
+            if len(text_blocks) == 1 and text_blocks[0].get("type") == "text":
+                msg["content"] = text_blocks[0].get("text", "")
+            else:
+                msg["content"] = text_blocks
+        messages.append(msg)
+
+    system_instruction = body.get("systemInstruction")
+    if isinstance(system_instruction, dict):
+        parts = system_instruction.get("parts")
+        system_text = ""
+        if isinstance(parts, list):
+            for part in parts:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    system_text += part["text"]
+        if system_text:
+            messages.insert(0, {"role": "system", "content": system_text})
+
+    out: Dict[str, Any] = {"model": target_model, "messages": messages}
+
+    generation = body.get("generationConfig")
+    if isinstance(generation, dict):
+        for src, dst in (
+            ("temperature", "temperature"),
+            ("topP", "top_p"),
+            ("topK", "top_k"),
+        ):
+            if generation.get(src) is not None:
+                out[dst] = generation.get(src)
+        if isinstance(generation.get("maxOutputTokens"), int):
+            out["max_tokens"] = generation.get("maxOutputTokens")
+        stop_sequences = generation.get("stopSequences")
+        if isinstance(stop_sequences, list):
+            out["stop"] = [s for s in stop_sequences if isinstance(s, str)]
+
+    tools = body.get("tools")
+    if isinstance(tools, list):
+        openai_tools: list[Dict[str, Any]] = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            for decl in tool.get("functionDeclarations", []):
+                if not isinstance(decl, dict):
+                    continue
+                name = decl.get("name")
+                if not isinstance(name, str) or not name:
+                    continue
+                fn: Dict[str, Any] = {"name": name}
+                if isinstance(decl.get("description"), str):
+                    fn["description"] = decl["description"]
+                if isinstance(decl.get("parameters"), dict):
+                    fn["parameters"] = decl["parameters"]
+                openai_tools.append({"type": "function", "function": fn})
+        if openai_tools:
+            out["tools"] = openai_tools
+
+    tool_config = body.get("toolConfig")
+    if isinstance(tool_config, dict):
+        fc = tool_config.get("functionCallingConfig")
+        if isinstance(fc, dict):
+            mode = fc.get("mode")
+            if mode == "NONE":
+                out["tool_choice"] = "none"
+            elif mode == "ANY":
+                allowed = fc.get("allowedFunctionNames")
+                if isinstance(allowed, list) and allowed and isinstance(allowed[0], str):
+                    out["tool_choice"] = {
+                        "type": "function",
+                        "function": {"name": allowed[0]},
+                    }
+                else:
+                    out["tool_choice"] = "required"
+            elif mode == "AUTO":
+                out["tool_choice"] = "auto"
+
+    stream = "streamGenerateContent" in path
+    if stream:
+        out["stream"] = True
+
+    return ConversionResult(path=_OPENAI_CHAT_PATH, body=out)
+
+
+def _gemini_usage_to_openai(usage: Any) -> Dict[str, Any]:
+    if not isinstance(usage, dict):
+        return {}
+    prompt = usage.get("promptTokenCount", 0)
+    completion = usage.get("candidatesTokenCount", 0)
+    total = usage.get("totalTokenCount", prompt + completion)
+    out = {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": total,
+    }
+    cached = usage.get("cachedContentTokenCount")
+    if isinstance(cached, int):
+        out["prompt_tokens_details"] = {"cached_tokens": cached}
+    return out
+
+
+def _gemini_usage_to_openai_image(usage: Any) -> Dict[str, Any]:
+    """Convert Gemini usageMetadata to OpenAI Images API usage format."""
+    if not isinstance(usage, dict):
+        return {}
+    prompt = usage.get("promptTokenCount", 0)
+    completion = usage.get("candidatesTokenCount", 0)
+    total = usage.get("totalTokenCount", prompt + completion)
+
+    input_details: Dict[str, int] = {}
+    output_details: Dict[str, int] = {}
+    prompt_details = usage.get("promptTokensDetails")
+    if isinstance(prompt_details, list):
+        for d in prompt_details:
+            if isinstance(d, dict):
+                modality = d.get("modality", "")
+                count = d.get("tokenCount", 0)
+                if modality == "TEXT":
+                    input_details["text_tokens"] = count
+                elif modality == "IMAGE":
+                    input_details["image_tokens"] = count
+    candidates_details = usage.get("candidatesTokensDetails")
+    if isinstance(candidates_details, list):
+        for d in candidates_details:
+            if isinstance(d, dict):
+                modality = d.get("modality", "")
+                count = d.get("tokenCount", 0)
+                if modality == "TEXT":
+                    output_details["text_tokens"] = count
+                elif modality == "IMAGE":
+                    output_details["image_tokens"] = count
+
+    result: Dict[str, Any] = {
+        "input_tokens": prompt,
+        "output_tokens": completion,
+        "total_tokens": total,
+    }
+    if input_details:
+        result["input_tokens_details"] = input_details
+    if output_details:
+        result["output_tokens_details"] = output_details
+    return result
+
+
+def _build_openai_image_response(
+    image_parts: list[Dict[str, Any]],
+    gemini_body: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build OpenAI Images API compatible response from Gemini image parts."""
+    result: Dict[str, Any] = {
+        "created": int(time.time()),
+        "data": [{"b64_json": img["data"]} for img in image_parts],
+    }
+
+    # Derive output_format from first image's mimeType
+    first_mime = image_parts[0].get("mimeType", "") if image_parts else ""
+    if first_mime:
+        # "image/png" -> "png", "image/jpeg" -> "jpeg"
+        fmt = first_mime.split("/", 1)[-1] if "/" in first_mime else first_mime
+        result["output_format"] = fmt
+
+    # Convert usage metadata
+    usage_meta = gemini_body.get("usageMetadata")
+    if isinstance(usage_meta, dict):
+        result["usage"] = _gemini_usage_to_openai_image(usage_meta)
+
+    return result
+
+
+def _gemini_response_to_openai(
+    body: Dict[str, Any],
+    target_model: str,
+) -> Dict[str, Any]:
+    if "embedding" in body or "embeddings" in body:
+        if isinstance(body.get("embedding"), dict):
+            values = body["embedding"].get("values")
+            if not isinstance(values, list):
+                values = []
+            return {
+                "object": "list",
+                "data": [{"object": "embedding", "index": 0, "embedding": values}],
+                "model": target_model,
+                "usage": _gemini_usage_to_openai(body.get("usageMetadata")),
+            }
+        embeddings = body.get("embeddings")
+        data: list[Dict[str, Any]] = []
+        if isinstance(embeddings, list):
+            for i, item in enumerate(embeddings):
+                values = []
+                if isinstance(item, dict) and isinstance(item.get("values"), list):
+                    values = item["values"]
+                data.append({"object": "embedding", "index": i, "embedding": values})
+        return {
+            "object": "list",
+            "data": data,
+            "model": target_model,
+            "usage": _gemini_usage_to_openai(body.get("usageMetadata")),
+        }
+
+    candidates = body.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return {
+            "id": f"chatcmpl-{uuid.uuid4().hex}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": target_model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": ""},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": _gemini_usage_to_openai(body.get("usageMetadata")),
+        }
+
+    cand = candidates[0] if isinstance(candidates[0], dict) else {}
+    content = cand.get("content", {})
+    parts = content.get("parts", []) if isinstance(content, dict) else []
+    text_parts: list[str] = []
+    image_parts: list[Dict[str, Any]] = []
+    tool_calls: list[Dict[str, Any]] = []
+
+    if isinstance(parts, list):
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if isinstance(part.get("text"), str):
+                text_parts.append(part["text"])
+            fc = part.get("functionCall")
+            if isinstance(fc, dict) and isinstance(fc.get("name"), str):
+                tool_calls.append(
+                    {
+                        "id": f"call_{uuid.uuid4().hex}",
+                        "type": "function",
+                        "function": {
+                            "name": fc["name"],
+                            "arguments": json.dumps(fc.get("args") or {}, ensure_ascii=False),
+                        },
+                    }
+                )
+            inline = part.get("inlineData")
+            if (
+                isinstance(inline, dict)
+                and isinstance(inline.get("data"), str)
+                and inline.get("data")
+            ):
+                image_parts.append(
+                    {"data": inline["data"], "mimeType": inline.get("mimeType", "")}
+                )
+
+    if image_parts and not text_parts and not tool_calls:
+        return _build_openai_image_response(image_parts, body)
+
+    message: Dict[str, Any] = {"role": "assistant"}
+    if tool_calls:
+        message["tool_calls"] = tool_calls
+        message["content"] = "".join(text_parts)
+    else:
+        message["content"] = "".join(text_parts)
+
+    return {
+        "id": body.get("responseId") or f"chatcmpl-{uuid.uuid4().hex}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": target_model,
+        "choices": [
+            {
+                "index": 0,
+                "message": message,
+                "finish_reason": _map_gemini_finish_reason_to_openai(
+                    cand.get("finishReason")
+                ),
+            }
+        ],
+        "usage": _gemini_usage_to_openai(body.get("usageMetadata")),
+    }
+
+
+def _openai_response_to_gemini(
+    body: Dict[str, Any],
+    target_model: str,
+) -> Dict[str, Any]:
+    data = body.get("data")
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        if "embedding" in data[0]:
+            if len(data) == 1:
+                return {"embedding": {"values": data[0].get("embedding", [])}}
+            return {
+                "embeddings": [
+                    {"values": item.get("embedding", [])}
+                    for item in data
+                    if isinstance(item, dict)
+                ]
+            }
+        if "b64_json" in data[0]:
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "role": "model",
+                            "parts": [
+                                {
+                                    "inlineData": {
+                                        "mimeType": "image/png",
+                                        "data": item.get("b64_json", ""),
+                                    }
+                                }
+                                for item in data
+                                if isinstance(item, dict)
+                            ],
+                        },
+                        "finishReason": "STOP",
+                        "index": 0,
+                    }
+                ]
+            }
+
+    choices = body.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0] if isinstance(choices[0], dict) else {}
+        message = first.get("message", {})
+        parts: list[Dict[str, Any]] = []
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str):
+                parts.append({"text": content})
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and isinstance(block.get("text"), str):
+                        parts.append({"text": block["text"]})
+            tool_calls = message.get("tool_calls")
+            if isinstance(tool_calls, list):
+                for tc in tool_calls:
+                    if not isinstance(tc, dict):
+                        continue
+                    fn = tc.get("function")
+                    if not isinstance(fn, dict) or not isinstance(fn.get("name"), str):
+                        continue
+                    parts.append(
+                        {
+                            "functionCall": {
+                                "name": fn["name"],
+                                "args": _safe_json_loads(fn.get("arguments")),
+                            }
+                        }
+                    )
+        usage = body.get("usage", {})
+        usage_meta = {
+            "promptTokenCount": usage.get("prompt_tokens", 0),
+            "candidatesTokenCount": usage.get("completion_tokens", 0),
+            "totalTokenCount": usage.get(
+                "total_tokens",
+                (usage.get("prompt_tokens", 0) or 0)
+                + (usage.get("completion_tokens", 0) or 0),
+            ),
+        }
+        return {
+            "candidates": [
+                {
+                    "content": {"role": "model", "parts": parts or [{"text": ""}]},
+                    "finishReason": _map_openai_finish_reason_to_gemini(
+                        first.get("finish_reason")
+                    ),
+                    "index": 0,
+                }
+            ],
+            "usageMetadata": usage_meta,
+            "modelVersion": target_model,
+            "responseId": body.get("id") or f"resp_{uuid.uuid4().hex}",
+        }
+
+    return body
+
+
 class SDKRequestConverter(IRequestConverter):
     """
     Request converter using llm_api_converter SDK.
@@ -205,6 +1116,7 @@ class SDKRequestConverter(IRequestConverter):
             Protocol.OPENAI: "/v1/chat/completions",
             Protocol.OPENAI_RESPONSES: "/v1/responses",
             Protocol.ANTHROPIC: "/v1/messages",
+            Protocol.GEMINI: "/v1beta/models/{model}:generateContent",
         }
 
     @property
@@ -236,6 +1148,68 @@ class SDKRequestConverter(IRequestConverter):
         options = options or {}
 
         try:
+            if self._source == Protocol.GEMINI:
+                openai_result = _gemini_request_to_openai_chat(path, body, target_model)
+                if self._target == Protocol.OPENAI:
+                    return openai_result
+
+                sdk_target = _protocol_to_sdk(self._target)
+                converted = convert_request(
+                    SDKProtocol.OPENAI_CHAT,
+                    sdk_target,
+                    openai_result.body,
+                    stream=bool(openai_result.body.get("stream")),
+                    options=options,
+                )
+                converted["model"] = target_model
+                target_path = self.get_target_path(path)
+                return ConversionResult(path=target_path, body=converted)
+
+            if self._target == Protocol.GEMINI:
+                if self._source == Protocol.OPENAI and path == _OPENAI_EMBEDDINGS_PATH:
+                    return _openai_embeddings_to_gemini_request(body, target_model)
+                if self._source == Protocol.OPENAI and path in _OPENAI_IMAGE_PATHS:
+                    return _openai_images_to_gemini_request(body, target_model, path)
+
+                if self._source == Protocol.OPENAI:
+                    if path == _OPENAI_COMPLETIONS_PATH:
+                        openai_body = _openai_completions_to_chat_request(body)
+                    elif path in (_OPENAI_CHAT_PATH,):
+                        openai_body = _normalize_openai_tooling_fields(body)
+                    elif path == _OPENAI_RESPONSES_PATH:
+                        from app.common.openai_responses import (
+                            responses_request_to_chat_completions,
+                        )
+
+                        openai_body = responses_request_to_chat_completions(body)
+                    else:
+                        raise ValidationError(
+                            "path",
+                            f"Unsupported OpenAI endpoint for Gemini conversion: {path}",
+                        )
+                elif self._source == Protocol.OPENAI_RESPONSES:
+                    from app.common.openai_responses import (
+                        responses_request_to_chat_completions,
+                    )
+
+                    openai_body = responses_request_to_chat_completions(body)
+                elif self._source == Protocol.ANTHROPIC:
+                    openai_body = convert_request(
+                        SDKProtocol.ANTHROPIC_MESSAGES,
+                        SDKProtocol.OPENAI_CHAT,
+                        body,
+                        stream=bool(body.get("stream")),
+                        options=options,
+                    )
+                else:
+                    raise ValidationError(
+                        "source_protocol",
+                        f"Unsupported source protocol for Gemini conversion: {self._source.value}",
+                    )
+
+                openai_body["model"] = target_model
+                return _openai_chat_to_gemini_request(openai_body, target_model)
+
             # Normalize OpenAI request
             if self._source == Protocol.OPENAI:
                 body = _normalize_openai_tooling_fields(body)
@@ -379,6 +1353,32 @@ class SDKResponseConverter(IResponseConverter):
         options = options or {}
 
         try:
+            if self._source == Protocol.GEMINI:
+                openai_body = _gemini_response_to_openai(body, target_model)
+                if self._target == Protocol.OPENAI:
+                    return openai_body
+
+                sdk_target = _protocol_to_sdk(self._target)
+                return convert_response(
+                    SDKProtocol.OPENAI_CHAT,
+                    sdk_target,
+                    openai_body,
+                    options=options,
+                )
+
+            if self._target == Protocol.GEMINI:
+                if self._source == Protocol.OPENAI:
+                    return _openai_response_to_gemini(body, target_model)
+
+                sdk_source = _protocol_to_sdk(self._source)
+                openai_body = convert_response(
+                    sdk_source,
+                    SDKProtocol.OPENAI_CHAT,
+                    body,
+                    options=options,
+                )
+                return _openai_response_to_gemini(openai_body, target_model)
+
             sdk_source = _protocol_to_sdk(self._source)
             sdk_target = _protocol_to_sdk(self._target)
 
@@ -481,6 +1481,37 @@ class SDKStreamConverter(IStreamConverter):
             # Chain: OpenAI Responses -> OpenAI Chat -> Anthropic
             openai_stream = self._convert_openai_responses_to_openai(upstream, model)
             async for chunk in self._convert_openai_to_anthropic(openai_stream, model):
+                yield chunk
+        elif self._source == Protocol.GEMINI and self._target == Protocol.OPENAI:
+            async for chunk in self._convert_gemini_to_openai(upstream, model):
+                yield chunk
+        elif self._source == Protocol.OPENAI and self._target == Protocol.GEMINI:
+            async for chunk in self._convert_openai_to_gemini(upstream, model):
+                yield chunk
+        elif (
+            self._source == Protocol.GEMINI
+            and self._target == Protocol.OPENAI_RESPONSES
+        ):
+            openai_stream = self._convert_gemini_to_openai(upstream, model)
+            input_tokens = options.get("input_tokens") if options else None
+            async for chunk in self._convert_openai_to_openai_responses(
+                openai_stream, model, input_tokens=input_tokens
+            ):
+                yield chunk
+        elif (
+            self._source == Protocol.OPENAI_RESPONSES
+            and self._target == Protocol.GEMINI
+        ):
+            openai_stream = self._convert_openai_responses_to_openai(upstream, model)
+            async for chunk in self._convert_openai_to_gemini(openai_stream, model):
+                yield chunk
+        elif self._source == Protocol.GEMINI and self._target == Protocol.ANTHROPIC:
+            openai_stream = self._convert_gemini_to_openai(upstream, model)
+            async for chunk in self._convert_openai_to_anthropic(openai_stream, model):
+                yield chunk
+        elif self._source == Protocol.ANTHROPIC and self._target == Protocol.GEMINI:
+            openai_stream = self._convert_anthropic_to_openai(upstream, model)
+            async for chunk in self._convert_openai_to_gemini(openai_stream, model):
                 yield chunk
         else:
             # Generic fallback using SDK
@@ -893,6 +1924,174 @@ class SDKStreamConverter(IStreamConverter):
             upstream=upstream, model=model, input_tokens=input_tokens
         ):
             yield chunk
+
+    async def _convert_gemini_to_openai(
+        self,
+        upstream: AsyncGenerator[bytes, None],
+        model: str,
+    ) -> AsyncGenerator[bytes, None]:
+        decoder = _SSEDecoder()
+        sent_role = False
+        response_id = f"chatcmpl-{uuid.uuid4().hex}"
+        done = False
+
+        async for chunk in upstream:
+            for payload in decoder.feed(chunk):
+                if not payload or payload.strip() == "[DONE]":
+                    continue
+                try:
+                    data = json.loads(payload)
+                except Exception:
+                    continue
+
+                candidates = data.get("candidates")
+                if isinstance(candidates, list) and candidates:
+                    cand = candidates[0] if isinstance(candidates[0], dict) else {}
+                    content = cand.get("content", {})
+                    parts = content.get("parts", []) if isinstance(content, dict) else []
+                    if isinstance(parts, list):
+                        for part in parts:
+                            if not isinstance(part, dict):
+                                continue
+                            if isinstance(part.get("text"), str) and part.get("text"):
+                                delta: Dict[str, Any] = {"content": part["text"]}
+                                if not sent_role:
+                                    delta["role"] = "assistant"
+                                    sent_role = True
+                                yield _encode_sse_json(
+                                    self._create_openai_chunk(response_id, model, delta, None)
+                                )
+                            fc = part.get("functionCall")
+                            if isinstance(fc, dict) and isinstance(fc.get("name"), str):
+                                args = fc.get("args")
+                                if not isinstance(args, str):
+                                    args = json.dumps(args or {}, ensure_ascii=False)
+                                delta = {
+                                    "tool_calls": [
+                                        {
+                                            "index": 0,
+                                            "id": f"call_{uuid.uuid4().hex}",
+                                            "type": "function",
+                                            "function": {
+                                                "name": fc["name"],
+                                                "arguments": args,
+                                            },
+                                        }
+                                    ]
+                                }
+                                if not sent_role:
+                                    delta["role"] = "assistant"
+                                    sent_role = True
+                                yield _encode_sse_json(
+                                    self._create_openai_chunk(response_id, model, delta, None)
+                                )
+
+                    finish_reason = _map_gemini_finish_reason_to_openai(
+                        cand.get("finishReason")
+                    )
+                    if finish_reason:
+                        yield _encode_sse_json(
+                            self._create_openai_chunk(
+                                response_id, model, {}, finish_reason
+                            )
+                        )
+
+                usage = data.get("usageMetadata")
+                if isinstance(usage, dict):
+                    usage_chunk = {
+                        "id": response_id,
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [],
+                        "usage": _gemini_usage_to_openai(usage),
+                    }
+                    yield _encode_sse_json(usage_chunk)
+
+        if not done:
+            done = True
+            yield _encode_sse_data("[DONE]")
+
+    async def _convert_openai_to_gemini(
+        self,
+        upstream: AsyncGenerator[bytes, None],
+        model: str,
+    ) -> AsyncGenerator[bytes, None]:
+        decoder = _SSEDecoder()
+
+        async for chunk in upstream:
+            for payload in decoder.feed(chunk):
+                if not payload:
+                    continue
+                if payload.strip() == "[DONE]":
+                    continue
+                try:
+                    data = json.loads(payload)
+                except Exception:
+                    continue
+
+                choices = data.get("choices")
+                if not isinstance(choices, list) or not choices:
+                    continue
+                choice = choices[0] if isinstance(choices[0], dict) else {}
+                delta = choice.get("delta", {})
+                finish_reason = choice.get("finish_reason")
+
+                parts: list[Dict[str, Any]] = []
+                if isinstance(delta, dict):
+                    text = delta.get("content")
+                    if isinstance(text, str) and text:
+                        parts.append({"text": text})
+                    tool_calls = delta.get("tool_calls")
+                    if isinstance(tool_calls, list):
+                        for tool_call in tool_calls:
+                            if not isinstance(tool_call, dict):
+                                continue
+                            fn = tool_call.get("function")
+                            if not isinstance(fn, dict) or not isinstance(
+                                fn.get("name"), str
+                            ):
+                                continue
+                            args = _safe_json_loads(fn.get("arguments"))
+                            if not isinstance(args, dict):
+                                args = {"value": args}
+                            parts.append(
+                                {
+                                    "functionCall": {
+                                        "name": fn["name"],
+                                        "args": args,
+                                    }
+                                }
+                            )
+
+                gemini_chunk: Dict[str, Any] = {
+                    "candidates": [
+                        {
+                            "content": {
+                                "role": "model",
+                                "parts": parts or [{"text": ""}],
+                            },
+                            "index": 0,
+                        }
+                    ]
+                }
+                mapped_finish_reason = _map_openai_finish_reason_to_gemini(finish_reason)
+                if mapped_finish_reason:
+                    gemini_chunk["candidates"][0]["finishReason"] = mapped_finish_reason
+
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    gemini_chunk["usageMetadata"] = {
+                        "promptTokenCount": usage.get("prompt_tokens", 0),
+                        "candidatesTokenCount": usage.get("completion_tokens", 0),
+                        "totalTokenCount": usage.get(
+                            "total_tokens",
+                            (usage.get("prompt_tokens", 0) or 0)
+                            + (usage.get("completion_tokens", 0) or 0),
+                        ),
+                    }
+
+                yield _encode_sse_json(gemini_chunk)
 
     async def _generic_stream_conversion(
         self,

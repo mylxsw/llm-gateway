@@ -7,6 +7,7 @@ Creates corresponding provider clients based on protocol type.
 from app.providers.base import ProviderClient
 from app.providers.openai_client import OpenAIClient
 from app.providers.anthropic_client import AnthropicClient
+from app.providers.gemini_client import GeminiClient
 
 
 # Client cache
@@ -35,6 +36,8 @@ def get_provider_client(protocol: str) -> ProviderClient:
             _clients[protocol] = OpenAIClient()
         elif protocol == "anthropic":
             _clients[protocol] = AnthropicClient()
+        elif protocol == "gemini":
+            _clients[protocol] = GeminiClient()
         else:
             raise ValueError(f"Unsupported protocol: {protocol}")
     

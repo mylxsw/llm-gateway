@@ -153,6 +153,8 @@ class StreamUsageAccumulator:
 
         if self.protocol == "anthropic":
             self._handle_anthropic_event(data)
+        elif self.protocol == "gemini":
+            self._handle_gemini_event(data)
         else:
             self._handle_openai_event(data)
 
@@ -199,9 +201,6 @@ class StreamUsageAccumulator:
                         if fn.get("name"):
                             buffer["function"]["name"] += fn["name"]
                         if fn.get("arguments"):
-                            print(
-                                f"DEBUG: Appending args for index {index}: '{fn['arguments']}'"
-                            )
                             buffer["function"]["arguments"] += fn["arguments"]
 
                 # Legacy OpenAI streaming function calling: choices[].delta.function_call
@@ -264,6 +263,43 @@ class StreamUsageAccumulator:
                         self._tool_calls_buffer[index]["function"]["arguments"] += (
                             partial_json
                         )
+
+    def _handle_gemini_event(self, data: dict[str, Any]) -> None:
+        """Handle native Gemini streaming events (candidates[].content.parts[].text)."""
+        self._update_usage_from_payload(data)
+
+        candidates = data.get("candidates")
+        if not isinstance(candidates, list):
+            return
+
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            content = candidate.get("content")
+            if not isinstance(content, dict):
+                continue
+            parts = content.get("parts")
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                text = part.get("text")
+                if isinstance(text, str) and text:
+                    self._text_parts.append(text)
+                fc = part.get("functionCall")
+                if isinstance(fc, dict) and isinstance(fc.get("name"), str):
+                    index = len(self._tool_calls_buffer)
+                    args = fc.get("args")
+                    args_str = json.dumps(args or {}, ensure_ascii=False) if not isinstance(args, str) else args
+                    self._tool_calls_buffer[index] = {
+                        "index": index,
+                        "type": "function",
+                        "function": {
+                            "name": fc["name"],
+                            "arguments": args_str,
+                        },
+                    }
 
     def _update_usage_from_payload(self, data: dict[str, Any]) -> None:
         details = extract_usage_details(data)
