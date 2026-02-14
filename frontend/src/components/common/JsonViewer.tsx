@@ -3,15 +3,22 @@
  * Used to display formatted JSON data, supports collapse and copy.
  */
 
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
-import ReactJsonView from '@uiw/react-json-view';
-import { darkTheme } from '@uiw/react-json-view/dark';
-import { lightTheme } from '@uiw/react-json-view/light';
-import { Button } from '@/components/ui/button';
-import { Copy, Check, ChevronDown, ChevronRight, WrapText, Braces } from 'lucide-react';
-import { copyToClipboard, cn } from '@/lib/utils';
+import React, { useEffect, useMemo, useState } from "react";
+import ReactJsonView from "@uiw/react-json-view";
+import { darkTheme } from "@uiw/react-json-view/dark";
+import { lightTheme } from "@uiw/react-json-view/light";
+import { Button } from "@/components/ui/button";
+import {
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  WrapText,
+  Braces,
+} from "lucide-react";
+import { copyToClipboard, cn } from "@/lib/utils";
 
 interface JsonViewerProps {
   /** JSON Data */
@@ -22,6 +29,8 @@ interface JsonViewerProps {
   maxHeight?: string;
   /** Custom class name */
   className?: string;
+  /** Extra action buttons rendered at the start of the toolbar right section */
+  extraActions?: React.ReactNode;
 }
 
 /**
@@ -31,8 +40,9 @@ interface JsonViewerProps {
 export function JsonViewer({
   data,
   defaultExpanded = true,
-  maxHeight = '400px',
+  maxHeight = "400px",
   className,
+  extraActions,
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -41,9 +51,9 @@ export function JsonViewer({
   const [isDark, setIsDark] = useState(false);
 
   const parsedJson = useMemo(() => {
-    if (typeof data !== 'string') {
+    if (typeof data !== "string") {
       const isJsonValue =
-        data === null || ['object', 'number', 'boolean'].includes(typeof data);
+        data === null || ["object", "number", "boolean"].includes(typeof data);
       return { isValid: isJsonValue, value: data };
     }
     const trimmed = data.trim();
@@ -56,19 +66,24 @@ export function JsonViewer({
   }, [data]);
 
   const isValidJson =
-    parsedJson.isValid && typeof parsedJson.value === 'object' && parsedJson.value !== null;
+    parsedJson.isValid &&
+    typeof parsedJson.value === "object" &&
+    parsedJson.value !== null;
   const jsonValue = parsedJson.value;
   const showJsonView = isValidJson && !useRawView;
 
   useEffect(() => {
     const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains('dark'));
+      setIsDark(document.documentElement.classList.contains("dark"));
     };
 
     updateTheme();
 
     const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     return () => observer.disconnect();
   }, []);
@@ -82,7 +97,7 @@ export function JsonViewer({
         return String(jsonValue);
       }
     }
-    if (typeof jsonValue === 'string') {
+    if (typeof jsonValue === "string") {
       return jsonValue;
     }
     try {
@@ -92,11 +107,12 @@ export function JsonViewer({
     }
   })();
 
-  type TokenType = 'key' | 'string' | 'number' | 'boolean' | 'null' | 'plain';
+  type TokenType = "key" | "string" | "number" | "boolean" | "null" | "plain";
 
   const tokens = useMemo(() => {
     if (showJsonView) return [];
-    const tokenRegex = /"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+    const tokenRegex =
+      /"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
     const parsedTokens: Array<{ text: string; type: TokenType }> = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -105,23 +121,23 @@ export function JsonViewer({
       if (match.index > lastIndex) {
         parsedTokens.push({
           text: jsonString.slice(lastIndex, match.index),
-          type: 'plain',
+          type: "plain",
         });
       }
 
       const value = match[0];
-      let type: TokenType = 'plain';
+      let type: TokenType = "plain";
 
       if (value.startsWith('"')) {
         const after = jsonString.slice(match.index + value.length);
         const isKey = /^\s*:/.test(after);
-        type = isKey ? 'key' : 'string';
-      } else if (value === 'true' || value === 'false') {
-        type = 'boolean';
-      } else if (value === 'null') {
-        type = 'null';
+        type = isKey ? "key" : "string";
+      } else if (value === "true" || value === "false") {
+        type = "boolean";
+      } else if (value === "null") {
+        type = "null";
       } else {
-        type = 'number';
+        type = "number";
       }
 
       parsedTokens.push({ text: value, type });
@@ -131,7 +147,7 @@ export function JsonViewer({
     if (lastIndex < jsonString.length) {
       parsedTokens.push({
         text: jsonString.slice(lastIndex),
-        type: 'plain',
+        type: "plain",
       });
     }
 
@@ -140,18 +156,18 @@ export function JsonViewer({
 
   const tokenClassName = (type: TokenType) => {
     switch (type) {
-      case 'key':
-        return 'text-sky-600';
-      case 'string':
-        return 'text-emerald-600';
-      case 'number':
-        return 'text-amber-600';
-      case 'boolean':
-        return 'text-rose-600';
-      case 'null':
-        return 'text-teal-600';
+      case "key":
+        return "text-sky-600";
+      case "string":
+        return "text-emerald-600";
+      case "number":
+        return "text-amber-600";
+      case "boolean":
+        return "text-rose-600";
+      case "null":
+        return "text-teal-600";
       default:
-        return 'text-foreground';
+        return "text-foreground";
     }
   };
 
@@ -165,7 +181,7 @@ export function JsonViewer({
   };
 
   return (
-    <div className={cn('relative rounded-md border bg-muted/50', className)}>
+    <div className={cn("relative rounded-md border bg-muted/50", className)}>
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b px-3 py-2">
         <button
@@ -177,9 +193,10 @@ export function JsonViewer({
           ) : (
             <ChevronRight className="h-4 w-4" suppressHydrationWarning />
           )}
-          <span>{expanded ? 'Collapse' : 'Expand'}</span>
+          <span>{expanded ? "Collapse" : "Expand"}</span>
         </button>
         <div className="flex items-center gap-2">
+          {extraActions}
           {!showJsonView && (
             <Button
               variant="ghost"
@@ -188,7 +205,7 @@ export function JsonViewer({
               className="h-7 gap-1 px-2"
             >
               <WrapText className="h-3.5 w-3.5" suppressHydrationWarning />
-              <span>{wrapLines ? 'No wrap' : 'Wrap'}</span>
+              <span>{wrapLines ? "No wrap" : "Wrap"}</span>
             </Button>
           )}
           <Button
@@ -199,7 +216,10 @@ export function JsonViewer({
           >
             {copied ? (
               <>
-                <Check className="h-3.5 w-3.5 text-green-500" suppressHydrationWarning />
+                <Check
+                  className="h-3.5 w-3.5 text-green-500"
+                  suppressHydrationWarning
+                />
                 <span className="text-green-500">Copied</span>
               </>
             ) : (
@@ -217,7 +237,7 @@ export function JsonViewer({
               className="h-7 gap-1 px-2"
             >
               <Braces className="h-3.5 w-3.5" suppressHydrationWarning />
-              <span>{useRawView ? 'JSON' : 'Raw'}</span>
+              <span>{useRawView ? "JSON" : "Raw"}</span>
             </Button>
           )}
         </div>
@@ -236,14 +256,19 @@ export function JsonViewer({
           ) : (
             <pre
               className={cn(
-                'overflow-auto p-3 text-sm font-mono',
-                wrapLines ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+                "overflow-auto p-3 text-sm font-mono",
+                wrapLines
+                  ? "whitespace-pre-wrap break-words"
+                  : "whitespace-pre",
               )}
               style={{ maxHeight }}
             >
               <code>
                 {tokens.map((token, index) => (
-                  <span key={`${token.type}-${index}`} className={tokenClassName(token.type)}>
+                  <span
+                    key={`${token.type}-${index}`}
+                    className={tokenClassName(token.type)}
+                  >
                     {token.text}
                   </span>
                 ))}

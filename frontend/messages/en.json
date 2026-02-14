@@ -598,27 +598,27 @@
     "title": "Logs",
     "description": "View proxy request logs, supports multi-condition filtering",
     "unknown": "Unknown",
-  "actions": {
-    "refresh": "Refresh"
-  },
-  "timeline": {
-    "title": "Request Timeline",
-    "hint": "Click a bar to focus; hover to see the exact time range.",
-    "success": "Success",
-    "error": "Error",
-    "empty": "No timeline data",
-    "rangeSelect": "Select time range",
-    "rangeCustom": "Current filter",
-    "range1h": "Last 1 hour",
-    "range3h": "Last 3 hours",
-    "range6h": "Last 6 hours",
-    "range12h": "Last 12 hours",
-    "range24h": "Last 24 hours",
-    "range1w": "Last 1 week",
-    "clear": "Clear range",
-    "refresh": "Refresh timeline"
-  },
-  "toasts": {
+    "actions": {
+      "refresh": "Refresh"
+    },
+    "timeline": {
+      "title": "Request Timeline",
+      "hint": "Click a bar to focus; hover to see the exact time range.",
+      "success": "Success",
+      "error": "Error",
+      "empty": "No timeline data",
+      "rangeSelect": "Select time range",
+      "rangeCustom": "Current filter",
+      "range1h": "Last 1 hour",
+      "range3h": "Last 3 hours",
+      "range6h": "Last 6 hours",
+      "range12h": "Last 12 hours",
+      "range24h": "Last 24 hours",
+      "range1w": "Last 1 week",
+      "clear": "Clear range",
+      "refresh": "Refresh timeline"
+    },
+    "toasts": {
       "refreshSuccess": "Refreshed",
       "refreshFailed": "Refresh failed"
     },
@@ -722,7 +722,8 @@
       "originalResponse": "Original Response (Upstream)",
       "convertedResponse": "Converted Response (Client)",
       "requestHeaders": "Request Headers",
-      "responseHeaders": "Response Headers"
+      "responseHeaders": "Response Headers",
+      "copyAsCurl": "Copy as cURL"
     },
     "costStats": {
       "activity": "Activity",
