@@ -34,6 +34,28 @@ class StreamHooks(ProtocolConversionHooks):
         return chunk.replace(b"hi", b"hi!")
 
 
+class ImageHooks(ProtocolConversionHooks):
+    async def before_image_request_conversion(
+        self, body, request_protocol, supplier_protocol, path
+    ):
+        return {**body, "image_before": path}
+
+    async def after_image_request_conversion(
+        self, supplier_body, request_protocol, supplier_protocol, path
+    ):
+        return {**supplier_body, "image_after": path}
+
+    async def before_image_response_conversion(
+        self, supplier_body, request_protocol, supplier_protocol, path
+    ):
+        return {"image_wrapped": supplier_body, "path": path}
+
+    async def after_image_response_conversion(
+        self, response_body, request_protocol, supplier_protocol, path
+    ):
+        return {"image_after_response": response_body, "path": path}
+
+
 @pytest.mark.asyncio
 async def test_protocol_hooks_apply_to_non_stream_flow():
     now = utc_now()
@@ -109,6 +131,90 @@ async def test_protocol_hooks_apply_to_non_stream_flow():
                 )
 
     assert response.body == {"after_response": {"converted_response": True}}
+    service.log_repo.create.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_protocol_hooks_apply_to_image_non_stream_flow():
+    now = utc_now()
+    model_mapping = ModelMapping(
+        requested_model="test-image-model",
+        strategy="round_robin",
+        matching_rules=None,
+        capabilities=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    candidate = CandidateProvider(
+        provider_id=1,
+        provider_name="p-gemini",
+        base_url="https://example.com",
+        protocol="gemini",
+        api_key="sk-test",
+        target_model="gemini-2.5-flash-image",
+        priority=0,
+        weight=1,
+    )
+
+    service = ProxyService(
+        model_repo=AsyncMock(),
+        provider_repo=AsyncMock(),
+        log_repo=AsyncMock(),
+        protocol_hooks=ImageHooks(),
+    )
+    service._resolve_candidates = AsyncMock(
+        return_value=(model_mapping, [candidate], 0, "openai", {})
+    )  # type: ignore[method-assign]
+
+    async def forward(*, body: dict, **kwargs):
+        assert body["image_after"] == "/v1/images/generations"
+        return ProviderResponse(
+            status_code=200,
+            headers={"content-type": "application/json"},
+            body={"upstream_image": "ok"},
+        )
+
+    fake_client = AsyncMock()
+    fake_client.forward = AsyncMock(side_effect=forward)
+
+    def fake_convert_request_for_supplier(*, body, **kwargs):
+        assert body["image_before"] == "/v1/images/generations"
+        return "/v1beta/models/gemini:generateContent", {"converted_image": True}
+
+    def fake_convert_response_for_user(*, body, **kwargs):
+        assert body == {
+            "image_wrapped": {"upstream_image": "ok"},
+            "path": "/v1/images/generations",
+        }
+        return {"converted_image_response": True}
+
+    with patch(
+        "app.services.proxy_service.convert_request_for_supplier",
+        side_effect=fake_convert_request_for_supplier,
+    ):
+        with patch(
+            "app.services.proxy_service.convert_response_for_user",
+            side_effect=fake_convert_response_for_user,
+        ):
+            with patch(
+                "app.services.proxy_service.get_provider_client",
+                return_value=fake_client,
+            ):
+                response, _ = await service.process_request(
+                    api_key_id=1,
+                    api_key_name="k",
+                    request_protocol="openai",
+                    path="/v1/images/generations",
+                    method="POST",
+                    headers={},
+                    body={"model": "test-image-model", "prompt": "a cat"},
+                )
+
+    assert response.body == {
+        "image_after_response": {"converted_image_response": True},
+        "path": "/v1/images/generations",
+    }
     service.log_repo.create.assert_awaited()
 
 
