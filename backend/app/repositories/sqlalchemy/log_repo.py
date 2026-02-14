@@ -7,22 +7,22 @@ Provides concrete database operation implementation for request logs.
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select, and_, or_, delete, case, Integer, cast, not_
+from sqlalchemy import Integer, and_, case, cast, delete, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import RequestLog as RequestLogORM
 from app.domain.log import (
-    RequestLogModel,
-    RequestLogCreate,
-    RequestLogQuery,
+    LogCostByModel,
     LogCostStatsQuery,
     LogCostStatsResponse,
     LogCostSummary,
     LogCostTrendPoint,
-    LogCostByModel,
-    ModelStats,
     ModelProviderStats,
+    ModelStats,
+    RequestLogCreate,
+    RequestLogModel,
+    RequestLogQuery,
 )
 from app.repositories.log_repo import LogRepository
 
@@ -35,19 +35,19 @@ def _pg_make_interval_minutes(minutes):
 class SQLAlchemyLogRepository(LogRepository):
     """
     Log Repository SQLAlchemy Implementation
-    
+
     Uses SQLAlchemy ORM to implement database operations for request logs.
     """
-    
+
     def __init__(self, session: AsyncSession):
         """
         Initialize Repository
-        
+
         Args:
             session: Async database session
         """
         self.session = session
-    
+
     def _to_domain(self, entity: RequestLogORM) -> RequestLogModel:
         """Convert ORM entity to domain model"""
         request_time = ensure_utc(entity.request_time)
@@ -65,9 +65,15 @@ class SQLAlchemyLogRepository(LogRepository):
             total_time_ms=entity.total_time_ms,
             input_tokens=entity.input_tokens,
             output_tokens=entity.output_tokens,
-            total_cost=float(entity.total_cost) if entity.total_cost is not None else None,
-            input_cost=float(entity.input_cost) if entity.input_cost is not None else None,
-            output_cost=float(entity.output_cost) if entity.output_cost is not None else None,
+            total_cost=float(entity.total_cost)
+            if entity.total_cost is not None
+            else None,
+            input_cost=float(entity.input_cost)
+            if entity.input_cost is not None
+            else None,
+            output_cost=float(entity.output_cost)
+            if entity.output_cost is not None
+            else None,
             price_source=entity.price_source,
             request_headers=entity.request_headers,
             response_headers=entity.response_headers,
@@ -83,8 +89,11 @@ class SQLAlchemyLogRepository(LogRepository):
             supplier_protocol=entity.supplier_protocol,
             converted_request_body=entity.converted_request_body,
             upstream_response_body=entity.upstream_response_body,
+            request_path=entity.request_path,
+            request_method=entity.request_method,
+            upstream_url=entity.upstream_url,
         )
-    
+
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
         """Create request log"""
         entity = RequestLogORM(
@@ -118,12 +127,15 @@ class SQLAlchemyLogRepository(LogRepository):
             supplier_protocol=data.supplier_protocol,
             converted_request_body=data.converted_request_body,
             upstream_response_body=data.upstream_response_body,
+            request_path=data.request_path,
+            request_method=data.request_method,
+            upstream_url=data.upstream_url,
         )
         self.session.add(entity)
         await self.session.commit()
         await self.session.refresh(entity)
         return self._to_domain(entity)
-    
+
     async def get_by_id(self, id: int) -> Optional[RequestLogModel]:
         """Get log by ID"""
         result = await self.session.execute(
@@ -131,26 +143,30 @@ class SQLAlchemyLogRepository(LogRepository):
         )
         entity = result.scalar_one_or_none()
         return self._to_domain(entity) if entity else None
-    
+
     async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogModel], int]:
         """
         Query log list
-        
+
         Supports multi-condition filtering, pagination, and sorting.
         """
         # Build base query
         stmt = select(RequestLogORM)
         count_stmt = select(func.count()).select_from(RequestLogORM)
-        
+
         # Build filter conditions list
         conditions = []
-        
+
         # Time range filter
         if query.start_time:
-            conditions.append(RequestLogORM.request_time >= to_utc_naive(query.start_time))
+            conditions.append(
+                RequestLogORM.request_time >= to_utc_naive(query.start_time)
+            )
         if query.end_time:
-            conditions.append(RequestLogORM.request_time <= to_utc_naive(query.end_time))
-        
+            conditions.append(
+                RequestLogORM.request_time <= to_utc_naive(query.end_time)
+            )
+
         # Model filter (fuzzy match)
         if query.requested_model:
             conditions.append(
@@ -160,17 +176,17 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(
                 RequestLogORM.target_model.ilike(f"%{query.target_model}%")
             )
-        
+
         # Provider filter
         if query.provider_id:
             conditions.append(RequestLogORM.provider_id == query.provider_id)
-        
+
         # Status code filter
         if query.status_min is not None:
             conditions.append(RequestLogORM.response_status >= query.status_min)
         if query.status_max is not None:
             conditions.append(RequestLogORM.response_status <= query.status_max)
-        
+
         # Has error
         if query.has_error is not None:
             has_error_condition = or_(
@@ -187,7 +203,7 @@ class SQLAlchemyLogRepository(LogRepository):
                 conditions.append(has_error_condition)
             else:
                 conditions.append(not_(has_error_condition))
-        
+
         # API Key filter
         if query.api_key_id:
             conditions.append(RequestLogORM.api_key_id == query.api_key_id)
@@ -195,44 +211,44 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
-        
+
         # Retry count filter
         if query.retry_count_min is not None:
             conditions.append(RequestLogORM.retry_count >= query.retry_count_min)
         if query.retry_count_max is not None:
             conditions.append(RequestLogORM.retry_count <= query.retry_count_max)
-        
+
         # Token filter
         if query.input_tokens_min is not None:
             conditions.append(RequestLogORM.input_tokens >= query.input_tokens_min)
         if query.input_tokens_max is not None:
             conditions.append(RequestLogORM.input_tokens <= query.input_tokens_max)
-        
+
         # Duration filter
         if query.total_time_min is not None:
             conditions.append(RequestLogORM.total_time_ms >= query.total_time_min)
         if query.total_time_max is not None:
             conditions.append(RequestLogORM.total_time_ms <= query.total_time_max)
-        
+
         # Apply filter conditions
         if conditions:
             stmt = stmt.where(and_(*conditions))
             count_stmt = count_stmt.where(and_(*conditions))
-        
+
         # Get total count
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar() or 0
-        
+
         # Sorting
         sort_column = getattr(RequestLogORM, query.sort_by, RequestLogORM.request_time)
         if query.sort_order == "asc":
             stmt = stmt.order_by(sort_column.asc())
         else:
             stmt = stmt.order_by(sort_column.desc())
-        
+
         # Pagination
         stmt = stmt.offset((query.page - 1) * query.page_size).limit(query.page_size)
-        
+
         # Execute query
         result = await self.session.execute(stmt)
         entities = result.scalars().all()
@@ -262,15 +278,21 @@ class SQLAlchemyLogRepository(LogRepository):
         tz_offset_minutes = int(query.tz_offset_minutes or 0)
 
         if query.start_time:
-            conditions.append(RequestLogORM.request_time >= to_utc_naive(query.start_time))
+            conditions.append(
+                RequestLogORM.request_time >= to_utc_naive(query.start_time)
+            )
         if query.end_time:
-            conditions.append(RequestLogORM.request_time <= to_utc_naive(query.end_time))
+            conditions.append(
+                RequestLogORM.request_time <= to_utc_naive(query.end_time)
+            )
         if query.provider_id:
             conditions.append(RequestLogORM.provider_id == query.provider_id)
         if query.api_key_id:
             conditions.append(RequestLogORM.api_key_id == query.api_key_id)
         if query.api_key_name:
-            conditions.append(RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%"))
+            conditions.append(
+                RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
+            )
         if query.requested_model:
             conditions.append(
                 RequestLogORM.requested_model.ilike(f"%{query.requested_model}%")
@@ -321,7 +343,8 @@ class SQLAlchemyLogRepository(LogRepository):
                 )
             else:
                 shifted_time_expr = (
-                    RequestLogORM.request_time + _pg_make_interval_minutes(tz_offset_minutes)
+                    RequestLogORM.request_time
+                    + _pg_make_interval_minutes(tz_offset_minutes)
                 )
         else:
             shifted_time_expr = RequestLogORM.request_time
@@ -349,7 +372,9 @@ class SQLAlchemyLogRepository(LogRepository):
                 minutes_since_hour = func.extract("minute", shifted_time_expr)
                 bucket_index = func.floor(minutes_since_hour / bucket_minutes)
                 bucket_minute = bucket_index * bucket_minutes
-                bucket_local_start_expr = func.date_trunc("hour", shifted_time_expr) + _pg_make_interval_minutes(
+                bucket_local_start_expr = func.date_trunc(
+                    "hour", shifted_time_expr
+                ) + _pg_make_interval_minutes(
                     bucket_minute  # type: ignore[arg-type]
                 )
         elif query.bucket == "hour":
@@ -373,22 +398,27 @@ class SQLAlchemyLogRepository(LogRepository):
                     bucket_local_start_expr, f"{-tz_offset_minutes:+d} minutes"
                 )
             else:
-                bucket_start_utc_expr = bucket_local_start_expr - _pg_make_interval_minutes(
-                    tz_offset_minutes
+                bucket_start_utc_expr = (
+                    bucket_local_start_expr
+                    - _pg_make_interval_minutes(tz_offset_minutes)
                 )
         else:
             bucket_start_utc_expr = bucket_local_start_expr
 
-        trend_stmt = select(
-            bucket_start_utc_expr.label("bucket"),
-            func.count().label("request_count"),
-            sum_total.label("total_cost"),
-            sum_input.label("input_cost"),
-            sum_output.label("output_cost"),
-            sum_in_tokens.label("input_tokens"),
-            sum_out_tokens.label("output_tokens"),
-            sum_error.label("error_count"),
-        ).group_by(bucket_start_utc_expr).order_by(bucket_start_utc_expr)
+        trend_stmt = (
+            select(
+                bucket_start_utc_expr.label("bucket"),
+                func.count().label("request_count"),
+                sum_total.label("total_cost"),
+                sum_input.label("input_cost"),
+                sum_output.label("output_cost"),
+                sum_in_tokens.label("input_tokens"),
+                sum_out_tokens.label("output_tokens"),
+                sum_error.label("error_count"),
+            )
+            .group_by(bucket_start_utc_expr)
+            .order_by(bucket_start_utc_expr)
+        )
         if where_clause is not None:
             trend_stmt = trend_stmt.where(where_clause)
         trend_rows = (await self.session.execute(trend_stmt)).mappings().all()
@@ -462,7 +492,9 @@ class SQLAlchemyLogRepository(LogRepository):
         )
         if where_clause is not None:
             by_model_tokens_stmt = by_model_tokens_stmt.where(where_clause)
-        model_tokens_rows = (await self.session.execute(by_model_tokens_stmt)).mappings().all()
+        model_tokens_rows = (
+            (await self.session.execute(by_model_tokens_stmt)).mappings().all()
+        )
         by_model_tokens = [
             LogCostByModel(
                 requested_model=r["requested_model"] or "-",
@@ -478,10 +510,12 @@ class SQLAlchemyLogRepository(LogRepository):
             summary=summary,
             trend=trend,
             by_model=by_model,
-            by_model_tokens=by_model_tokens
+            by_model_tokens=by_model_tokens,
         )
 
-    async def get_model_stats(self, requested_model: str | None = None) -> list[ModelStats]:
+    async def get_model_stats(
+        self, requested_model: str | None = None
+    ) -> list[ModelStats]:
         cutoff_time = to_utc_naive(utc_now() - timedelta(days=7))
         conditions = []
         if cutoff_time:

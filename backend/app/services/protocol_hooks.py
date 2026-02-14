@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 
 # 30 days in seconds
 TOOL_CALL_EXTRA_CONTENT_TTL = 30 * 24 * 60 * 60
+OPENAI_IMAGE_PATHS = {
+    "/v1/images/generations",
+    "/v1/images/edits",
+    "/v1/images/variations",
+}
 
 
 class ProtocolConversionHooks:
@@ -93,6 +98,42 @@ class ProtocolConversionHooks:
         supplier_protocol: str,
     ) -> bytes:
         return chunk
+
+    async def before_image_request_conversion(
+        self,
+        body: dict[str, Any],
+        request_protocol: str,
+        supplier_protocol: str,
+        path: str,
+    ) -> dict[str, Any]:
+        return body
+
+    async def after_image_request_conversion(
+        self,
+        supplier_body: dict[str, Any],
+        request_protocol: str,
+        supplier_protocol: str,
+        path: str,
+    ) -> dict[str, Any]:
+        return supplier_body
+
+    async def before_image_response_conversion(
+        self,
+        supplier_body: Any,
+        request_protocol: str,
+        supplier_protocol: str,
+        path: str,
+    ) -> Any:
+        return supplier_body
+
+    async def after_image_response_conversion(
+        self,
+        response_body: Any,
+        request_protocol: str,
+        supplier_protocol: str,
+        path: str,
+    ) -> Any:
+        return response_body
 
     async def _cache_response_tool_call_extra_content_stream(
         self, chunk: bytes

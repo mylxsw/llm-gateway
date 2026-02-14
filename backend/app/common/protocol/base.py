@@ -18,6 +18,7 @@ class Protocol(str, Enum):
     OPENAI = "openai"
     OPENAI_RESPONSES = "openai_responses"
     ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
 
     @classmethod
     def from_string(cls, value: str) -> "Protocol":
@@ -30,6 +31,8 @@ class Protocol(str, Enum):
             "openai_responses": cls.OPENAI_RESPONSES,
             "anthropic": cls.ANTHROPIC,
             "anthropic_messages": cls.ANTHROPIC,
+            "gemini": cls.GEMINI,
+            "google_gemini": cls.GEMINI,
         }
         if normalized in mapping:
             return mapping[normalized]

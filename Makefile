@@ -3,8 +3,11 @@ default:
 	echo "Please specify a target: start-backend or start-frontend or test"
 
 test:
-	cd llm_api_converter && uv sync && uv run pytest
-	cd backend && uv sync && uv run pytest
+	cd llm_api_converter && uv sync --extra dev && uv run pytest
+	$(MAKE) test-backend
+
+test-backend:
+	./backend/run-tests.sh
 
 start-backend:
 	cd backend && uv sync && uv run python -m app.main
@@ -12,4 +15,4 @@ start-backend:
 start-frontend:
 	cd frontend && npm install && npm run dev
 
-.PHONY: start-backend start-frontend test
+.PHONY: start-backend start-frontend test test-backend

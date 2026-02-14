@@ -116,6 +116,37 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
         output_tokens = _safe_int(usage.get("candidatesTokenCount"))
         total_tokens = _safe_int(usage.get("totalTokenCount"))
         cached_tokens = _safe_int(usage.get("cachedContentTokenCount"))
+
+        # Parse Gemini modality details: promptTokensDetails
+        prompt_details = usage.get("promptTokensDetails")
+        if isinstance(prompt_details, list):
+            for d in prompt_details:
+                if isinstance(d, dict):
+                    modality = d.get("modality", "")
+                    count = _safe_int(d.get("tokenCount"))
+                    if modality == "IMAGE":
+                        input_image_tokens = count
+                    elif modality == "AUDIO":
+                        input_audio_tokens = count
+                    elif modality == "VIDEO":
+                        input_video_tokens = count
+
+        # Parse Gemini modality details: candidatesTokensDetails
+        candidates_details = usage.get("candidatesTokensDetails")
+        if isinstance(candidates_details, list):
+            for d in candidates_details:
+                if isinstance(d, dict):
+                    modality = d.get("modality", "")
+                    count = _safe_int(d.get("tokenCount"))
+                    if modality == "IMAGE":
+                        output_image_tokens = count
+                    elif modality == "AUDIO":
+                        output_audio_tokens = count
+                    elif modality == "VIDEO":
+                        output_video_tokens = count
+
+        # Map thoughtsTokenCount to reasoning_tokens
+        reasoning_tokens = _safe_int(usage.get("thoughtsTokenCount"))
     else:
         input_tokens = _safe_int(usage.get("prompt_tokens") or usage.get("input_tokens"))
         output_tokens = _safe_int(usage.get("completion_tokens") or usage.get("output_tokens"))
@@ -171,6 +202,9 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
         "candidatesTokenCount",
         "totalTokenCount",
         "cachedContentTokenCount",
+        "promptTokensDetails",
+        "candidatesTokensDetails",
+        "thoughtsTokenCount",
     }
     extra_usage = {k: v for k, v in usage.items() if k not in mapped_keys} or None
 

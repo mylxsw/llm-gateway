@@ -36,7 +36,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
-from app.services.protocol_hooks import ProtocolConversionHooks
+from app.services.protocol_hooks import OPENAI_IMAGE_PATHS, ProtocolConversionHooks
 from app.services.strategy import (
     CostFirstStrategy,
     PriorityStrategy,
@@ -475,6 +475,9 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=False,
+                request_path=path,
+                request_method=method,
+                upstream_url=conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
                 supplier_protocol=resolve_implementation_protocol(
@@ -502,6 +505,7 @@ class ProxyService:
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             supplier_protocol: Optional[str] = None
             try:
+                is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
                 client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
@@ -514,6 +518,17 @@ class ProxyService:
                 )
                 if hooked_body is None:
                     hooked_body = body
+                if is_image_path:
+                    hooked_image_body = (
+                        await self._protocol_hooks.before_image_request_conversion(
+                            hooked_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_body is not None:
+                        hooked_body = hooked_image_body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
@@ -531,9 +546,21 @@ class ProxyService:
                 )
                 if hooked_supplier_body is not None:
                     supplier_body = hooked_supplier_body
+                if is_image_path:
+                    hooked_image_supplier_body = (
+                        await self._protocol_hooks.after_image_request_conversion(
+                            supplier_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_supplier_body is not None:
+                        supplier_body = hooked_image_supplier_body
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
+                conversion_data["upstream_url"] = f"{candidate.base_url.rstrip('/')}{supplier_path}"
                 same_protocol = normalize_protocol(
                     request_protocol
                 ) == normalize_protocol(supplier_protocol)
@@ -578,6 +605,7 @@ class ProxyService:
 
         if result.response.body is not None and result.final_provider is not None:
             try:
+                is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(
                     result.final_provider.protocol
                 )
@@ -591,6 +619,17 @@ class ProxyService:
                 )
                 if hooked_upstream_body is None:
                     hooked_upstream_body = result.response.body
+                if is_image_path:
+                    hooked_image_upstream_body = (
+                        await self._protocol_hooks.before_image_response_conversion(
+                            hooked_upstream_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_upstream_body is not None:
+                        hooked_upstream_body = hooked_image_upstream_body
                 # Capture upstream response before protocol conversion
                 conversion_data["upstream_response_body"] = hooked_upstream_body
                 response_body = hooked_upstream_body
@@ -608,6 +647,17 @@ class ProxyService:
                 )
                 if hooked_response_body is not None:
                     response_body = hooked_response_body
+                if is_image_path:
+                    hooked_image_response_body = (
+                        await self._protocol_hooks.after_image_response_conversion(
+                            response_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_response_body is not None:
+                        response_body = hooked_image_response_body
                 result.response.body = response_body
             except Exception as e:
                 error_msg = str(e)
@@ -737,6 +787,9 @@ class ProxyService:
             error_info=result.response.error,
             trace_id=trace_id,
             is_stream=False,
+            request_path=path,
+            request_method=method,
+            upstream_url=conversion_data.get("upstream_url"),
             # Protocol conversion fields
             request_protocol=conversion_data.get("request_protocol"),
             supplier_protocol=conversion_data.get("supplier_protocol"),
@@ -849,6 +902,7 @@ class ProxyService:
 
             supplier_protocol: Optional[str] = None
             try:
+                is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
                 client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
@@ -861,6 +915,17 @@ class ProxyService:
                 )
                 if hooked_body is None:
                     hooked_body = body
+                if is_image_path:
+                    hooked_image_body = (
+                        await self._protocol_hooks.before_image_request_conversion(
+                            hooked_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_body is not None:
+                        hooked_body = hooked_image_body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
                     supplier_protocol=supplier_protocol,
@@ -876,9 +941,21 @@ class ProxyService:
                 )
                 if hooked_supplier_body is not None:
                     supplier_body = hooked_supplier_body
+                if is_image_path:
+                    hooked_image_supplier_body = (
+                        await self._protocol_hooks.after_image_request_conversion(
+                            supplier_body,
+                            request_protocol,
+                            supplier_protocol,
+                            path,
+                        )
+                    )
+                    if hooked_image_supplier_body is not None:
+                        supplier_body = hooked_image_supplier_body
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
+                stream_conversion_data["upstream_url"] = f"{candidate.base_url.rstrip('/')}{supplier_path}"
             except Exception as e:
                 error_msg = str(e)
                 logger.error(
@@ -1091,6 +1168,9 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=True,
+                request_path=path,
+                request_method=method,
+                upstream_url=stream_conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
                 supplier_protocol=resolve_implementation_protocol(
@@ -1272,6 +1352,9 @@ class ProxyService:
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                     is_stream=True,
+                    request_path=path,
+                    request_method=method,
+                    upstream_url=stream_conversion_data.get("upstream_url"),
                     # Protocol conversion fields
                     request_protocol=stream_conversion_data.get("request_protocol"),
                     supplier_protocol=stream_conversion_data.get("supplier_protocol"),

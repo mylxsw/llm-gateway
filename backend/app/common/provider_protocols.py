@@ -11,6 +11,7 @@ from app.common.errors import ServiceError
 OPENAI_PROTOCOL = "openai"
 OPENAI_RESPONSES_PROTOCOL = "openai_responses"
 ANTHROPIC_PROTOCOL = "anthropic"
+GEMINI_PROTOCOL = "gemini"
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,12 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
         base_url="https://api.anthropic.com/v1",
         label="Anthropic",
     ),
+    "gemini": ProtocolConfig(
+        frontend="gemini",
+        implementation=GEMINI_PROTOCOL,
+        base_url="https://generativelanguage.googleapis.com",
+        label="Google Gemini",
+    ),
     "zhipu": ProtocolConfig(
         frontend="zhipu",
         implementation=OPENAI_PROTOCOL,
@@ -66,6 +73,7 @@ IMPLEMENTATION_PROTOCOLS = (
     OPENAI_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
     ANTHROPIC_PROTOCOL,
+    GEMINI_PROTOCOL,
 )
 
 

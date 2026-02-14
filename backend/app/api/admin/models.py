@@ -21,6 +21,7 @@ from app.api.deps import (
 from app.common.errors import AppError
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
+    GEMINI_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
     resolve_implementation_protocol,
 )
@@ -131,6 +132,15 @@ def _build_test_payload(
             implementation,
         )
 
+    if implementation == GEMINI_PROTOCOL:
+        return (
+            f"/v1beta/models/{requested_model}:{'streamGenerateContent?alt=sse' if stream else 'generateContent'}",
+            {
+                "contents": [{"role": "user", "parts": [{"text": "hello"}]}],
+            },
+            implementation,
+        )
+
     return (
         "/v1/chat/completions",
         {
@@ -208,6 +218,24 @@ def _extract_text_from_response(body: Any, implementation: str) -> str:
         if isinstance(text, str):
             return text
 
+    if implementation == GEMINI_PROTOCOL:
+        candidates = body.get("candidates")
+        if isinstance(candidates, list) and candidates:
+            first = candidates[0]
+            if isinstance(first, dict):
+                content = first.get("content")
+                if isinstance(content, dict):
+                    candidate_parts = content.get("parts")
+                    if isinstance(candidate_parts, list):
+                        texts: list[str] = []
+                        for part in candidate_parts:
+                            if isinstance(part, dict):
+                                text = part.get("text")
+                                if isinstance(text, str) and text:
+                                    texts.append(text)
+                        if texts:
+                            return "".join(texts)
+
     choices = body.get("choices")
     if isinstance(choices, list) and choices:
         first = choices[0]
@@ -267,6 +295,39 @@ async def _collect_stream_text(
         if parts:
             return "".join(parts)
         return completed_text or ""
+
+    if implementation == GEMINI_PROTOCOL:
+        decoder = SSEDecoder()
+        parts: list[str] = []
+
+        async for chunk in stream:
+            for payload in decoder.feed(chunk):
+                stripped = payload.strip()
+                if not stripped or stripped == "[DONE]":
+                    continue
+                try:
+                    data = json.loads(payload)
+                except Exception:
+                    continue
+                candidates = data.get("candidates")
+                if not isinstance(candidates, list):
+                    continue
+                for candidate in candidates:
+                    if not isinstance(candidate, dict):
+                        continue
+                    content = candidate.get("content")
+                    if not isinstance(content, dict):
+                        continue
+                    candidate_parts = content.get("parts")
+                    if not isinstance(candidate_parts, list):
+                        continue
+                    for part in candidate_parts:
+                        if isinstance(part, dict):
+                            text = part.get("text")
+                            if isinstance(text, str) and text:
+                                parts.append(text)
+
+        return "".join(parts)
 
     usage_acc = StreamUsageAccumulator(protocol=implementation, model=requested_model)
     async for chunk in stream:

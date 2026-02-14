@@ -40,6 +40,9 @@ export interface RequestLogDetail extends RequestLog {
   price_source?: 'SupplierOverride' | 'ModelFallback' | 'DefaultZero' | string | null;
   request_protocol?: string;
   supplier_protocol?: string;
+  request_path?: string;
+  request_method?: string;
+  upstream_url?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   converted_request_body?: Record<string, any>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

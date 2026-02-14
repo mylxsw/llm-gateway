@@ -274,6 +274,23 @@ async def audio_translations(
     )
 
 
+async def _handle_proxy_request_auto(
+    request: Request,
+    api_key: CurrentApiKey,
+    service: ProxyServiceDep,
+    path: str,
+):
+    """
+    Auto-detect content type (JSON vs multipart) and handle accordingly.
+    """
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" in content_type:
+        return await _handle_proxy_request_multipart(
+            request, api_key, service, path
+        )
+    return await _handle_proxy_request(request, api_key, service, path)
+
+
 @router.post("/v1/images/generations")
 async def images_generations(
     request: Request,
@@ -283,8 +300,36 @@ async def images_generations(
     """
     OpenAI Images Generations API Proxy
     """
-    return await _handle_proxy_request(
+    return await _handle_proxy_request_auto(
         request, api_key, service, "/v1/images/generations"
+    )
+
+
+@router.post("/v1/images/edits")
+async def images_edits(
+    request: Request,
+    api_key: CurrentApiKey,
+    service: ProxyServiceDep,
+):
+    """
+    OpenAI Images Edits API Proxy
+    """
+    return await _handle_proxy_request_auto(
+        request, api_key, service, "/v1/images/edits"
+    )
+
+
+@router.post("/v1/images/variations")
+async def images_variations(
+    request: Request,
+    api_key: CurrentApiKey,
+    service: ProxyServiceDep,
+):
+    """
+    OpenAI Images Variations API Proxy (dall-e-2 only, multipart)
+    """
+    return await _handle_proxy_request_auto(
+        request, api_key, service, "/v1/images/variations"
     )
 
 

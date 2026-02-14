@@ -79,3 +79,35 @@ def test_openai_stream_includes_legacy_function_call_in_output_text():
     result = acc.finalize()
     assert "get_weather" in result.output_text
     assert "arguments" in result.output_text
+
+
+def test_gemini_stream_accumulates_text_and_usage():
+    """Test native Gemini stream parsing with candidates[].content.parts[].text."""
+    acc = StreamUsageAccumulator(protocol="gemini", model="gemini-2.0-flash")
+    chunks = [
+        b'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hel"}]},"index":0}]}\n\n',
+        b'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"lo"}]},"index":0}]}\n\n',
+        b'data: {"candidates":[{"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":5,"totalTokenCount":8}}\n\n',
+    ]
+    for c in chunks:
+        acc.feed(c)
+
+    result = acc.finalize()
+    assert result.output_text == "Hello"
+    assert result.upstream_reported_output_tokens == 5
+    assert result.input_tokens == 3
+
+
+def test_gemini_stream_includes_function_calls():
+    """Test native Gemini stream parsing with functionCall parts."""
+    acc = StreamUsageAccumulator(protocol="gemini", model="gemini-2.0-flash")
+    chunks = [
+        b'data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"get_weather","args":{"city":"Paris"}}}]},"index":0}]}\n\n',
+        b'data: {"candidates":[{"finishReason":"STOP","index":0}]}\n\n',
+    ]
+    for c in chunks:
+        acc.feed(c)
+
+    result = acc.finalize()
+    assert "get_weather" in result.output_text
+    assert "Paris" in result.output_text

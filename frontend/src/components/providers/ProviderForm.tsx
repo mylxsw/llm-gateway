@@ -96,7 +96,7 @@ export function ProviderForm({
     reset,
     setValue,
     watch,
-    formState: { errors, dirtyFields },
+    formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
       name: '',
@@ -125,7 +125,7 @@ export function ProviderForm({
   const [defaultParameters, setDefaultParameters] = useState<
     { key: string; value: string }[]
   >([]);
-  const lastAutoBaseUrl = useRef<string | null>(null);
+  const userHasEditedBaseUrl = useRef(false);
 
   // Add header
   const addHeader = () => {
@@ -206,8 +206,9 @@ export function ProviderForm({
         proxy_url: '',
         no_suffix: provider.provider_options?.no_suffix ?? false,
       });
-      lastAutoBaseUrl.current =
-        getProviderProtocolConfig(provider.protocol, protocolConfigs)?.base_url ?? null;
+      // In edit mode, treat base_url as user-edited if it differs from the protocol default
+      const defaultUrl = getProviderProtocolConfig(provider.protocol, protocolConfigs)?.base_url;
+      userHasEditedBaseUrl.current = !!defaultUrl && provider.base_url !== defaultUrl;
       
       // Fill extra headers
       if (provider.extra_headers) {
@@ -248,7 +249,7 @@ export function ProviderForm({
         proxy_url: '',
         no_suffix: false,
       });
-      lastAutoBaseUrl.current = getProviderProtocolConfig('openai', protocolConfigs)?.base_url ?? null;
+      userHasEditedBaseUrl.current = false;
       setExtraHeaders([]);
       setDefaultParameters(
         protocol === 'anthropic'
@@ -265,20 +266,29 @@ export function ProviderForm({
     setDefaultParameters([{ key: 'max_tokens', value: '4096' }]);
   }, [provider, protocol, defaultParameters.length]);
 
+  // Auto-fill base_url when protocol changes — only if user hasn't manually customised it.
+  // "User has edited" means the current value is not any of the built-in protocol defaults.
   useEffect(() => {
     if (!protocolConfig) return;
+    if (userHasEditedBaseUrl.current) return;
+
     const nextBaseUrl = protocolConfig.base_url;
-    const baseUrlDirty = !!dirtyFields.base_url;
-    const shouldAutoFill =
-      (!baseUrl && !baseUrlDirty) ||
-      (!baseUrlDirty && lastAutoBaseUrl.current && baseUrl === lastAutoBaseUrl.current);
+    setValue('base_url', nextBaseUrl, { shouldDirty: false });
+  }, [protocol, protocolConfig, setValue]);
 
-    if (shouldAutoFill && baseUrl !== nextBaseUrl) {
-      setValue('base_url', nextBaseUrl, { shouldDirty: true });
+  // Detect manual edits: if the user changes base_url to something other than a
+  // built-in protocol default, mark it as user-edited and stop auto-filling.
+  useEffect(() => {
+    if (!protocolConfigs.length) return;
+    const knownDefaults = new Set(protocolConfigs.map((c) => c.base_url));
+    // Empty string is not considered a user edit — it's just a cleared field.
+    // But we do NOT auto-fill on empty; we only auto-fill on protocol change.
+    if (baseUrl && !knownDefaults.has(baseUrl)) {
+      userHasEditedBaseUrl.current = true;
+    } else {
+      userHasEditedBaseUrl.current = false;
     }
-
-    lastAutoBaseUrl.current = nextBaseUrl;
-  }, [baseUrl, dirtyFields.base_url, protocolConfig, setValue]);
+  }, [baseUrl, protocolConfigs]);
 
   // Submit form
   const onFormSubmit = (data: FormData) => {

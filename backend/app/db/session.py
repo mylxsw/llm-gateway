@@ -127,6 +127,9 @@ def _run_migrations(sync_conn) -> None:
             "converted_request_body": "converted_request_body JSON",
             "upstream_response_body": "upstream_response_body TEXT",
             "response_headers": "response_headers JSON",
+            "request_path": "request_path VARCHAR(200)",
+            "request_method": "request_method VARCHAR(10)",
+            "upstream_url": "upstream_url VARCHAR(500)",
         },
     )
     ensure_columns(

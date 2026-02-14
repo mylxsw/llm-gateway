@@ -117,6 +117,104 @@ async def test_openai_audio_transcriptions_proxy_multipart():
 
 
 @pytest.mark.asyncio
+async def test_openai_images_edits_proxy_json():
+    service = _DummyProxyService()
+    app.dependency_overrides[get_proxy_service] = lambda: service
+    app.dependency_overrides[get_current_api_key] = _make_api_key
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/images/edits",
+            json={
+                "model": "gpt-image-1",
+                "prompt": "Add a hat",
+                "images": [{"image_url": "https://example.com/image.png"}],
+                "size": "1024x1024",
+                "quality": "high",
+            },
+        )
+
+    assert response.status_code == 200
+    assert service.calls[0]["path"] == "/v1/images/edits"
+    assert service.calls[0]["body"]["prompt"] == "Add a hat"
+    assert service.calls[0]["body"]["model"] == "gpt-image-1"
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_openai_images_edits_proxy_multipart():
+    service = _DummyProxyService()
+    app.dependency_overrides[get_proxy_service] = lambda: service
+    app.dependency_overrides[get_current_api_key] = _make_api_key
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/images/edits",
+            data={"model": "dall-e-2", "prompt": "Add a hat", "n": "1", "size": "1024x1024"},
+            files={"image": ("image.png", b"fake-image-bytes", "image/png")},
+        )
+
+    assert response.status_code == 200
+    assert service.calls[0]["path"] == "/v1/images/edits"
+    body = service.calls[0]["body"]
+    assert body["prompt"] == "Add a hat"
+    assert body["model"] == "dall-e-2"
+    assert body["_files"][0]["filename"] == "image.png"
+    assert body["_files"][0]["data"] == b"fake-image-bytes"
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_openai_images_variations_proxy_multipart():
+    service = _DummyProxyService()
+    app.dependency_overrides[get_proxy_service] = lambda: service
+    app.dependency_overrides[get_current_api_key] = _make_api_key
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/images/variations",
+            data={"n": "1", "size": "1024x1024"},
+            files={"image": ("image.png", b"fake-image-bytes", "image/png")},
+        )
+
+    assert response.status_code == 200
+    assert service.calls[0]["path"] == "/v1/images/variations"
+    body = service.calls[0]["body"]
+    assert body["_files"][0]["filename"] == "image.png"
+    assert body["_files"][0]["data"] == b"fake-image-bytes"
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_openai_images_generations_proxy_multipart():
+    """Images generations should also accept multipart for backward compat."""
+    service = _DummyProxyService()
+    app.dependency_overrides[get_proxy_service] = lambda: service
+    app.dependency_overrides[get_current_api_key] = _make_api_key
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/images/generations",
+            data={"model": "dall-e-2", "prompt": "A dog", "n": "1"},
+            files={"file": ("dummy.bin", b"", "application/octet-stream")},
+        )
+
+    assert response.status_code == 200
+    assert service.calls[0]["path"] == "/v1/images/generations"
+    body = service.calls[0]["body"]
+    assert body["prompt"] == "A dog"
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
 async def test_openai_audio_translations_proxy_multipart():
     service = _DummyProxyService()
     app.dependency_overrides[get_proxy_service] = lambda: service

@@ -82,6 +82,15 @@ def normalize_protocol(protocol: str) -> str:
         ) from e
 
 
+_IMAGE_PATHS = {"/v1/images/generations", "/v1/images/edits", "/v1/images/variations"}
+
+
+def _apply_image_defaults(path: str, body: dict[str, Any]) -> None:
+    """Apply default parameters for image API requests."""
+    if path in _IMAGE_PATHS:
+        body.setdefault("response_format", "b64_json")
+
+
 def convert_request_for_supplier(
     *,
     request_protocol: str,
@@ -126,6 +135,8 @@ def convert_request_for_supplier(
             target_model=target_model,
             options=options,
         )
+
+        _apply_image_defaults(result.path, result.body)
 
         return result.path, result.body
 

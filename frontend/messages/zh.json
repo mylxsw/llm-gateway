@@ -552,7 +552,7 @@
       "inputTokens": "输入 tokens",
       "inputTokensError": "请输入有效的输入 token 数。",
       "headers": "请求头",
-      "headersPlaceholder": "{{\n  \"x-priority\": \"high\"\n}}",
+      "headersPlaceholder": "'{'\n  \"x-priority\": \"high\"\n'}'",
       "headersHint": "使用 JSON 或每行 key: value。",
       "headersInvalid": "请求头格式无效，请使用 JSON 或每行 key: value。",
       "apiKey": "API Key",
@@ -598,27 +598,27 @@
     "title": "日志",
     "description": "查看代理请求日志，支持多条件筛选",
     "unknown": "未知",
-  "actions": {
-    "refresh": "刷新"
-  },
-  "timeline": {
-    "title": "请求时间轴",
-    "hint": "点击柱体进行筛选，悬停查看时间范围。",
-    "success": "成功",
-    "error": "失败",
-    "empty": "暂无时间轴数据",
-    "rangeSelect": "选择时间范围",
-    "rangeCustom": "当前筛选",
-    "range1h": "近1小时",
-    "range3h": "近3小时",
-    "range6h": "近6小时",
-    "range12h": "近12小时",
-    "range24h": "近24小时",
-    "range1w": "近1周",
-    "clear": "清除范围",
-    "refresh": "刷新时间轴"
-  },
-  "toasts": {
+    "actions": {
+      "refresh": "刷新"
+    },
+    "timeline": {
+      "title": "请求时间轴",
+      "hint": "点击柱体进行筛选，悬停查看时间范围。",
+      "success": "成功",
+      "error": "失败",
+      "empty": "暂无时间轴数据",
+      "rangeSelect": "选择时间范围",
+      "rangeCustom": "当前筛选",
+      "range1h": "近1小时",
+      "range3h": "近3小时",
+      "range6h": "近6小时",
+      "range12h": "近12小时",
+      "range24h": "近24小时",
+      "range1w": "近1周",
+      "clear": "清除范围",
+      "refresh": "刷新时间轴"
+    },
+    "toasts": {
       "refreshSuccess": "已刷新",
       "refreshFailed": "刷新失败"
     },
@@ -715,12 +715,15 @@
       "request": "请求",
       "response": "响应",
       "headers": "请求头",
+      "requestUrl": "请求地址：",
+      "upstreamUrl": "上游地址：",
       "originalRequest": "原始请求",
       "convertedRequest": "转换后的请求（上游）",
       "originalResponse": "原始响应（上游）",
       "convertedResponse": "转换后的响应（客户端）",
       "requestHeaders": "请求头",
-      "responseHeaders": "响应头"
+      "responseHeaders": "响应头",
+      "copyAsCurl": "复制为 cURL"
     },
     "costStats": {
       "activity": "活动",

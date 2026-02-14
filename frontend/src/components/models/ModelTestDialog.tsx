@@ -63,6 +63,7 @@ export function ModelTestDialog({
       'openai',
       'openai_responses',
       'anthropic',
+      'gemini',
     ];
     if (protocolConfigs.length === 0) {
       return supported;

@@ -36,6 +36,7 @@ class TestProtocolEnum:
         assert Protocol.OPENAI.value == "openai"
         assert Protocol.OPENAI_RESPONSES.value == "openai_responses"
         assert Protocol.ANTHROPIC.value == "anthropic"
+        assert Protocol.GEMINI.value == "gemini"
 
     def test_protocol_from_string(self):
         assert Protocol.from_string("openai") == Protocol.OPENAI
@@ -45,6 +46,8 @@ class TestProtocolEnum:
         assert Protocol.from_string("openai_responses") == Protocol.OPENAI_RESPONSES
         assert Protocol.from_string("anthropic") == Protocol.ANTHROPIC
         assert Protocol.from_string("anthropic_messages") == Protocol.ANTHROPIC
+        assert Protocol.from_string("gemini") == Protocol.GEMINI
+        assert Protocol.from_string("google_gemini") == Protocol.GEMINI
 
     def test_protocol_from_string_invalid(self):
         with pytest.raises(ValueError):
@@ -66,6 +69,9 @@ class TestNormalizeProtocol:
 
     def test_normalize_openai_responses(self):
         assert normalize_protocol("openai_responses") == Protocol.OPENAI_RESPONSES
+
+    def test_normalize_gemini(self):
+        assert normalize_protocol("gemini") == Protocol.GEMINI
 
     def test_normalize_invalid(self):
         with pytest.raises(UnsupportedConversionError):
