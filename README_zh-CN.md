@@ -109,12 +109,11 @@ docker compose -f docker-compose.prod.yml up -d
 使用 SQLite 进行简单部署：
 
 ```bash
-docker build -t llm-gateway .
 docker run -d \
   -p 8000:8000 \
   -v $(pwd)/data:/data \
   --name llm-gateway \
-  llm-gateway
+  ghcr.io/mylxsw/llm-gateway:latest
 ```
 
 ### 手动安装
