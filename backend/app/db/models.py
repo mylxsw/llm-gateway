@@ -274,6 +274,12 @@ class RequestLog(Base):
     trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Is Stream Request
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Request path (e.g., /v1/chat/completions)
+    request_path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Request HTTP method (e.g., POST)
+    request_method: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    # Upstream URL (full URL sent to provider)
+    upstream_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     # Protocol Conversion Fields (for debugging and analysis)
     # Client request protocol (openai/anthropic)
     request_protocol: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

@@ -378,6 +378,33 @@ export function LogDetail({ log }: LogDetailProps) {
         <CardContent>
           {activeTab === 'request' && (
             <div className={layout === 'horizontal' && log.converted_request_body ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : 'space-y-6'}>
+              {(log.request_path || log.upstream_url) && (
+                <div className={layout === 'horizontal' && log.converted_request_body ? 'col-span-full' : ''}>
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                    {log.request_path && (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-muted-foreground shrink-0">{t('detail.requestUrl')}</span>
+                        <code className="truncate font-mono text-xs">
+                          {log.request_method && <span className="font-semibold">{log.request_method} </span>}
+                          {log.request_path}
+                        </code>
+                      </div>
+                    )}
+                    {log.request_path && log.upstream_url && (
+                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" suppressHydrationWarning />
+                    )}
+                    {log.upstream_url && (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-muted-foreground shrink-0">{t('detail.upstreamUrl')}</span>
+                        <code className="truncate font-mono text-xs">
+                          {log.request_method && <span className="font-semibold">{log.request_method} </span>}
+                          {log.upstream_url}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium">{t('detail.originalRequest')}</div>

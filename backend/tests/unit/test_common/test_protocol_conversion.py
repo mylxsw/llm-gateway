@@ -961,3 +961,57 @@ async def test_convert_stream_openai_to_anthropic_multiple_tool_calls_without_in
     assert (
         len(block_stops) == 2
     ), f"Expected 2 content_block_stop events, got {len(block_stops)}"
+
+
+class TestImageDefaultResponseFormat:
+    """Test that image API requests get response_format=b64_json by default."""
+
+    def test_generations_default_response_format(self):
+        path, body = convert_request_for_supplier(
+            request_protocol="openai",
+            supplier_protocol="openai",
+            path="/v1/images/generations",
+            body={"model": "gpt-image-1", "prompt": "A cat"},
+            target_model="gpt-image-1",
+        )
+        assert body["response_format"] == "b64_json"
+
+    def test_generations_explicit_response_format_preserved(self):
+        path, body = convert_request_for_supplier(
+            request_protocol="openai",
+            supplier_protocol="openai",
+            path="/v1/images/generations",
+            body={"model": "dall-e-3", "prompt": "A cat", "response_format": "url"},
+            target_model="dall-e-3",
+        )
+        assert body["response_format"] == "url"
+
+    def test_edits_default_response_format(self):
+        path, body = convert_request_for_supplier(
+            request_protocol="openai",
+            supplier_protocol="openai",
+            path="/v1/images/edits",
+            body={"model": "gpt-image-1", "prompt": "Add a hat"},
+            target_model="gpt-image-1",
+        )
+        assert body["response_format"] == "b64_json"
+
+    def test_variations_default_response_format(self):
+        path, body = convert_request_for_supplier(
+            request_protocol="openai",
+            supplier_protocol="openai",
+            path="/v1/images/variations",
+            body={"model": "dall-e-2"},
+            target_model="dall-e-2",
+        )
+        assert body["response_format"] == "b64_json"
+
+    def test_non_image_path_no_default(self):
+        path, body = convert_request_for_supplier(
+            request_protocol="openai",
+            supplier_protocol="openai",
+            path="/v1/chat/completions",
+            body={"model": "gpt-4", "messages": [{"role": "user", "content": "hi"}]},
+            target_model="gpt-4",
+        )
+        assert "response_format" not in body

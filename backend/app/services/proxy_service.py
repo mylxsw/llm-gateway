@@ -475,6 +475,9 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=False,
+                request_path=path,
+                request_method=method,
+                upstream_url=conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
                 supplier_protocol=resolve_implementation_protocol(
@@ -534,6 +537,7 @@ class ProxyService:
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
+                conversion_data["upstream_url"] = f"{candidate.base_url.rstrip('/')}{supplier_path}"
                 same_protocol = normalize_protocol(
                     request_protocol
                 ) == normalize_protocol(supplier_protocol)
@@ -737,6 +741,9 @@ class ProxyService:
             error_info=result.response.error,
             trace_id=trace_id,
             is_stream=False,
+            request_path=path,
+            request_method=method,
+            upstream_url=conversion_data.get("upstream_url"),
             # Protocol conversion fields
             request_protocol=conversion_data.get("request_protocol"),
             supplier_protocol=conversion_data.get("supplier_protocol"),
@@ -879,6 +886,7 @@ class ProxyService:
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
+                stream_conversion_data["upstream_url"] = f"{candidate.base_url.rstrip('/')}{supplier_path}"
             except Exception as e:
                 error_msg = str(e)
                 logger.error(
@@ -1091,6 +1099,9 @@ class ProxyService:
                 error_info=attempt.response.error,
                 trace_id=trace_id,
                 is_stream=True,
+                request_path=path,
+                request_method=method,
+                upstream_url=stream_conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
                 supplier_protocol=resolve_implementation_protocol(
@@ -1272,6 +1283,9 @@ class ProxyService:
                     error_info=initial_response.error or stream_error,
                     trace_id=trace_id,
                     is_stream=True,
+                    request_path=path,
+                    request_method=method,
+                    upstream_url=stream_conversion_data.get("upstream_url"),
                     # Protocol conversion fields
                     request_protocol=stream_conversion_data.get("request_protocol"),
                     supplier_protocol=stream_conversion_data.get("supplier_protocol"),

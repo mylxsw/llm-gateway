@@ -77,6 +77,11 @@ class RequestLogCreate(RequestLogBase):
     trace_id: Optional[str] = Field(None, description="Trace ID")
     # Is Stream Request
     is_stream: bool = Field(False, description="Is Stream Request")
+    # Request path and method
+    request_path: Optional[str] = Field(None, description="Request Path")
+    request_method: Optional[str] = Field(None, description="Request HTTP Method")
+    # Upstream URL (full URL sent to provider)
+    upstream_url: Optional[str] = Field(None, description="Upstream URL")
     # Protocol Conversion Fields (for debugging and analysis)
     # Client request protocol (openai/anthropic)
     request_protocol: Optional[str] = Field(None, description="Client Request Protocol")
