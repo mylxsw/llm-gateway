@@ -108,12 +108,11 @@ Access the dashboard at **http://localhost:8000** (or the port you set in `LLM_G
 Run with SQLite for simple deployments:
 
 ```bash
-docker build -t llm-gateway .
 docker run -d \
   -p 8000:8000 \
   -v $(pwd)/data:/data \
   --name llm-gateway \
-  llm-gateway
+  ghcr.io/mylxsw/llm-gateway:latest
 ```
 
 ### Manual Installation
