@@ -112,9 +112,26 @@ function buildTimelinePoints(
   barsCount = 60,
   bucketMinutes?: number,
 ): TimelinePoint[] {
-  if (!rangeStart || !rangeEnd) return [];
-  const rangeStartMs = new Date(normalizeUtcDateString(rangeStart)).getTime();
-  const rangeEndMs = new Date(normalizeUtcDateString(rangeEnd)).getTime();
+  let rangeStartMs: number;
+  let rangeEndMs: number;
+
+  if (rangeStart && rangeEnd) {
+    rangeStartMs = new Date(normalizeUtcDateString(rangeStart)).getTime();
+    rangeEndMs = new Date(normalizeUtcDateString(rangeEnd)).getTime();
+  } else if (trend.length > 0) {
+    // No explicit range provided — infer from trend data
+    const times = trend
+      .map((p) => parseBucketToDate(String(p.bucket))?.getTime())
+      .filter((t): t is number => t != null);
+    if (times.length === 0) return [];
+    rangeStartMs = Math.min(...times);
+    const unitMs =
+      unit === "day" ? DAY_MS : unit === "hour" ? HOUR_MS : (bucketMinutes ?? 1) * 60 * 1000;
+    rangeEndMs = Math.max(...times) + unitMs;
+  } else {
+    return [];
+  }
+
   if (
     Number.isNaN(rangeStartMs) ||
     Number.isNaN(rangeEndMs) ||
