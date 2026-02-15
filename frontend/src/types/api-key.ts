@@ -11,6 +11,7 @@ export interface ApiKey {
   is_active: boolean;
   created_at: string;
   last_used_at?: string | null;
+  monthly_cost?: number | null; // Current month's total cost (USD)
 }
 
 /** Create API Key Request */

@@ -51,6 +51,8 @@ class ApiKeyResponse(ApiKeyBase):
     is_active: bool = Field(True, description="Is Active")
     created_at: datetime = Field(..., description="Creation Time")
     last_used_at: Optional[datetime] = Field(None, description="Last Used Time")
+    # Current month's total cost (USD)
+    monthly_cost: Optional[float] = Field(None, description="Current month's total cost (USD)")
     
     model_config = ConfigDict(from_attributes=True)
 

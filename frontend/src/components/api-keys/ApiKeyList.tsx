@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Pencil, Trash2, Copy, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiKey } from '@/types';
-import { formatDateTime, getActiveStatus } from '@/lib/utils';
+import { formatDateTime, getActiveStatus, formatUsdCompact } from '@/lib/utils';
 import { getRawKeyValue } from '@/lib/api/api-keys';
 
 interface ApiKeyListProps {
@@ -98,6 +98,7 @@ export function ApiKeyList({
           <TableHead className="w-[60px]">{t('list.columns.id')}</TableHead>
           <TableHead>{t('list.columns.name')}</TableHead>
           <TableHead>{t('list.columns.key')}</TableHead>
+          <TableHead>{t('list.columns.monthlyCost')}</TableHead>
           <TableHead>{t('list.columns.status')}</TableHead>
           <TableHead>{t('list.columns.createdAt')}</TableHead>
           <TableHead>{t('list.columns.lastUsed')}</TableHead>
@@ -156,6 +157,9 @@ export function ApiKeyList({
                     )}
                   </Button>
                 </div>
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {formatUsdCompact(apiKey.monthly_cost)}
               </TableCell>
               <TableCell>
                 <Badge className={status.className}>

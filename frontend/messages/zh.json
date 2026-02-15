@@ -124,6 +124,7 @@
         "id": "ID",
         "name": "名称",
         "key": "API Key",
+        "monthlyCost": "本月消费",
         "status": "状态",
         "createdAt": "创建时间",
         "lastUsed": "最近使用",

@@ -286,3 +286,10 @@ class ModelProviderStats(BaseModel):
     avg_response_time_ms: Optional[float] = None
     success_rate: float = 0.0
     failure_rate: float = 0.0
+
+
+class ApiKeyMonthlyCost(BaseModel):
+    """API Key monthly cost summary"""
+
+    api_key_id: int
+    total_cost: float = 0.0

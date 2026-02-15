@@ -124,6 +124,7 @@
         "id": "ID",
         "name": "Name",
         "key": "API Key",
+        "monthlyCost": "Monthly Cost",
         "status": "Status",
         "createdAt": "Created At",
         "lastUsed": "Last Used",
