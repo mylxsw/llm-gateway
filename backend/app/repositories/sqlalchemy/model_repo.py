@@ -55,6 +55,10 @@ class SQLAlchemyModelRepository(ModelRepository):
             is_active=entity.is_active,
             input_price=float(entity.input_price) if entity.input_price is not None else None,
             output_price=float(entity.output_price) if entity.output_price is not None else None,
+            billing_mode=entity.billing_mode,
+            per_request_price=float(entity.per_request_price) if entity.per_request_price is not None else None,
+            per_image_price=float(entity.per_image_price) if entity.per_image_price is not None else None,
+            tiered_pricing=entity.tiered_pricing,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
         )
@@ -81,6 +85,9 @@ class SQLAlchemyModelRepository(ModelRepository):
             billing_mode=entity.billing_mode,
             per_request_price=float(entity.per_request_price)
             if entity.per_request_price is not None
+            else None,
+            per_image_price=float(entity.per_image_price)
+            if entity.per_image_price is not None
             else None,
             tiered_pricing=entity.tiered_pricing,
             priority=entity.priority,
@@ -231,6 +238,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             output_price=data.output_price,
             billing_mode=data.billing_mode,
             per_request_price=data.per_request_price,
+            per_image_price=data.per_image_price,
             tiered_pricing=[
                 t.model_dump() for t in (data.tiered_pricing or [])
             ]

@@ -34,6 +34,7 @@ class SelectionStrategy(ABC):
         candidates: list[CandidateProvider],
         requested_model: str,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Select a provider from the candidate list
@@ -42,12 +43,13 @@ class SelectionStrategy(ABC):
             candidates: List of candidate providers
             requested_model: Requested model name (for state isolation)
             input_tokens: Number of input tokens (for cost-based selection)
+            image_count: Number of images (for per_image billing)
 
         Returns:
             Optional[CandidateProvider]: Selected provider, or None if no provider available
         """
         pass
-    
+
     @abstractmethod
     async def get_next(
         self,
@@ -55,6 +57,7 @@ class SelectionStrategy(ABC):
         requested_model: str,
         current: CandidateProvider,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Get next provider (used for failover)
@@ -64,6 +67,7 @@ class SelectionStrategy(ABC):
             requested_model: Requested model name
             current: Current provider
             input_tokens: Number of input tokens (for cost-based selection)
+            image_count: Number of images (for per_image billing)
 
         Returns:
             Optional[CandidateProvider]: Next provider, or None if no provider available
@@ -98,6 +102,7 @@ class RoundRobinStrategy(SelectionStrategy):
         candidates: list[CandidateProvider],
         requested_model: str,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Round-robin provider selection
@@ -106,13 +111,14 @@ class RoundRobinStrategy(SelectionStrategy):
             candidates: List of candidate providers (sorted by priority)
             requested_model: Requested model name
             input_tokens: Number of input tokens (unused in round-robin)
+            image_count: Number of images (unused in round-robin)
 
         Returns:
             Optional[CandidateProvider]: Selected provider
         """
         if not candidates:
             return None
-        
+
         # Calculate total weight
         total_weight = sum(c.weight for c in candidates)
         if total_weight <= 0:
@@ -125,7 +131,7 @@ class RoundRobinStrategy(SelectionStrategy):
         async with self.lock:
             # Get current count
             counter = self._counters.get(requested_model, 0)
-            
+
             if use_simple_rr:
                 index = counter % len(candidates)
                 selected = candidates[index]
@@ -139,22 +145,23 @@ class RoundRobinStrategy(SelectionStrategy):
                     if current_val < cumulative_weight:
                         selected = candidate
                         break
-                
+
                 # Should not happen if logic is correct
                 if selected is None:
                     selected = candidates[0]
 
             # Update count
             self._counters[requested_model] = counter + 1
-        
+
         return selected
-    
+
     async def get_next(
         self,
         candidates: list[CandidateProvider],
         requested_model: str,
         current: CandidateProvider,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Get next provider (used for failover)
@@ -164,30 +171,31 @@ class RoundRobinStrategy(SelectionStrategy):
             requested_model: Requested model name
             current: Current provider
             input_tokens: Number of input tokens (unused in round-robin)
+            image_count: Number of images (unused in round-robin)
 
         Returns:
             Optional[CandidateProvider]: Next provider
         """
         if not candidates or len(candidates) <= 1:
             return None
-        
+
         # Find index of current provider
         current_index = -1
         for i, c in enumerate(candidates):
             if _candidate_key(c) == _candidate_key(current):
                 current_index = i
                 break
-        
+
         if current_index == -1:
             return None
-        
+
         # Return next provider
         next_index = (current_index + 1) % len(candidates)
         if next_index == current_index:
             return None
-        
+
         return candidates[next_index]
-    
+
     def reset(self, requested_model: Optional[str] = None) -> None:
         """
         Reset counters (for testing)
@@ -286,6 +294,7 @@ class PriorityStrategy(SelectionStrategy):
         candidates: list[CandidateProvider],
         requested_model: str,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Select provider by priority with round robin within same priority
@@ -294,6 +303,7 @@ class PriorityStrategy(SelectionStrategy):
             candidates: List of candidate providers
             requested_model: Requested model name
             input_tokens: Number of input tokens (unused in priority strategy)
+            image_count: Number of images (unused in priority strategy)
 
         Returns:
             Optional[CandidateProvider]: Selected provider
@@ -311,6 +321,7 @@ class PriorityStrategy(SelectionStrategy):
         requested_model: str,
         current: CandidateProvider,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Get next provider by priority (used for failover)
@@ -320,6 +331,7 @@ class PriorityStrategy(SelectionStrategy):
             requested_model: Requested model name
             current: Current provider
             input_tokens: Number of input tokens (unused in priority strategy)
+            image_count: Number of images (unused in priority strategy)
 
         Returns:
             Optional[CandidateProvider]: Next provider, or None if no provider available
@@ -390,13 +402,14 @@ class CostFirstStrategy(SelectionStrategy):
         """Initialize Strategy"""
         self._round_robin = RoundRobinStrategy()
 
-    def _calculate_input_cost(self, candidate: CandidateProvider, input_tokens: int) -> float:
+    def _calculate_input_cost(self, candidate: CandidateProvider, input_tokens: int, image_count: Optional[int] = None) -> float:
         """
         Calculate input cost for a candidate provider
 
         Args:
             candidate: Candidate provider with billing information
             input_tokens: Number of input tokens
+            image_count: Number of images (for per_image billing)
 
         Returns:
             float: Estimated input cost in USD
@@ -406,8 +419,13 @@ class CostFirstStrategy(SelectionStrategy):
             input_tokens=input_tokens,
             model_input_price=candidate.model_input_price,
             model_output_price=candidate.model_output_price,
+            model_billing_mode=candidate.model_billing_mode,
+            model_per_request_price=candidate.model_per_request_price,
+            model_per_image_price=candidate.model_per_image_price,
+            model_tiered_pricing=candidate.model_tiered_pricing,
             provider_billing_mode=candidate.billing_mode,
             provider_per_request_price=candidate.per_request_price,
+            provider_per_image_price=candidate.per_image_price,
             provider_tiered_pricing=candidate.tiered_pricing,
             provider_input_price=candidate.input_price,
             provider_output_price=candidate.output_price,
@@ -418,17 +436,19 @@ class CostFirstStrategy(SelectionStrategy):
             input_tokens=input_tokens,
             output_tokens=0,  # We don't know output tokens yet
             billing=billing,
+            image_count=image_count,
         )
 
-        # For per_request billing, use the full per_request_price as the cost
+        # For per_request/per_image billing, use the full total_cost
         # For token-based billing, use only the input_cost
-        return cost_breakdown.total_cost if billing.billing_mode == "per_request" else cost_breakdown.input_cost
+        return cost_breakdown.total_cost if billing.billing_mode in ("per_request", "per_image") else cost_breakdown.input_cost
 
     async def select(
         self,
         candidates: list[CandidateProvider],
         requested_model: str,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Select provider with lowest cost
@@ -437,6 +457,7 @@ class CostFirstStrategy(SelectionStrategy):
             candidates: List of candidate providers
             requested_model: Requested model name
             input_tokens: Number of input tokens
+            image_count: Number of images (for per_image billing)
 
         Returns:
             Optional[CandidateProvider]: Provider with lowest cost, or None if no providers available
@@ -453,7 +474,7 @@ class CostFirstStrategy(SelectionStrategy):
         candidates_with_cost = []
         for candidate in candidates:
             try:
-                cost = self._calculate_input_cost(candidate, input_tokens)
+                cost = self._calculate_input_cost(candidate, input_tokens, image_count)
                 candidates_with_cost.append((candidate, cost))
                 logger.debug(
                     f"CostFirstStrategy: Provider {candidate.provider_name} (ID: {candidate.provider_id}) "
@@ -515,6 +536,7 @@ class CostFirstStrategy(SelectionStrategy):
         requested_model: str,
         current: CandidateProvider,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Get next provider by cost (used for failover)
@@ -524,6 +546,7 @@ class CostFirstStrategy(SelectionStrategy):
             requested_model: Requested model name
             current: Current provider
             input_tokens: Number of input tokens
+            image_count: Number of images (for per_image billing)
 
         Returns:
             Optional[CandidateProvider]: Next cheapest provider, or None if no more providers
@@ -553,7 +576,7 @@ class CostFirstStrategy(SelectionStrategy):
         candidates_with_cost = []
         for candidate in candidates:
             try:
-                cost = self._calculate_input_cost(candidate, input_tokens)
+                cost = self._calculate_input_cost(candidate, input_tokens, image_count)
                 candidates_with_cost.append((candidate, cost))
             except Exception as e:
                 logger.error(

@@ -9,7 +9,7 @@ import React from 'react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
-type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | null | undefined;
+type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null | undefined;
 
 interface BillingTier {
   max_input_tokens?: number | null;
@@ -22,6 +22,7 @@ interface BillingDisplayProps {
   inputPrice?: number | null;
   outputPrice?: number | null;
   perRequestPrice?: number | null;
+  perImagePrice?: number | null;
   tieredPricing?: BillingTier[] | null;
   fallbackInputPrice?: number | null;
   fallbackOutputPrice?: number | null;
@@ -58,6 +59,7 @@ export function BillingDisplay({
   inputPrice,
   outputPrice,
   perRequestPrice,
+  perImagePrice,
   tieredPricing,
   fallbackInputPrice,
   fallbackOutputPrice,
@@ -79,6 +81,16 @@ export function BillingDisplay({
     } else {
       text = t('detail.billingDisplay.perRequest', {
         price: formatUsdCeil4(perRequestPrice),
+      });
+    }
+  } else if (mode === 'per_image') {
+    if (perImagePrice === null || perImagePrice === undefined) {
+      text = t('detail.billingDisplay.perImageEmpty');
+    } else if (perImagePrice === 0) {
+      text = t('detail.billingDisplay.free');
+    } else {
+      text = t('detail.billingDisplay.perImage', {
+        price: formatUsdCeil4(perImagePrice),
       });
     }
   } else if (mode === 'token_tiered') {

@@ -79,12 +79,14 @@ interface FormData {
   provider_id: string;
   target_model_name: string;
   provider_rules: RuleSet | null;
-  billing_mode: 'token_flat' | 'token_tiered' | 'per_request';
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
   // token_flat
   input_price: string;
   output_price: string;
   // per_request
   per_request_price: string;
+  // per_image
+  per_image_price: string;
   // token_tiered
   tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
   priority: number;
@@ -130,6 +132,7 @@ export function ModelProviderForm({
       input_price: '',
       output_price: '',
       per_request_price: '',
+      per_image_price: '',
       tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
       priority: 0,
       weight: 1,
@@ -146,7 +149,7 @@ export function ModelProviderForm({
   const isActive = watch('is_active');
   const billingMode = watch('billing_mode');
   const targetModelName = watch('target_model_name');
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding';
+  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
   const [providerModels, setProviderModels] = useState<string[]>([]);
   const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
   const [selectedProviderModel, setSelectedProviderModel] = useState('');
@@ -164,7 +167,8 @@ export function ModelProviderForm({
       const mode = (mapping.billing_mode || 'token_flat') as
         | 'token_flat'
         | 'token_tiered'
-        | 'per_request';
+        | 'per_request'
+        | 'per_image';
 
       reset({
         provider_id: String(mapping.provider_id),
@@ -187,6 +191,10 @@ export function ModelProviderForm({
           mapping.per_request_price === null || mapping.per_request_price === undefined
             ? '0'
             : String(mapping.per_request_price),
+        per_image_price:
+          mapping.per_image_price === null || mapping.per_image_price === undefined
+            ? '0'
+            : String(mapping.per_image_price),
         tiers:
           mapping.tiered_pricing && mapping.tiered_pricing.length > 0
             ? mapping.tiered_pricing.map((t) => ({
@@ -231,6 +239,7 @@ export function ModelProviderForm({
         input_price: fallbackInputPrice,
         output_price: fallbackOutputPrice,
         per_request_price: '0',
+        per_image_price: '0',
         tiers: [
           {
             max_input_tokens: '32768',
@@ -282,6 +291,10 @@ export function ModelProviderForm({
     setValue('billing_mode', resolvedBillingMode);
     if (resolvedBillingMode === 'per_request') {
       setValue('per_request_price', String(item.per_request_price ?? 0));
+      return;
+    }
+    if (resolvedBillingMode === 'per_image') {
+      setValue('per_image_price', String(item.per_image_price ?? 0));
       return;
     }
     if (resolvedBillingMode === 'token_tiered') {
@@ -347,6 +360,7 @@ export function ModelProviderForm({
       input_price: 0,
       output_price: 0,
       per_request_price: null,
+      per_image_price: null,
       tiered_pricing: null,
     };
 
@@ -387,12 +401,21 @@ export function ModelProviderForm({
         if (billingMode === 'per_request') {
           const perReq = data.per_request_price.trim();
           submitData.per_request_price = perReq ? Number(perReq) : 0;
+          submitData.per_image_price = null;
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.tiered_pricing = null;
+        } else if (billingMode === 'per_image') {
+          const perImg = data.per_image_price.trim();
+          submitData.per_image_price = perImg ? Number(perImg) : 0;
+          submitData.per_request_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
           submitData.tiered_pricing = null;
         } else if (billingMode === 'token_tiered') {
           submitData.tiered_pricing = buildTieredPricing();
           submitData.per_request_price = null;
+          submitData.per_image_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
         } else {
@@ -400,6 +423,7 @@ export function ModelProviderForm({
           submitData.input_price = flat.input_price;
           submitData.output_price = flat.output_price;
           submitData.per_request_price = null;
+          submitData.per_image_price = null;
           submitData.tiered_pricing = null;
         }
       } else {
@@ -407,11 +431,12 @@ export function ModelProviderForm({
         submitData.input_price = nonBillingOverride.input_price;
         submitData.output_price = nonBillingOverride.output_price;
         submitData.per_request_price = nonBillingOverride.per_request_price;
+        submitData.per_image_price = nonBillingOverride.per_image_price;
         submitData.tiered_pricing = nonBillingOverride.tiered_pricing;
       }
-      
+
       submitData.provider_rules = data.provider_rules || undefined;
-      
+
       onSubmit(submitData);
     } else {
       // Create mode
@@ -429,12 +454,21 @@ export function ModelProviderForm({
         if (billingMode === 'per_request') {
           const perReq = data.per_request_price.trim();
           submitData.per_request_price = perReq ? Number(perReq) : 0;
+          submitData.per_image_price = null;
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.tiered_pricing = null;
+        } else if (billingMode === 'per_image') {
+          const perImg = data.per_image_price.trim();
+          submitData.per_image_price = perImg ? Number(perImg) : 0;
+          submitData.per_request_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
           submitData.tiered_pricing = null;
         } else if (billingMode === 'token_tiered') {
           submitData.tiered_pricing = buildTieredPricing();
           submitData.per_request_price = null;
+          submitData.per_image_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
         } else {
@@ -442,6 +476,7 @@ export function ModelProviderForm({
           submitData.input_price = flat.input_price;
           submitData.output_price = flat.output_price;
           submitData.per_request_price = null;
+          submitData.per_image_price = null;
           submitData.tiered_pricing = null;
         }
       } else {
@@ -449,11 +484,12 @@ export function ModelProviderForm({
         submitData.input_price = nonBillingOverride.input_price;
         submitData.output_price = nonBillingOverride.output_price;
         submitData.per_request_price = nonBillingOverride.per_request_price;
+        submitData.per_image_price = nonBillingOverride.per_image_price;
         submitData.tiered_pricing = nonBillingOverride.tiered_pricing;
       }
-      
+
       submitData.provider_rules = data.provider_rules || undefined;
-      
+
       onSubmit(submitData);
     }
   };
@@ -560,6 +596,7 @@ export function ModelProviderForm({
               historyLoading={historyLoading}
               onLoadHistory={handleLoadPriceHistory}
               showHistoryButton
+              modelType={modelType}
             />
           )}
 
@@ -726,6 +763,7 @@ export function ModelProviderForm({
                         inputPrice={item.input_price}
                         outputPrice={item.output_price}
                         perRequestPrice={item.per_request_price}
+                        perImagePrice={item.per_image_price}
                         tieredPricing={item.tiered_pricing}
                       />
                     </TableCell>

@@ -448,9 +448,11 @@
       "billingDisplay": {
         "free": "free",
         "perRequestEmpty": "Per request: -",
+        "perImageEmpty": "Per image: -",
         "tieredEmpty": "Tiered: -",
         "tokenFlat": "Token: {input}/{output} (per 1M)",
         "perRequest": "Per request: {price}",
+        "perImage": "Per image: {price}",
         "tieredPreview": "Tiered: {preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}"
@@ -485,9 +487,11 @@
       "billingMode": "Billing Mode",
       "billingModePlaceholder": "Select billing mode",
       "billingModePerRequest": "Per request",
+      "billingModePerImage": "Per image",
       "billingModeTokenFlat": "Per token (flat)",
       "billingModeTokenTiered": "Per token (tiered by input tokens)",
       "pricePerRequest": "Price (USD / request)",
+      "pricePerImage": "Price (USD / image)",
       "tieredHint": "Choose the tier by input tokens, then bill input/output tokens separately by that tier’s prices.",
       "maxInputTokens": "Max Input Tokens",
       "tierInputPrice": "Input (USD / 1M)",

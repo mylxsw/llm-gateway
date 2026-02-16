@@ -45,10 +45,11 @@ interface ProviderModelBulkUpgradeDialogProps {
 
 interface FormData {
   new_target_model_name: string;
-  billing_mode: 'token_flat' | 'token_tiered' | 'per_request';
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
   input_price: string;
   output_price: string;
   per_request_price: string;
+  per_image_price: string;
   tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
 }
 
@@ -59,6 +60,7 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       input_price: '0',
       output_price: '0',
       per_request_price: '0',
+      per_image_price: '0',
       tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
     };
   }
@@ -71,6 +73,18 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       input_price: '0',
       output_price: '0',
       per_request_price: String(mapping.per_request_price ?? 0),
+      per_image_price: '0',
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+    };
+  }
+
+  if (billingMode === 'per_image') {
+    return {
+      billing_mode: billingMode,
+      input_price: '0',
+      output_price: '0',
+      per_request_price: '0',
+      per_image_price: String(mapping.per_image_price ?? 0),
       tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
     };
   }
@@ -93,6 +107,7 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       input_price: '0',
       output_price: '0',
       per_request_price: '0',
+      per_image_price: '0',
       tiers,
     };
   }
@@ -102,6 +117,7 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
     input_price: String(mapping.input_price ?? 0),
     output_price: String(mapping.output_price ?? 0),
     per_request_price: '0',
+    per_image_price: '0',
     tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
   };
 }
@@ -133,6 +149,7 @@ export function ProviderModelBulkUpgradeDialog({
       input_price: '0',
       output_price: '0',
       per_request_price: '0',
+      per_image_price: '0',
       tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
     },
   });
@@ -168,11 +185,14 @@ export function ProviderModelBulkUpgradeDialog({
       input_price: null,
       output_price: null,
       per_request_price: null,
+      per_image_price: null,
       tiered_pricing: null,
     };
 
     if (data.billing_mode === 'per_request') {
       payload.per_request_price = Number(data.per_request_price.trim() || '0');
+    } else if (data.billing_mode === 'per_image') {
+      payload.per_image_price = Number(data.per_image_price.trim() || '0');
     } else if (data.billing_mode === 'token_tiered') {
       payload.tiered_pricing = (data.tiers || []).map((tier) => ({
         max_input_tokens: tier.max_input_tokens.trim() ? Number(tier.max_input_tokens.trim()) : null,
@@ -227,6 +247,7 @@ export function ProviderModelBulkUpgradeDialog({
                         inputPrice={mapping.input_price}
                         outputPrice={mapping.output_price}
                         perRequestPrice={mapping.per_request_price}
+                        perImagePrice={mapping.per_image_price}
                         tieredPricing={mapping.tiered_pricing}
                       />
                     </TableCell>

@@ -448,9 +448,11 @@
       "billingDisplay": {
         "free": "免费",
         "perRequestEmpty": "按请求计费：-",
+        "perImageEmpty": "按图片计费：-",
         "tieredEmpty": "分档：-",
         "tokenFlat": "Token：{input}/{output}（每 1M）",
         "perRequest": "按请求计费：{price}",
+        "perImage": "按图片计费：{price}",
         "tieredPreview": "分档：{preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}"
@@ -485,9 +487,11 @@
       "billingMode": "计费方式",
       "billingModePlaceholder": "选择计费方式",
       "billingModePerRequest": "按请求计费",
+      "billingModePerImage": "按图片计费",
       "billingModeTokenFlat": "按 token 计费（固定）",
       "billingModeTokenTiered": "按 token 计费（按输入 token 分档）",
       "pricePerRequest": "价格（美元/请求）",
+      "pricePerImage": "价格（美元/张）",
       "tieredHint": "先按输入 token 选档，再按档位价格分别计费输入/输出 token。",
       "maxInputTokens": "最大输入 tokens",
       "tierInputPrice": "输入（美元/1M）",

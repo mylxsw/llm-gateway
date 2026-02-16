@@ -86,13 +86,18 @@ class RuleEngine:
                         input_price=pm.input_price,
                         output_price=pm.output_price,
                         per_request_price=pm.per_request_price,
+                        per_image_price=pm.per_image_price,
                         tiered_pricing=pm.tiered_pricing,
                         model_input_price=model_mapping.input_price,
                         model_output_price=model_mapping.output_price,
+                        model_billing_mode=model_mapping.billing_mode,
+                        model_per_request_price=model_mapping.per_request_price,
+                        model_per_image_price=model_mapping.per_image_price,
+                        model_tiered_pricing=model_mapping.tiered_pricing,
                         provider_mapping_id=pm.id,
                     )
                 )
-        
+
         # 3. Sort by priority (lower value means higher priority)
         candidates.sort(
             key=lambda c: (
@@ -102,9 +107,9 @@ class RuleEngine:
                 c.provider_mapping_id or 0,
             )
         )
-        
+
         return candidates
-    
+
     def evaluate_sync(
         self,
         context: RuleContext,
@@ -123,11 +128,11 @@ class RuleEngine:
         for pm in provider_mappings:
             if not pm.is_active:
                 continue
-            
+
             provider = providers.get(pm.provider_id)
             if not provider or not provider.is_active:
                 continue
-            
+
             provider_rules = RuleSet.from_dict(pm.provider_rules)
             if self.evaluator.evaluate_ruleset(provider_rules, context):
                 candidates.append(
@@ -148,13 +153,18 @@ class RuleEngine:
                         input_price=pm.input_price,
                         output_price=pm.output_price,
                         per_request_price=pm.per_request_price,
+                        per_image_price=pm.per_image_price,
                         tiered_pricing=pm.tiered_pricing,
                         model_input_price=model_mapping.input_price,
                         model_output_price=model_mapping.output_price,
+                        model_billing_mode=model_mapping.billing_mode,
+                        model_per_request_price=model_mapping.per_request_price,
+                        model_per_image_price=model_mapping.per_image_price,
+                        model_tiered_pricing=model_mapping.tiered_pricing,
                         provider_mapping_id=pm.id,
                     )
                 )
-        
+
         # Sort by priority (lower value means higher priority)
         candidates.sort(
             key=lambda c: (

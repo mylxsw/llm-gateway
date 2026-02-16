@@ -17,8 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { ModelType } from '@/types';
 
-export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request';
+export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
 
 interface TierInputValue {
   max_input_tokens: string;
@@ -30,6 +31,7 @@ type BillingFormValues = FieldValues & {
   input_price: string;
   output_price: string;
   per_request_price: string;
+  per_image_price: string;
   tiers: TierInputValue[];
 };
 
@@ -44,6 +46,7 @@ interface ModelProviderBillingFieldsProps<TFormValues extends BillingFormValues>
   historyLoading?: boolean;
   onLoadHistory?: () => void;
   showHistoryButton?: boolean;
+  modelType?: ModelType;
 }
 
 export function ModelProviderBillingFields<TFormValues extends BillingFormValues>({
@@ -57,6 +60,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
   historyLoading = false,
   onLoadHistory,
   showHistoryButton = false,
+  modelType,
 }: ModelProviderBillingFieldsProps<TFormValues>) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
@@ -88,15 +92,24 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
               <SelectValue placeholder={t('providerForm.billingModePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="per_request">
-                {t('providerForm.billingModePerRequest')}
-              </SelectItem>
+              {modelType !== 'images' && (
+                <SelectItem value="per_request">
+                  {t('providerForm.billingModePerRequest')}
+                </SelectItem>
+              )}
+              {(modelType === 'images' || modelType === undefined) && (
+                <SelectItem value="per_image">
+                  {t('providerForm.billingModePerImage')}
+                </SelectItem>
+              )}
               <SelectItem value="token_flat">
                 {t('providerForm.billingModeTokenFlat')}
               </SelectItem>
-              <SelectItem value="token_tiered">
-                {t('providerForm.billingModeTokenTiered')}
-              </SelectItem>
+              {modelType !== 'images' && (
+                <SelectItem value="token_tiered">
+                  {t('providerForm.billingModeTokenTiered')}
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -113,6 +126,19 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
             min={0}
             step="0.0001"
             {...register('per_request_price' as Path<TFormValues>)}
+          />
+        </div>
+      ) : billingMode === 'per_image' ? (
+        <div className="space-y-2">
+          <Label htmlFor="per_image_price">
+            {t('providerForm.pricePerImage')}
+          </Label>
+          <Input
+            id="per_image_price"
+            type="number"
+            min={0}
+            step="0.0001"
+            {...register('per_image_price' as Path<TFormValues>)}
           />
         </div>
       ) : billingMode === 'token_tiered' ? (

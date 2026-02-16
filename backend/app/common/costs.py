@@ -19,6 +19,7 @@ PRICE_SOURCE_DEFAULT_ZERO = "DefaultZero"
 BILLING_MODE_TOKEN_FLAT = "token_flat"
 BILLING_MODE_TOKEN_TIERED = "token_tiered"
 BILLING_MODE_PER_REQUEST = "per_request"
+BILLING_MODE_PER_IMAGE = "per_image"
 
 
 _ONE_MILLION = Decimal("1000000")
@@ -57,6 +58,7 @@ class ResolvedBilling:
     input_price: float
     output_price: float
     per_request_price: float | None = None
+    per_image_price: float | None = None
 
 
 def resolve_price(
@@ -146,8 +148,13 @@ def resolve_billing(
     input_tokens: int | None,
     model_input_price: Optional[float],
     model_output_price: Optional[float],
+    model_billing_mode: Optional[str] = None,
+    model_per_request_price: Optional[float] = None,
+    model_per_image_price: Optional[float] = None,
+    model_tiered_pricing: list[object] | None = None,
     provider_billing_mode: Optional[str],
     provider_per_request_price: Optional[float],
+    provider_per_image_price: Optional[float] = None,
     provider_tiered_pricing: list[object] | None,
     provider_input_price: Optional[float],
     provider_output_price: Optional[float],
@@ -155,26 +162,53 @@ def resolve_billing(
     """
     Resolve effective billing config.
 
-    Provider billing config wins when billing_mode is set; otherwise fall back to legacy
-    token pricing (provider input/output override > model fallback > default zero).
+    Priority: provider billing_mode > model billing_mode > token_flat fallback.
+    Within token_flat, price resolution: provider override > model fallback > zero.
     """
-    mode = provider_billing_mode or BILLING_MODE_TOKEN_FLAT
+    # Determine effective billing source
+    if provider_billing_mode:
+        mode = provider_billing_mode
+        eff_per_request_price = provider_per_request_price
+        eff_per_image_price = provider_per_image_price
+        eff_tiered_pricing = provider_tiered_pricing
+        price_source = PRICE_SOURCE_SUPPLIER_OVERRIDE
+    elif model_billing_mode:
+        mode = model_billing_mode
+        eff_per_request_price = model_per_request_price
+        eff_per_image_price = model_per_image_price
+        eff_tiered_pricing = model_tiered_pricing
+        price_source = PRICE_SOURCE_MODEL_FALLBACK
+    else:
+        mode = BILLING_MODE_TOKEN_FLAT
+        eff_per_request_price = None
+        eff_per_image_price = None
+        eff_tiered_pricing = None
+        price_source = None  # Will be determined by resolve_price
 
     if mode == BILLING_MODE_PER_REQUEST:
         return ResolvedBilling(
             billing_mode=mode,
-            price_source=PRICE_SOURCE_SUPPLIER_OVERRIDE,
+            price_source=price_source,
             input_price=0.0,
             output_price=0.0,
-            per_request_price=float(provider_per_request_price or 0.0),
+            per_request_price=float(eff_per_request_price or 0.0),
+        )
+
+    if mode == BILLING_MODE_PER_IMAGE:
+        return ResolvedBilling(
+            billing_mode=mode,
+            price_source=price_source,
+            input_price=0.0,
+            output_price=0.0,
+            per_image_price=float(eff_per_image_price or 0.0),
         )
 
     if mode == BILLING_MODE_TOKEN_TIERED:
         in_tokens = int(input_tokens or 0)
-        tier_in, tier_out = _select_tier(provider_tiered_pricing, input_tokens=in_tokens)
+        tier_in, tier_out = _select_tier(eff_tiered_pricing, input_tokens=in_tokens)
         return ResolvedBilling(
             billing_mode=mode,
-            price_source=PRICE_SOURCE_SUPPLIER_OVERRIDE,
+            price_source=price_source,
             input_price=float(tier_in),
             output_price=float(tier_out),
         )
@@ -199,9 +233,15 @@ def calculate_cost_from_billing(
     input_tokens: int | None,
     output_tokens: int | None,
     billing: ResolvedBilling,
+    image_count: int | None = None,
 ) -> CostBreakdown:
     if billing.billing_mode == BILLING_MODE_PER_REQUEST:
         total = _q4(_to_decimal(billing.per_request_price))
+        return CostBreakdown(total_cost=float(total), input_cost=0.0, output_cost=0.0)
+
+    if billing.billing_mode == BILLING_MODE_PER_IMAGE:
+        n = max(int(image_count or 1), 1)
+        total = _q4(_to_decimal(billing.per_image_price) * Decimal(n))
         return CostBreakdown(total_cost=float(total), input_cost=0.0, output_cost=0.0)
 
     return calculate_cost(

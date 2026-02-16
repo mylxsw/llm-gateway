@@ -397,6 +397,14 @@ class ProxyService:
         )
         token_counter = get_token_counter(protocol)
 
+        # Extract image count for per-image billing
+        image_count: Optional[int] = None
+        if path in OPENAI_IMAGE_PATHS:
+            try:
+                image_count = int(body.get("n") or 1)
+            except (ValueError, TypeError):
+                image_count = 1
+
         # DEBUG: Log matched providers
         candidates_info = [
             {
@@ -433,10 +441,17 @@ class ProxyService:
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
                 model_output_price=model_mapping.output_price,
+                model_billing_mode=model_mapping.billing_mode,
+                model_per_request_price=model_mapping.per_request_price,
+                model_per_image_price=model_mapping.per_image_price,
+                model_tiered_pricing=model_mapping.tiered_pricing,
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
                 provider_per_request_price=provider_mapping.per_request_price
+                if provider_mapping
+                else None,
+                provider_per_image_price=provider_mapping.per_image_price
                 if provider_mapping
                 else None,
                 provider_tiered_pricing=provider_mapping.tiered_pricing
@@ -600,6 +615,7 @@ class ProxyService:
             requested_model=requested_model,
             forward_fn=forward_fn,
             input_tokens=input_tokens,
+            image_count=image_count,
             on_failure_attempt=log_failed_attempt,
         )
 
@@ -739,6 +755,9 @@ class ProxyService:
             provider_per_request_price=provider_mapping.per_request_price
             if provider_mapping
             else None,
+            provider_per_image_price=provider_mapping.per_image_price
+            if provider_mapping
+            else None,
             provider_tiered_pricing=provider_mapping.tiered_pricing
             if provider_mapping
             else None,
@@ -753,6 +772,7 @@ class ProxyService:
             billing=billing,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            image_count=image_count,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -868,6 +888,14 @@ class ProxyService:
             headers=headers,
             body=body,
         )
+
+        # Extract image count for per-image billing
+        image_count: Optional[int] = None
+        if path in OPENAI_IMAGE_PATHS:
+            try:
+                image_count = int(body.get("n") or 1)
+            except (ValueError, TypeError):
+                image_count = 1
 
         # DEBUG: Log matched providers
         candidates_info = [
@@ -1126,10 +1154,17 @@ class ProxyService:
                 input_tokens=input_tokens,
                 model_input_price=model_mapping.input_price,
                 model_output_price=model_mapping.output_price,
+                model_billing_mode=model_mapping.billing_mode,
+                model_per_request_price=model_mapping.per_request_price,
+                model_per_image_price=model_mapping.per_image_price,
+                model_tiered_pricing=model_mapping.tiered_pricing,
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
                 provider_per_request_price=provider_mapping.per_request_price
+                if provider_mapping
+                else None,
+                provider_per_image_price=provider_mapping.per_image_price
                 if provider_mapping
                 else None,
                 provider_tiered_pricing=provider_mapping.tiered_pricing
@@ -1194,6 +1229,7 @@ class ProxyService:
             requested_model,
             forward_stream_fn,
             input_tokens=input_tokens,
+            image_count=image_count,
             on_failure_attempt=log_failed_attempt,
         )
 
@@ -1288,6 +1324,9 @@ class ProxyService:
                     provider_per_request_price=provider_mapping.per_request_price
                     if provider_mapping
                     else None,
+                    provider_per_image_price=provider_mapping.per_image_price
+                    if provider_mapping
+                    else None,
                     provider_tiered_pricing=provider_mapping.tiered_pricing
                     if provider_mapping
                     else None,
@@ -1302,6 +1341,7 @@ class ProxyService:
                     billing=billing,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
+                    image_count=image_count,
                 )
                 raw_stream_text = (
                     b"".join(raw_stream_chunks).decode("utf-8", errors="replace")

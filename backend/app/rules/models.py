@@ -97,10 +97,11 @@ class CandidateProvider:
         target_model: Target Model Name (Actual model corresponding to this provider)
         priority: Priority (Lower value means higher priority)
         weight: Weight (Used for weighted selection)
-        billing_mode: Billing mode (token_flat/token_tiered/per_request)
+        billing_mode: Billing mode (token_flat/token_tiered/per_request/per_image)
         input_price: Provider input token price override (USD per 1M tokens)
         output_price: Provider output token price override (USD per 1M tokens)
         per_request_price: Per-request price (USD)
+        per_image_price: Per-image price (USD)
         tiered_pricing: Tiered pricing configuration
         model_input_price: Model fallback input price (USD per 1M tokens)
         model_output_price: Model fallback output price (USD per 1M tokens)
@@ -122,7 +123,12 @@ class CandidateProvider:
     input_price: Optional[float] = None
     output_price: Optional[float] = None
     per_request_price: Optional[float] = None
+    per_image_price: Optional[float] = None
     tiered_pricing: Optional[list[Any]] = None
     model_input_price: Optional[float] = None
     model_output_price: Optional[float] = None
+    model_billing_mode: Optional[str] = None
+    model_per_request_price: Optional[float] = None
+    model_per_image_price: Optional[float] = None
+    model_tiered_pricing: Optional[list[Any]] = None
     provider_mapping_id: Optional[int] = None
