@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import RequestLog as RequestLogORM
 from app.domain.log import (
+    ApiKeyMonthlyCost,
     LogCostByModel,
     LogCostStatsQuery,
     LogCostStatsResponse,
@@ -648,3 +649,51 @@ class SQLAlchemyLogRepository(LogRepository):
                 )
             )
         return results
+
+    async def get_api_key_monthly_costs(
+        self, api_key_ids: list[int] | None = None
+    ) -> list[ApiKeyMonthlyCost]:
+        """
+        Get current month's total cost grouped by API Key ID
+
+        Args:
+            api_key_ids: Optional list of API Key IDs to filter.
+                         If None, returns stats for all API Keys with costs.
+
+        Returns:
+            list[ApiKeyMonthlyCost]: List of API Key monthly cost summaries
+        """
+        # Calculate the start of the current month in UTC
+        now = utc_now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        month_start_naive = to_utc_naive(month_start)
+
+        conditions = [
+            RequestLogORM.request_time >= month_start_naive,
+            RequestLogORM.api_key_id.isnot(None),
+        ]
+
+        if api_key_ids is not None and len(api_key_ids) > 0:
+            conditions.append(RequestLogORM.api_key_id.in_(api_key_ids))
+
+        where_clause = and_(*conditions)
+
+        sum_total = func.coalesce(func.sum(RequestLogORM.total_cost), 0)
+
+        stmt = (
+            select(
+                RequestLogORM.api_key_id.label("api_key_id"),
+                sum_total.label("total_cost"),
+            )
+            .where(where_clause)
+            .group_by(RequestLogORM.api_key_id)
+        )
+
+        rows = (await self.session.execute(stmt)).mappings().all()
+        return [
+            ApiKeyMonthlyCost(
+                api_key_id=int(row["api_key_id"]),
+                total_cost=float(row["total_cost"] or 0),
+            )
+            for row in rows
+        ]

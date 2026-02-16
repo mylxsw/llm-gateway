@@ -1,4 +1,5 @@
 from app.common.costs import (
+    BILLING_MODE_PER_IMAGE,
     BILLING_MODE_PER_REQUEST,
     BILLING_MODE_TOKEN_TIERED,
     calculate_cost,
@@ -116,3 +117,127 @@ def test_token_tiered_billing_selects_by_input_tokens():
     assert cost_large.input_cost == 0.15
     # 1 token at $4 / 1M => 0.000004 should ceil to 0.0001
     assert cost_large.output_cost == 0.0001
+
+
+def test_per_image_billing_multiplies_by_image_count():
+    """Per-image billing: cost = per_image_price * n"""
+    billing = resolve_billing(
+        input_tokens=100,
+        model_input_price=2.0,
+        model_output_price=3.0,
+        provider_billing_mode=BILLING_MODE_PER_IMAGE,
+        provider_per_request_price=None,
+        provider_per_image_price=0.04,
+        provider_tiered_pricing=None,
+        provider_input_price=None,
+        provider_output_price=None,
+    )
+    assert billing.billing_mode == BILLING_MODE_PER_IMAGE
+    assert billing.price_source == "SupplierOverride"
+    assert billing.per_image_price == 0.04
+
+    # n=4 images
+    cost = calculate_cost_from_billing(
+        input_tokens=100,
+        output_tokens=200,
+        billing=billing,
+        image_count=4,
+    )
+    assert cost.total_cost == 0.16  # 0.04 * 4
+    assert cost.input_cost == 0.0
+    assert cost.output_cost == 0.0
+
+
+def test_per_image_billing_defaults_to_1_image():
+    """When image_count is None, default to 1 image"""
+    billing = resolve_billing(
+        input_tokens=0,
+        model_input_price=0.0,
+        model_output_price=0.0,
+        provider_billing_mode=BILLING_MODE_PER_IMAGE,
+        provider_per_request_price=None,
+        provider_per_image_price=0.02,
+        provider_tiered_pricing=None,
+        provider_input_price=None,
+        provider_output_price=None,
+    )
+
+    cost = calculate_cost_from_billing(
+        input_tokens=0,
+        output_tokens=0,
+        billing=billing,
+        image_count=None,
+    )
+    assert cost.total_cost == 0.02  # 0.02 * 1
+
+
+def test_per_image_billing_zero_price_is_free():
+    """Per-image with price 0 should produce zero cost"""
+    billing = resolve_billing(
+        input_tokens=0,
+        model_input_price=0.0,
+        model_output_price=0.0,
+        provider_billing_mode=BILLING_MODE_PER_IMAGE,
+        provider_per_request_price=None,
+        provider_per_image_price=0.0,
+        provider_tiered_pricing=None,
+        provider_input_price=None,
+        provider_output_price=None,
+    )
+
+    cost = calculate_cost_from_billing(
+        input_tokens=0,
+        output_tokens=0,
+        billing=billing,
+        image_count=5,
+    )
+    assert cost.total_cost == 0.0
+
+
+def test_per_image_billing_rounds_up_to_4_decimals():
+    """Per-image billing should round up to 4 decimal places"""
+    billing = resolve_billing(
+        input_tokens=0,
+        model_input_price=0.0,
+        model_output_price=0.0,
+        provider_billing_mode=BILLING_MODE_PER_IMAGE,
+        provider_per_request_price=None,
+        provider_per_image_price=0.00003,
+        provider_tiered_pricing=None,
+        provider_input_price=None,
+        provider_output_price=None,
+    )
+
+    cost = calculate_cost_from_billing(
+        input_tokens=0,
+        output_tokens=0,
+        billing=billing,
+        image_count=1,
+    )
+    assert cost.total_cost == 0.0001  # 0.00003 rounds up to 0.0001
+
+
+def test_per_image_billing_ignores_tokens():
+    """Per-image billing ignores token counts entirely"""
+    billing = resolve_billing(
+        input_tokens=1000000,
+        model_input_price=10.0,
+        model_output_price=20.0,
+        provider_billing_mode=BILLING_MODE_PER_IMAGE,
+        provider_per_request_price=None,
+        provider_per_image_price=0.05,
+        provider_tiered_pricing=None,
+        provider_input_price=5.0,
+        provider_output_price=10.0,
+    )
+
+    cost = calculate_cost_from_billing(
+        input_tokens=1000000,
+        output_tokens=500000,
+        billing=billing,
+        image_count=2,
+    )
+    # Should be 0.05 * 2 = 0.10, not affected by tokens
+    assert cost.total_cost == 0.1
+    assert cost.input_cost == 0.0
+    assert cost.output_cost == 0.0

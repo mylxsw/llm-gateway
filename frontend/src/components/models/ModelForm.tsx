@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
 import {
   Dialog,
@@ -35,6 +35,8 @@ import {
   SelectionStrategy
 } from '@/types';
 import { isValidModelName } from '@/lib/utils';
+import { ModelProviderBillingFields } from '@/components/models/ModelProviderBillingFields';
+import type { BillingMode } from '@/components/models/ModelProviderBillingFields';
 
 interface ModelFormProps {
   /** Whether dialog is open */
@@ -55,8 +57,12 @@ interface FormData {
   strategy: SelectionStrategy;
   model_type: ModelType;
   is_active: boolean;
+  billing_mode: BillingMode;
   input_price: string;
   output_price: string;
+  per_request_price: string;
+  per_image_price: string;
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
 }
 
 /**
@@ -74,7 +80,7 @@ export function ModelForm({
 
   // Check if edit mode
   const isEdit = !!model;
-  
+
   // Form control
   const {
     register,
@@ -90,15 +96,25 @@ export function ModelForm({
       strategy: 'round_robin',
       model_type: 'chat',
       is_active: true,
+      billing_mode: 'token_flat' as BillingMode,
       input_price: '',
       output_price: '',
+      per_request_price: '',
+      per_image_price: '',
+      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
     },
+  });
+
+  const { fields: tierFields, append: appendTier, remove: removeTier } = useFieldArray({
+    control,
+    name: 'tiers',
   });
 
   const isActive = watch('is_active');
   const modelType = watch('model_type');
   const strategy = watch('strategy');
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding';
+  const billingMode = watch('billing_mode');
+  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
 
   useEffect(() => {
     if (!supportsBilling && strategy === 'cost_first') {
@@ -109,11 +125,13 @@ export function ModelForm({
   // Fill form data in edit mode
   useEffect(() => {
     if (model) {
+      const mode = (model.billing_mode || 'token_flat') as BillingMode;
       reset({
         requested_model: model.requested_model,
         strategy: model.strategy,
         model_type: model.model_type ?? 'chat',
         is_active: model.is_active,
+        billing_mode: mode,
         input_price:
           model.input_price === null || model.input_price === undefined
             ? ''
@@ -122,6 +140,25 @@ export function ModelForm({
           model.output_price === null || model.output_price === undefined
             ? ''
             : String(model.output_price),
+        per_request_price:
+          model.per_request_price === null || model.per_request_price === undefined
+            ? ''
+            : String(model.per_request_price),
+        per_image_price:
+          model.per_image_price === null || model.per_image_price === undefined
+            ? ''
+            : String(model.per_image_price),
+        tiers:
+          model.tiered_pricing && model.tiered_pricing.length > 0
+            ? model.tiered_pricing.map((t) => ({
+                max_input_tokens:
+                  t.max_input_tokens === null || t.max_input_tokens === undefined
+                    ? ''
+                    : String(t.max_input_tokens),
+                input_price: String(t.input_price),
+                output_price: String(t.output_price),
+              }))
+            : [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
       });
     } else {
       reset({
@@ -129,8 +166,12 @@ export function ModelForm({
         strategy: 'round_robin',
         model_type: 'chat',
         is_active: true,
+        billing_mode: 'token_flat' as BillingMode,
         input_price: '',
         output_price: '',
+        per_request_price: '',
+        per_image_price: '',
+        tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
       });
     }
   }, [model, reset]);
@@ -159,13 +200,52 @@ export function ModelForm({
     }
 
     if (supportsBilling) {
-      const inputPrice = data.input_price.trim();
-      const outputPrice = data.output_price.trim();
-      submitData.input_price = inputPrice ? Number(inputPrice) : null;
-      submitData.output_price = outputPrice ? Number(outputPrice) : null;
+      const billingMode = data.billing_mode;
+      submitData.billing_mode = billingMode;
+      if (billingMode === 'per_request') {
+        const perReq = data.per_request_price.trim();
+        submitData.per_request_price = perReq ? Number(perReq) : 0;
+        submitData.per_image_price = null;
+        submitData.input_price = null;
+        submitData.output_price = null;
+        submitData.tiered_pricing = null;
+      } else if (billingMode === 'per_image') {
+        const perImg = data.per_image_price.trim();
+        submitData.per_image_price = perImg ? Number(perImg) : 0;
+        submitData.per_request_price = null;
+        submitData.input_price = null;
+        submitData.output_price = null;
+        submitData.tiered_pricing = null;
+      } else if (billingMode === 'token_tiered') {
+        submitData.tiered_pricing = (data.tiers || []).map((t) => {
+          const maxStr = t.max_input_tokens.trim();
+          return {
+            max_input_tokens: maxStr === '' ? null : Number(maxStr),
+            input_price: Number(t.input_price || '0'),
+            output_price: Number(t.output_price || '0'),
+          };
+        });
+        submitData.per_request_price = null;
+        submitData.per_image_price = null;
+        submitData.input_price = null;
+        submitData.output_price = null;
+      } else {
+        // token_flat
+        const inputPrice = data.input_price.trim();
+        const outputPrice = data.output_price.trim();
+        submitData.input_price = inputPrice ? Number(inputPrice) : 0;
+        submitData.output_price = outputPrice ? Number(outputPrice) : 0;
+        submitData.per_request_price = null;
+        submitData.per_image_price = null;
+        submitData.tiered_pricing = null;
+      }
     } else {
+      submitData.billing_mode = null;
       submitData.input_price = null;
       submitData.output_price = null;
+      submitData.per_request_price = null;
+      submitData.per_image_price = null;
+      submitData.tiered_pricing = null;
     }
 
     onSubmit(submitData);
@@ -179,7 +259,7 @@ export function ModelForm({
             {isEdit ? t('form.editTitle') : t('form.newTitle')}
           </DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
           {/* Requested Model Name */}
           <div className="space-y-2">
@@ -211,7 +291,7 @@ export function ModelForm({
             )}
           </div>
 
-          
+
 
           {/* Model Type */}
           <div className="space-y-2">
@@ -236,40 +316,20 @@ export function ModelForm({
             />
           </div>
 
-          {/* Pricing */}
+          {/* Billing / Pricing */}
           {supportsBilling && (
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <div className="mb-2 text-sm font-medium">
-                {t('form.pricingTitle')}
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="input_price">{t('form.inputPrice')}</Label>
-                  <Input
-                    id="input_price"
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    placeholder={t('form.inputPricePlaceholder')}
-                    {...register('input_price')}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="output_price">{t('form.outputPrice')}</Label>
-                  <Input
-                    id="output_price"
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    placeholder={t('form.outputPricePlaceholder')}
-                    {...register('output_price')}
-                  />
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {t('form.pricingHint')}
-              </p>
-            </div>
+            <ModelProviderBillingFields
+              t={t}
+              billingMode={billingMode}
+              setBillingMode={(value) =>
+                setValue('billing_mode', value as FormData['billing_mode'])
+              }
+              register={register}
+              tierFields={tierFields}
+              appendTier={appendTier}
+              removeTier={removeTier}
+              modelType={modelType}
+            />
           )}
 
           {/* Strategy */}
@@ -422,7 +482,7 @@ export function ModelForm({
             />
           </div>
 
-          
+
 
           <DialogFooter>
             <Button

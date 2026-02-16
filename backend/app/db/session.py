@@ -103,6 +103,10 @@ def _run_migrations(sync_conn) -> None:
             "model_type": "model_type VARCHAR(50)",
             "input_price": "input_price NUMERIC(12,4)",
             "output_price": "output_price NUMERIC(12,4)",
+            "billing_mode": "billing_mode VARCHAR(50)",
+            "per_request_price": "per_request_price NUMERIC(12,4)",
+            "per_image_price": "per_image_price NUMERIC(12,4)",
+            "tiered_pricing": "tiered_pricing JSON",
         },
     )
     ensure_columns(
@@ -112,6 +116,7 @@ def _run_migrations(sync_conn) -> None:
             "output_price": "output_price NUMERIC(12,4)",
             "billing_mode": "billing_mode VARCHAR(50)",
             "per_request_price": "per_request_price NUMERIC(12,4)",
+            "per_image_price": "per_image_price NUMERIC(12,4)",
             "tiered_pricing": "tiered_pricing JSON",
         },
     )

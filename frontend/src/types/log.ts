@@ -54,6 +54,8 @@ export interface LogQueryParams {
   // Time range
   start_time?: string;
   end_time?: string;
+  // Relative time range preset (server-side resolved). Ignored when start_time is set.
+  timeline?: '1h' | '3h' | '6h' | '12h' | '24h' | '1w';
 
   // Client timezone offset minutes for stats bucketing (UTC to local)
   tz_offset_minutes?: number;

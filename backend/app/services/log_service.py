@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.common.errors import NotFoundError
 from app.domain.log import (
+    ApiKeyMonthlyCost,
     RequestLogModel,
     RequestLogCreate,
     RequestLogResponse,
@@ -144,3 +145,18 @@ class LogService:
         self, requested_model: str | None = None
     ) -> list[ModelProviderStats]:
         return await self.repo.get_model_provider_stats(requested_model)
+
+    async def get_api_key_monthly_costs(
+        self, api_key_ids: list[int] | None = None
+    ) -> list[ApiKeyMonthlyCost]:
+        """
+        Get current month's total cost grouped by API Key ID
+
+        Args:
+            api_key_ids: Optional list of API Key IDs to filter.
+                         If None, returns stats for all API Keys with costs.
+
+        Returns:
+            list[ApiKeyMonthlyCost]: List of API Key monthly cost summaries
+        """
+        return await self.repo.get_api_key_monthly_costs(api_key_ids)

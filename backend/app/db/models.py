@@ -104,6 +104,11 @@ class ModelMapping(Base):
     # Default pricing (USD per 1,000,000 tokens)
     input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Model-level billing mode
+    billing_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    per_request_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    per_image_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time
@@ -155,6 +160,10 @@ class ModelMappingProvider(Base):
     billing_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Per-request fixed price (USD)
     per_request_price: Mapped[Optional[float]] = mapped_column(
+        Numeric(12, 4), nullable=True
+    )
+    # Per-image price (USD), used when billing_mode == per_image
+    per_image_price: Mapped[Optional[float]] = mapped_column(
         Numeric(12, 4), nullable=True
     )
     # Tiered pricing config (JSON). Used when billing_mode == "token_tiered"

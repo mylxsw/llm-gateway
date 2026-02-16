@@ -489,3 +489,269 @@ class TestPriorityStrategy:
 
         next_provider = await self.strategy.get_next(self.candidates, "test-model", next_provider)
         assert next_provider.provider_id == 3
+
+
+class TestCostFirstPerImageStrategy:
+    """Test CostFirstStrategy with per_image billing and image_count"""
+
+    def setup_method(self):
+        self.strategy = CostFirstStrategy()
+
+    @pytest.mark.asyncio
+    async def test_per_image_multi_image_selects_cheaper(self):
+        """With image_count=10, $0.01/img provider ($0.10) beats $0.05/img provider ($0.50)"""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="Expensive",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.05,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="Cheap",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.01,
+            ),
+        ]
+
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=100, image_count=10)
+        assert selected.provider_id == 2
+        assert selected.provider_name == "Cheap"
+
+    @pytest.mark.asyncio
+    async def test_per_image_vs_per_request_multi_image(self):
+        """per_image $0.01 × 10 = $0.10 > per_request $0.05 → per_request wins"""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="PerImage",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.01,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="PerRequest",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_request",
+                per_request_price=0.05,
+            ),
+        ]
+
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=100, image_count=10)
+        assert selected.provider_id == 2
+        assert selected.provider_name == "PerRequest"
+
+    @pytest.mark.asyncio
+    async def test_per_image_without_image_count_defaults_to_1(self):
+        """Without image_count, per_image defaults to 1 image"""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="PerImage",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.04,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="PerRequest",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_request",
+                per_request_price=0.05,
+            ),
+        ]
+
+        # Without image_count (None), per_image = $0.04 * 1 = $0.04 < per_request $0.05
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=100, image_count=None)
+        assert selected.provider_id == 1
+        assert selected.provider_name == "PerImage"
+
+    @pytest.mark.asyncio
+    async def test_get_next_respects_image_count(self):
+        """get_next should also use image_count for cost sorting"""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="Cheap",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.01,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="Medium",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.03,
+            ),
+            CandidateProvider(
+                provider_id=3,
+                provider_name="Expensive",
+                base_url="https://api3.com",
+                protocol="openai",
+                api_key="key3",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.05,
+            ),
+        ]
+
+        # Select first (cheapest)
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=100, image_count=5)
+        assert selected.provider_id == 1
+
+        # get_next should return Medium
+        next_p = await self.strategy.get_next(candidates, "dall-e-3", selected, input_tokens=100, image_count=5)
+        assert next_p.provider_id == 2
+
+        # After Medium, should get Expensive
+        next_p = await self.strategy.get_next(candidates, "dall-e-3", next_p, input_tokens=100, image_count=5)
+        assert next_p.provider_id == 3
+
+
+class TestCostFirstModelBillingFallback:
+    """Test that CostFirstStrategy uses model-level billing when provider has no billing_mode."""
+
+    def setup_method(self):
+        self.strategy = CostFirstStrategy()
+
+    @pytest.mark.asyncio
+    async def test_model_per_request_fallback_selects_cheaper(self):
+        """When providers have no billing_mode, model-level per_request should be used."""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="Expensive",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="gpt-4",
+                priority=0,
+                billing_mode=None,
+                model_billing_mode="per_request",
+                model_per_request_price=0.10,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="Cheap",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="gpt-4",
+                priority=0,
+                billing_mode=None,
+                model_billing_mode="per_request",
+                model_per_request_price=0.05,
+            ),
+        ]
+
+        selected = await self.strategy.select(candidates, "gpt-4", input_tokens=1000)
+        assert selected.provider_id == 2
+        assert selected.provider_name == "Cheap"
+
+    @pytest.mark.asyncio
+    async def test_provider_billing_overrides_model_in_cost_calc(self):
+        """Provider with explicit billing_mode should override model billing in cost selection."""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="ModelFallback",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode=None,
+                model_billing_mode="per_image",
+                model_per_image_price=0.10,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="ProviderOverride",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode="per_image",
+                per_image_price=0.02,
+                model_billing_mode="per_image",
+                model_per_image_price=0.10,
+            ),
+        ]
+
+        # image_count=3: ModelFallback = $0.10*3 = $0.30, ProviderOverride = $0.02*3 = $0.06
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=1, image_count=3)
+        assert selected.provider_id == 2
+        assert selected.provider_name == "ProviderOverride"
+
+    @pytest.mark.asyncio
+    async def test_model_per_image_fallback_with_image_count(self):
+        """Model-level per_image billing should use image_count correctly."""
+        candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="CheapPerImage",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode=None,
+                model_billing_mode="per_image",
+                model_per_image_price=0.01,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="ExpensivePerImage",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="dall-e-3",
+                priority=0,
+                billing_mode=None,
+                model_billing_mode="per_image",
+                model_per_image_price=0.05,
+            ),
+        ]
+
+        # image_count=10: Cheap = $0.01*10 = $0.10, Expensive = $0.05*10 = $0.50
+        selected = await self.strategy.select(candidates, "dall-e-3", input_tokens=1, image_count=10)
+        assert selected.provider_id == 1

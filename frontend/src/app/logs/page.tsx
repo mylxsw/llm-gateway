@@ -127,34 +127,35 @@ function LogsContent() {
     return '24h';
   });
 
-  // Compute resolved time range: dynamic for presets, explicit for custom
-  const resolvedTimeRange = useMemo(() => {
+  // Build the resolved filter params: inject timeline when using presets (server handles time calc)
+  const resolvedFilters = useMemo<LogQueryParams>(() => {
     if (filters.start_time || filters.end_time) {
-      return { start_time: filters.start_time, end_time: filters.end_time };
+      return filters;
     }
-    if (timelinePreset === 'custom') {
-      return { start_time: undefined, end_time: undefined };
+    if (timelinePreset !== 'custom') {
+      return { ...filters, timeline: timelinePreset as LogQueryParams['timeline'] };
     }
-    const match = TIMELINE_PRESETS.find((p) => p.value === timelinePreset);
-    const minutes = match?.minutes ?? 1440;
-    const now = new Date();
-    // Truncate to the current minute to stabilise React Query cache keys
-    now.setSeconds(0, 0);
-    return {
-      start_time: new Date(now.getTime() - minutes * 60 * 1000).toISOString(),
-      end_time: now.toISOString(),
-    };
-  }, [filters.start_time, filters.end_time, timelinePreset]);
+    return filters;
+  }, [filters, timelinePreset]);
 
-  // Build the full resolved filter params used for API queries
-  const resolvedFilters = useMemo<LogQueryParams>(
-    () => ({
-      ...filters,
-      start_time: resolvedTimeRange.start_time,
-      end_time: resolvedTimeRange.end_time,
-    }),
-    [filters, resolvedTimeRange]
-  );
+  // Display-only time range for LogTimeline chart rendering.
+  // In preset mode, filters have no start/end but the chart needs concrete
+  // boundaries to lay out bars. This does NOT affect API queries.
+  const displayTimeRange = useMemo(() => {
+    if (filters.start_time && filters.end_time) {
+      return { start: filters.start_time, end: filters.end_time };
+    }
+    if (timelinePreset !== 'custom') {
+      const match = TIMELINE_PRESETS.find((p) => p.value === timelinePreset);
+      const minutes = match?.minutes ?? 1440;
+      const now = new Date();
+      return {
+        start: new Date(now.getTime() - minutes * 60 * 1000).toISOString(),
+        end: now.toISOString(),
+      };
+    }
+    return { start: undefined, end: undefined };
+  }, [filters.start_time, filters.end_time, timelinePreset]);
 
   // Data query
   const { data, isLoading, isError, refetch } = useLogs(resolvedFilters);
@@ -163,13 +164,14 @@ function LogsContent() {
   const { data: apiKeysData } = useApiKeys({ is_active: true, page: 1, page_size: 1000 });
   const tzOffsetMinutes = useMemo(() => -new Date().getTimezoneOffset(), []);
   const { bucket: timelineBucket, bucketMinutes } = useMemo(
-    () => resolveBucket(resolvedFilters.start_time, resolvedFilters.end_time, 60),
-    [resolvedFilters.end_time, resolvedFilters.start_time]
+    () => resolveBucket(displayTimeRange.start, displayTimeRange.end, 60),
+    [displayTimeRange.start, displayTimeRange.end]
   );
   const timelineParams = useMemo<LogQueryParams>(
     () => ({
       start_time: resolvedFilters.start_time,
       end_time: resolvedFilters.end_time,
+      timeline: resolvedFilters.timeline,
       requested_model: resolvedFilters.requested_model,
       provider_id: resolvedFilters.provider_id,
       api_key_id: resolvedFilters.api_key_id,
@@ -186,6 +188,7 @@ function LogsContent() {
       resolvedFilters.provider_id,
       resolvedFilters.requested_model,
       resolvedFilters.start_time,
+      resolvedFilters.timeline,
       bucketMinutes,
       timelineBucket,
       tzOffsetMinutes,
@@ -348,8 +351,8 @@ function LogsContent() {
         bucket={timelineBucket}
         bucketMinutes={bucketMinutes}
         maxBars={60}
-        selectedStart={resolvedFilters.start_time}
-        selectedEnd={resolvedFilters.end_time}
+        selectedStart={displayTimeRange.start}
+        selectedEnd={displayTimeRange.end}
         onRangeChange={(range) => {
           if (range) {
             handleFilterChange({ start_time: range.start_time, end_time: range.end_time });
@@ -367,7 +370,7 @@ function LogsContent() {
               const preset = value as TimelinePreset;
               setTimelinePreset(preset);
               if (preset === 'custom') return;
-              // Clear explicit times; resolvedTimeRange will compute dynamically
+              // Clear explicit times; timeline preset will be sent to backend
               handleFilterChange({ start_time: undefined, end_time: undefined });
             }}
           >

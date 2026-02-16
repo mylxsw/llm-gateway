@@ -135,10 +135,16 @@ class RequestLogDetailResponse(RequestLogModel):
 
 class RequestLogQuery(BaseModel):
     """Request Log Query Conditions"""
-    
+
     # Time Range
     start_time: Optional[datetime] = Field(None, description="Start Time")
     end_time: Optional[datetime] = Field(None, description="End Time")
+    # Relative time range preset (e.g. "24h"). Ignored when start_time is provided.
+    timeline: Optional[str] = Field(
+        None,
+        pattern="^(1h|3h|6h|12h|24h|1w)$",
+        description="Relative time range preset. Ignored when start_time is provided.",
+    )
     # Model Filter
     requested_model: Optional[str] = Field(None, description="Requested Model (Fuzzy Match)")
     target_model: Optional[str] = Field(None, description="Target Model (Fuzzy Match)")
@@ -180,6 +186,12 @@ class LogCostStatsQuery(BaseModel):
     # Time Range
     start_time: Optional[datetime] = Field(None, description="Start Time")
     end_time: Optional[datetime] = Field(None, description="End Time")
+    # Relative time range preset (e.g. "24h"). Ignored when start_time is provided.
+    timeline: Optional[str] = Field(
+        None,
+        pattern="^(1h|3h|6h|12h|24h|1w)$",
+        description="Relative time range preset. Ignored when start_time is provided.",
+    )
     # Core dimensions
     requested_model: Optional[str] = Field(None, description="Requested Model (Exact or fuzzy)")
     provider_id: Optional[int] = Field(None, description="Provider ID")
@@ -286,3 +298,10 @@ class ModelProviderStats(BaseModel):
     avg_response_time_ms: Optional[float] = None
     success_rate: float = 0.0
     failure_rate: float = 0.0
+
+
+class ApiKeyMonthlyCost(BaseModel):
+    """API Key monthly cost summary"""
+
+    api_key_id: int
+    total_cost: float = 0.0

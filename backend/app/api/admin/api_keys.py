@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.api.deps import ApiKeyServiceDep, require_admin_auth
+from app.api.deps import ApiKeyServiceDep, LogServiceDep, require_admin_auth
 from app.common.errors import AppError
 from app.domain.api_key import ApiKeyCreate, ApiKeyUpdate, ApiKeyResponse, ApiKeyCreateResponse
 
@@ -32,6 +32,7 @@ class PaginatedApiKeyResponse(BaseModel):
 @router.get("", response_model=PaginatedApiKeyResponse)
 async def list_api_keys(
     service: ApiKeyServiceDep,
+    log_service: LogServiceDep,
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=1000, description="Items per page"),
@@ -40,9 +41,22 @@ async def list_api_keys(
     Get API Key list
     
     key_value will be sanitized.
+    Includes current month's total cost for each API Key.
     """
     try:
         items, total = await service.get_all(is_active, page, page_size)
+        
+        # Get monthly costs for all API Keys in the result
+        api_key_ids = [item.id for item in items]
+        monthly_costs = await log_service.get_api_key_monthly_costs(api_key_ids)
+        
+        # Create a mapping from api_key_id to total_cost
+        cost_map = {cost.api_key_id: cost.total_cost for cost in monthly_costs}
+        
+        # Update items with monthly_cost
+        for item in items:
+            item.monthly_cost = cost_map.get(item.id, 0.0)
+        
         return PaginatedApiKeyResponse(
             items=items,
             total=total,

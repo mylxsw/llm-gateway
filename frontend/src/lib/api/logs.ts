@@ -50,6 +50,7 @@ export async function getLogCostStats(
     ? {
         start_time: params.start_time,
         end_time: params.end_time,
+        timeline: params.timeline,
         requested_model: params.requested_model,
         provider_id: params.provider_id,
         api_key_id: params.api_key_id,

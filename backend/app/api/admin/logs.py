@@ -4,7 +4,7 @@ Log Query API
 Provides request log query endpoints.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -30,6 +30,12 @@ router = APIRouter(
 )
 
 
+_TIMELINE_MINUTES: dict[str, int] = {
+    "1h": 60, "3h": 180, "6h": 360,
+    "12h": 720, "24h": 1440, "1w": 10080,
+}
+
+
 class PaginatedLogResponse(BaseModel):
     """Log Pagination Response"""
     items: list[RequestLogResponse]
@@ -49,6 +55,11 @@ async def get_log_cost_stats(
     service: LogServiceDep,
     start_time: Optional[datetime] = Query(None, description="Start Time"),
     end_time: Optional[datetime] = Query(None, description="End Time"),
+    timeline: Optional[str] = Query(
+        None,
+        pattern="^(1h|3h|6h|12h|24h|1w)$",
+        description="Relative time range (e.g. 24h). Ignored when start_time is set.",
+    ),
     requested_model: Optional[str] = Query(None, description="Requested Model (Fuzzy Match)"),
     provider_id: Optional[int] = Query(None, description="Provider ID"),
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
@@ -82,17 +93,29 @@ async def get_log_cost_stats(
     Dimensions: time range, model, provider, API key.
     """
     try:
+        # Resolve timeline to start_time when no explicit start_time is provided
+        effective_start = start_time
+        if not effective_start and timeline:
+            minutes = _TIMELINE_MINUTES[timeline]
+            effective_start = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+
         resolved_bucket = bucket
         if not resolved_bucket:
             resolved_bucket = "day"
-            if start_time and end_time:
-                delta = end_time - start_time
+            if effective_start and end_time:
+                delta = end_time - effective_start
                 if delta.total_seconds() <= 48 * 3600:
+                    resolved_bucket = "hour"
+            elif effective_start and not end_time and timeline:
+                # For timeline presets, use the preset duration to pick bucket
+                tl_minutes = _TIMELINE_MINUTES[timeline]
+                if tl_minutes * 60 <= 48 * 3600:
                     resolved_bucket = "hour"
 
         query = LogCostStatsQuery(
-            start_time=start_time,
+            start_time=effective_start,
             end_time=end_time,
+            timeline=timeline,
             requested_model=requested_model,
             provider_id=provider_id,
             api_key_id=api_key_id,
@@ -112,6 +135,11 @@ async def list_logs(
     service: LogServiceDep,
     start_time: Optional[datetime] = Query(None, description="Start Time"),
     end_time: Optional[datetime] = Query(None, description="End Time"),
+    timeline: Optional[str] = Query(
+        None,
+        pattern="^(1h|3h|6h|12h|24h|1w)$",
+        description="Relative time range (e.g. 24h). Ignored when start_time is set.",
+    ),
     requested_model: Optional[str] = Query(None, description="Requested Model (Fuzzy Match)"),
     target_model: Optional[str] = Query(None, description="Target Model (Fuzzy Match)"),
     provider_id: Optional[int] = Query(None, description="Provider ID"),
@@ -133,13 +161,20 @@ async def list_logs(
 ):
     """
     Query request log list
-    
+
     Supports multi-condition filtering, pagination, and sorting.
     """
     try:
+        # Resolve timeline to start_time when no explicit start_time is provided
+        effective_start = start_time
+        if not effective_start and timeline:
+            minutes = _TIMELINE_MINUTES[timeline]
+            effective_start = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+
         query = RequestLogQuery(
-            start_time=start_time,
+            start_time=effective_start,
             end_time=end_time,
+            timeline=timeline,
             requested_model=requested_model,
             target_model=target_model,
             provider_id=provider_id,
@@ -159,7 +194,7 @@ async def list_logs(
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        
+
         items, total = await service.query(query)
         return PaginatedLogResponse(
             items=items,

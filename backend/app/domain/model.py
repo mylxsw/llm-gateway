@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Literal
 
 
-BillingMode = Literal["token_flat", "token_tiered", "per_request"]
+BillingMode = Literal["token_flat", "token_tiered", "per_request", "per_image"]
 SelectionStrategyType = Literal["round_robin", "cost_first", "priority"]
 ModelType = Literal["chat", "speech", "transcription", "embedding", "images"]
 
@@ -55,6 +55,30 @@ class ModelMappingCreate(ModelMappingBase):
     # Default pricing (USD per 1,000,000 tokens)
     input_price: Optional[float] = Field(None, description="Input price ($/1M tokens)")
     output_price: Optional[float] = Field(None, description="Output price ($/1M tokens)")
+    # Model-level billing mode (None = legacy token_flat fallback)
+    billing_mode: Optional[BillingMode] = Field(None, description="Billing mode")
+    per_request_price: Optional[float] = Field(None, ge=0, description="Per-request price ($)")
+    per_image_price: Optional[float] = Field(None, ge=0, description="Per-image price ($)")
+    tiered_pricing: Optional[list[TokenTierPrice]] = Field(
+        None, description="Tiered pricing (based on input tokens)"
+    )
+
+    @model_validator(mode="after")
+    def _validate_billing(self) -> "ModelMappingCreate":
+        if self.billing_mode is None:
+            return self
+        if self.billing_mode == "per_request" and self.per_request_price is None:
+            raise ValueError("per_request_price is required when billing_mode=per_request")
+        if self.billing_mode == "per_image" and self.per_image_price is None:
+            raise ValueError("per_image_price is required when billing_mode=per_image")
+        if self.billing_mode == "token_tiered" and not self.tiered_pricing:
+            raise ValueError("tiered_pricing is required when billing_mode=token_tiered")
+        if self.billing_mode == "token_flat":
+            if self.input_price is None or self.output_price is None:
+                raise ValueError(
+                    "input_price and output_price are required when billing_mode=token_flat"
+                )
+        return self
 
 
 class ModelMappingUpdate(BaseModel):
@@ -67,6 +91,10 @@ class ModelMappingUpdate(BaseModel):
     is_active: Optional[bool] = None
     input_price: Optional[float] = None
     output_price: Optional[float] = None
+    billing_mode: Optional[BillingMode] = None
+    per_request_price: Optional[float] = Field(None, ge=0)
+    per_image_price: Optional[float] = Field(None, ge=0)
+    tiered_pricing: Optional[list[TokenTierPrice]] = None
 
 
 class ModelMapping(ModelMappingBase):
@@ -76,6 +104,10 @@ class ModelMapping(ModelMappingBase):
     is_active: bool = True
     input_price: Optional[float] = None
     output_price: Optional[float] = None
+    billing_mode: Optional[BillingMode] = None
+    per_request_price: Optional[float] = None
+    per_image_price: Optional[float] = None
+    tiered_pricing: Optional[list[TokenTierPrice]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -116,6 +148,7 @@ class ModelMatchProviderResponse(BaseModel):
     input_price: Optional[float] = Field(None, description="Input price override ($/1M tokens)")
     output_price: Optional[float] = Field(None, description="Output price override ($/1M tokens)")
     per_request_price: Optional[float] = Field(None, description="Per-request price ($)")
+    per_image_price: Optional[float] = Field(None, description="Per-image price ($)")
     tiered_pricing: Optional[list[TokenTierPrice]] = Field(
         None, description="Tiered pricing (based on input tokens)"
     )
@@ -161,6 +194,8 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
     billing_mode: BillingMode = Field("token_flat", description="Billing mode")
     # Per-request fixed price (USD), used when billing_mode == per_request
     per_request_price: Optional[float] = Field(None, ge=0, description="Per-request price ($)")
+    # Per-image price (USD), used when billing_mode == per_image
+    per_image_price: Optional[float] = Field(None, ge=0, description="Per-image price ($)")
     # Tiered pricing config, used when billing_mode == token_tiered
     tiered_pricing: Optional[list[TokenTierPrice]] = Field(
         None, description="Tiered pricing (based on input tokens)"
@@ -170,6 +205,8 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
     def _validate_billing(self) -> "ModelMappingProviderCreate":
         if self.billing_mode == "per_request" and self.per_request_price is None:
             raise ValueError("per_request_price is required when billing_mode=per_request")
+        if self.billing_mode == "per_image" and self.per_image_price is None:
+            raise ValueError("per_image_price is required when billing_mode=per_image")
         if self.billing_mode == "token_tiered" and not self.tiered_pricing:
             raise ValueError("tiered_pricing is required when billing_mode=token_tiered")
         if self.billing_mode == "token_flat":
@@ -190,6 +227,7 @@ class ModelMappingProviderUpdate(BaseModel):
     output_price: Optional[float] = None
     billing_mode: Optional[BillingMode] = None
     per_request_price: Optional[float] = Field(None, ge=0)
+    per_image_price: Optional[float] = Field(None, ge=0)
     tiered_pricing: Optional[list[TokenTierPrice]] = None
 
 
@@ -207,6 +245,7 @@ class ModelProviderBulkUpgradeRequest(BaseModel):
     input_price: Optional[float] = Field(None, description="Input price override ($/1M tokens)")
     output_price: Optional[float] = Field(None, description="Output price override ($/1M tokens)")
     per_request_price: Optional[float] = Field(None, ge=0, description="Per-request price ($)")
+    per_image_price: Optional[float] = Field(None, ge=0, description="Per-image price ($)")
     tiered_pricing: Optional[list[TokenTierPrice]] = Field(
         None, description="Tiered pricing (based on input tokens)"
     )
@@ -215,6 +254,8 @@ class ModelProviderBulkUpgradeRequest(BaseModel):
     def _validate_billing(self) -> "ModelProviderBulkUpgradeRequest":
         if self.billing_mode == "per_request" and self.per_request_price is None:
             raise ValueError("per_request_price is required when billing_mode=per_request")
+        if self.billing_mode == "per_image" and self.per_image_price is None:
+            raise ValueError("per_image_price is required when billing_mode=per_image")
         if self.billing_mode == "token_tiered" and not self.tiered_pricing:
             raise ValueError("tiered_pricing is required when billing_mode=token_tiered")
         if self.billing_mode == "token_flat":
@@ -232,13 +273,14 @@ class ModelMappingProvider(ModelMappingProviderBase):
     output_price: Optional[float] = None
     billing_mode: Optional[BillingMode] = None
     per_request_price: Optional[float] = None
+    per_image_price: Optional[float] = None
     tiered_pricing: Optional[list[TokenTierPrice]] = None
     priority: int = 0
     weight: int = 1
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -264,6 +306,7 @@ class ModelProviderExport(BaseModel):
     output_price: Optional[float] = None
     billing_mode: Optional[BillingMode] = None
     per_request_price: Optional[float] = None
+    per_image_price: Optional[float] = None
     tiered_pricing: Optional[list[TokenTierPrice]] = None
     priority: int = 0
     weight: int = 1

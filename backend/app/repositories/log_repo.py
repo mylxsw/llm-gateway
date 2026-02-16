@@ -15,6 +15,7 @@ from app.domain.log import (
     LogCostStatsResponse,
     ModelStats,
     ModelProviderStats,
+    ApiKeyMonthlyCost,
 )
 
 
@@ -88,4 +89,20 @@ class LogRepository(ABC):
         self, requested_model: str | None = None
     ) -> list[ModelProviderStats]:
         """Get aggregated model-provider stats for logs"""
+        pass
+
+    @abstractmethod
+    async def get_api_key_monthly_costs(
+        self, api_key_ids: list[int] | None = None
+    ) -> list[ApiKeyMonthlyCost]:
+        """
+        Get current month's total cost grouped by API Key ID
+
+        Args:
+            api_key_ids: Optional list of API Key IDs to filter.
+                         If None, returns stats for all API Keys with costs.
+
+        Returns:
+            list[ApiKeyMonthlyCost]: List of API Key monthly cost summaries
+        """
         pass

@@ -187,8 +187,13 @@ class ModelService:
                     input_tokens=data.input_tokens,
                     model_input_price=candidate.model_input_price,
                     model_output_price=candidate.model_output_price,
+                    model_billing_mode=candidate.model_billing_mode,
+                    model_per_request_price=candidate.model_per_request_price,
+                    model_per_image_price=candidate.model_per_image_price,
+                    model_tiered_pricing=candidate.model_tiered_pricing,
                     provider_billing_mode=candidate.billing_mode,
                     provider_per_request_price=candidate.per_request_price,
+                    provider_per_image_price=candidate.per_image_price,
                     provider_tiered_pricing=candidate.tiered_pricing,
                     provider_input_price=candidate.input_price,
                     provider_output_price=candidate.output_price,
@@ -200,7 +205,7 @@ class ModelService:
                 )
                 estimated_cost = (
                     cost_breakdown.total_cost
-                    if billing.billing_mode == "per_request"
+                    if billing.billing_mode in ("per_request", "per_image")
                     else cost_breakdown.input_cost
                 )
             except Exception:
@@ -218,6 +223,7 @@ class ModelService:
                     input_price=candidate.input_price,
                     output_price=candidate.output_price,
                     per_request_price=candidate.per_request_price,
+                    per_image_price=candidate.per_image_price,
                     tiered_pricing=candidate.tiered_pricing,
                     model_input_price=candidate.model_input_price,
                     model_output_price=candidate.model_output_price,
@@ -469,11 +475,12 @@ class ModelService:
             "output_price": existing.output_price,
             "billing_mode": existing.billing_mode or "token_flat",
             "per_request_price": existing.per_request_price,
+            "per_image_price": existing.per_image_price,
             "tiered_pricing": existing.tiered_pricing,
         }
         merged.update(update_data)
         ModelMappingProviderCreate(**merged)
-        
+
         result = await self.model_repo.update_provider_mapping(id, data)
         return result  # type: ignore
 
@@ -524,6 +531,7 @@ class ModelService:
             input_price=data.input_price,
             output_price=data.output_price,
             per_request_price=data.per_request_price,
+            per_image_price=data.per_image_price,
             tiered_pricing=data.tiered_pricing,
         )
 
@@ -543,6 +551,7 @@ class ModelService:
                 "output_price": existing.output_price,
                 "billing_mode": existing.billing_mode or "token_flat",
                 "per_request_price": existing.per_request_price,
+                "per_image_price": existing.per_image_price,
                 "tiered_pricing": existing.tiered_pricing,
             }
             merged.update(update_data.model_dump(exclude_unset=True))
@@ -613,6 +622,7 @@ class ModelService:
                         output_price=pm.output_price,
                         billing_mode=pm.billing_mode,
                         per_request_price=pm.per_request_price,
+                        per_image_price=pm.per_image_price,
                         tiered_pricing=pm.tiered_pricing,
                         priority=pm.priority,
                         weight=pm.weight,
@@ -629,6 +639,10 @@ class ModelService:
                     is_active=m.is_active,
                     input_price=m.input_price,
                     output_price=m.output_price,
+                    billing_mode=m.billing_mode,
+                    per_request_price=m.per_request_price,
+                    per_image_price=m.per_image_price,
+                    tiered_pricing=m.tiered_pricing,
                     providers=providers_export
                 )
             )
@@ -690,6 +704,7 @@ class ModelService:
                             output_price=output_price,
                             billing_mode=billing_mode,
                             per_request_price=p_item.per_request_price,
+                            per_image_price=p_item.per_image_price,
                             tiered_pricing=p_item.tiered_pricing,
                             priority=p_item.priority,
                             weight=p_item.weight,
@@ -739,6 +754,10 @@ class ModelService:
             is_active=mapping.is_active,
             input_price=mapping.input_price,
             output_price=mapping.output_price,
+            billing_mode=mapping.billing_mode,
+            per_request_price=mapping.per_request_price,
+            per_image_price=mapping.per_image_price,
+            tiered_pricing=mapping.tiered_pricing,
             created_at=mapping.created_at,
             updated_at=mapping.updated_at,
             provider_count=provider_count,

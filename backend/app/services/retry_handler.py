@@ -90,6 +90,7 @@ class RetryHandler:
         requested_model: str,
         *,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> list[CandidateProvider]:
         """
         Get candidate order based on the selection strategy.
@@ -101,7 +102,7 @@ class RetryHandler:
 
         ordered: list[CandidateProvider] = []
         tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
-        current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
+        current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
         while current_provider is not None:
             current_key = self._candidate_key(current_provider)
             if current_key in tried_candidates:
@@ -111,7 +112,7 @@ class RetryHandler:
             if len(tried_candidates) >= len(candidates):
                 break
             current_provider = await self._get_next_untried_provider(
-                candidates, tried_candidates, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
             )
 
         if len(ordered) == len(candidates):
@@ -130,6 +131,7 @@ class RetryHandler:
         forward_fn: Callable[[CandidateProvider], Any],
         *,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
     ) -> RetryResult:
         """
@@ -165,7 +167,7 @@ class RetryHandler:
         attempt_index = 0
         
         # Select the first provider
-        current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
+        current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
         
         while current_provider is not None:
             # Record current provider as tried
@@ -252,15 +254,15 @@ class RetryHandler:
             
             # Try to switch to the next provider
             next_provider = await self._get_next_untried_provider(
-                candidates, tried_candidates, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
             )
-            
+
             if next_provider is None:
                 # All providers tried
                 break
-            
+
             current_provider = next_provider
-        
+
         # All providers failed
         return RetryResult(
             response=last_response or ProviderResponse(
@@ -280,6 +282,7 @@ class RetryHandler:
         forward_stream_fn: Callable[[CandidateProvider], Any],
         *,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
     ) -> Any:
         """
@@ -308,8 +311,8 @@ class RetryHandler:
         last_provider: Optional[CandidateProvider] = None
         attempt_index = 0
 
-        current_provider = await self.strategy.select(candidates, requested_model, input_tokens)
-        
+        current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
+
         while current_provider is not None:
             tried_candidates.add(self._candidate_key(current_provider))
             last_provider = current_provider
@@ -438,7 +441,7 @@ class RetryHandler:
                         break
             
             next_provider = await self._get_next_untried_provider(
-                candidates, tried_candidates, requested_model, current_provider, input_tokens
+                candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
             )
             if next_provider is None:
                 break
@@ -457,6 +460,7 @@ class RetryHandler:
         requested_model: str,
         current_provider: CandidateProvider,
         input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
     ) -> Optional[CandidateProvider]:
         """
         Get next untried provider using the selection strategy
@@ -467,6 +471,7 @@ class RetryHandler:
             requested_model: Requested model name
             current_provider: Current provider
             input_tokens: Number of input tokens (for cost-based selection)
+            image_count: Number of images (for per_image billing)
 
         Returns:
             Optional[CandidateProvider]: Next provider
@@ -477,7 +482,7 @@ class RetryHandler:
 
         # Use the strategy to get the next provider
         next_provider = await self.strategy.get_next(
-            candidates, requested_model, current_provider, input_tokens
+            candidates, requested_model, current_provider, input_tokens, image_count
         )
 
         # Keep trying until we find an untried provider or run out of options.
@@ -488,7 +493,7 @@ class RetryHandler:
             if self._candidate_key(next_provider) not in tried_candidates:
                 return next_provider
             next_provider = await self.strategy.get_next(
-                candidates, requested_model, next_provider, input_tokens
+                candidates, requested_model, next_provider, input_tokens, image_count
             )
 
         return None

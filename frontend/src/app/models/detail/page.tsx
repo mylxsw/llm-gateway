@@ -224,7 +224,7 @@ function ModelDetailContent() {
 
   const status = getActiveStatus(model.is_active);
   const modelType = model.model_type ?? 'chat';
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding';
+  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
   const modelStats = modelStatsData?.find((stat) => stat.requested_model === requestedModel);
   const providerStats = providerStatsData ?? [];
 
@@ -275,11 +275,16 @@ function ModelDetailContent() {
             {supportsBilling && (
               <div className="md:col-span-2">
                 <p className="text-sm text-muted-foreground">{t('detail.pricing')}</p>
-                <p className="text-sm">
-                  <span className="font-mono">{formatPrice(model.input_price)}</span>
-                  <span className="mx-2 text-muted-foreground">/</span>
-                  <span className="font-mono">{formatPrice(model.output_price)}</span>
-                </p>
+                <div className="text-sm">
+                  <BillingDisplay
+                    billingMode={model.billing_mode}
+                    inputPrice={model.input_price}
+                    outputPrice={model.output_price}
+                    perRequestPrice={model.per_request_price}
+                    perImagePrice={model.per_image_price}
+                    tieredPricing={model.tiered_pricing}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -331,13 +336,15 @@ function ModelDetailContent() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t('detail.providerConfig')}</CardTitle>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTestDialogOpen(true)}
-            >
-              {t('actions.modelTest')}
-            </Button>
+            {modelType === 'chat' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTestDialogOpen(true)}
+              >
+                {t('actions.modelTest')}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -416,6 +423,7 @@ function ModelDetailContent() {
                             inputPrice={mapping.input_price}
                             outputPrice={mapping.output_price}
                             perRequestPrice={mapping.per_request_price}
+                            perImagePrice={mapping.per_image_price}
                             tieredPricing={mapping.tiered_pricing}
                             fallbackInputPrice={model.input_price}
                             fallbackOutputPrice={model.output_price}
@@ -549,11 +557,13 @@ function ModelDetailContent() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      <ModelTestDialog
-        open={testDialogOpen}
-        onOpenChange={setTestDialogOpen}
-        requestedModel={requestedModel}
-      />
+      {modelType === 'chat' && (
+        <ModelTestDialog
+          open={testDialogOpen}
+          onOpenChange={setTestDialogOpen}
+          requestedModel={requestedModel}
+        />
+      )}
 
       <ModelMatchDialog
         open={matchDialogOpen}
