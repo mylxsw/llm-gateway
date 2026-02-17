@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 
 from app.config import get_settings
 
@@ -24,10 +24,18 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     # SQLite specific configuration
-    connect_args={"check_same_thread": False} 
-    if settings.DATABASE_TYPE == "sqlite" 
+    connect_args={"check_same_thread": False}
+    if settings.DATABASE_TYPE == "sqlite"
     else {},
 )
+
+# Enable foreign keys for SQLite (required for CASCADE deletes)
+if settings.DATABASE_TYPE == "sqlite":
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 # Create asynchronous session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -154,3 +162,50 @@ def _run_migrations(sync_conn) -> None:
             "remark": "remark TEXT",
         },
     )
+
+    # Migrate existing request_logs data to request_log_details table
+    if "request_log_details" in table_names and "request_logs" in table_names:
+        result = sync_conn.execute(text("SELECT COUNT(*) FROM request_log_details"))
+        detail_count = result.scalar()
+
+        result2 = sync_conn.execute(text(
+            "SELECT COUNT(*) FROM request_logs WHERE request_body IS NOT NULL"
+            " OR response_body IS NOT NULL"
+            " OR request_headers IS NOT NULL"
+            " OR error_info IS NOT NULL"
+        ))
+        logs_with_body = result2.scalar()
+
+        if detail_count == 0 and logs_with_body > 0:
+            # Copy large fields from request_logs to request_log_details
+            sync_conn.execute(text("""
+                INSERT INTO request_log_details
+                    (log_id, request_body, response_body, request_headers,
+                     response_headers, converted_request_body, upstream_response_body,
+                     usage_details, error_info)
+                SELECT id, request_body, response_body, request_headers,
+                       response_headers, converted_request_body, upstream_response_body,
+                       usage_details, error_info
+                FROM request_logs
+                WHERE request_body IS NOT NULL
+                   OR response_body IS NOT NULL
+                   OR request_headers IS NOT NULL
+                   OR error_info IS NOT NULL
+            """))
+
+            # Null out the migrated columns on request_logs to reclaim space
+            sync_conn.execute(text("""
+                UPDATE request_logs SET
+                    request_body = NULL,
+                    response_body = NULL,
+                    request_headers = NULL,
+                    response_headers = NULL,
+                    converted_request_body = NULL,
+                    upstream_response_body = NULL,
+                    usage_details = NULL,
+                    error_info = NULL
+                WHERE request_body IS NOT NULL
+                   OR response_body IS NOT NULL
+                   OR request_headers IS NOT NULL
+                   OR error_info IS NOT NULL
+            """))

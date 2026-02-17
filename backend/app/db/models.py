@@ -313,14 +313,50 @@ class RequestLog(Base):
     # Indices for optimizing queries
     __table_args__ = (
         Index("idx_request_logs_time", "request_time"),
-        Index("idx_request_logs_api_key", "api_key_id"),
+        Index("idx_request_logs_time_model", "request_time", "requested_model"),
+        Index("idx_request_logs_time_provider", "request_time", "provider_id"),
+        Index("idx_request_logs_time_status", "request_time", "response_status"),
+        Index("idx_request_logs_time_apikey", "request_time", "api_key_id"),
         Index("idx_request_logs_model", "requested_model"),
-        Index("idx_request_logs_provider", "provider_id"),
-        Index("idx_request_logs_status", "response_status"),
+        Index("idx_request_logs_api_key", "api_key_id"),
     )
-    
+
     # Relationships
     api_key: Mapped[Optional["ApiKey"]] = relationship("ApiKey", back_populates="logs")
+    detail: Mapped[Optional["RequestLogDetail"]] = relationship(
+        "RequestLogDetail", uselist=False, cascade="all, delete-orphan", lazy="noload"
+    )
+
+
+class RequestLogDetail(Base):
+    """
+    Request Log Detail Table
+
+    Stores large request/response bodies separately from the summary table
+    to optimize list query performance.
+    """
+    __tablename__ = "request_log_details"
+
+    # Foreign key to request_logs.id, also serves as primary key (1:1)
+    log_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("request_logs.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Full request body (JSON)
+    request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Full response body (Text)
+    response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Request headers (JSON, sanitized)
+    request_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Response headers (JSON)
+    response_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Converted request body (after protocol conversion)
+    converted_request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Upstream response body (original response before protocol conversion)
+    upstream_response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Usage details (JSON)
+    usage_details: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Error info
+    error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class KeyValueStore(Base):

@@ -9,9 +9,11 @@ from typing import Optional
 
 from sqlalchemy import Integer, and_, case, cast, delete, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import RequestLog as RequestLogORM
+from app.db.models import RequestLogDetail as RequestLogDetailORM
 from app.domain.log import (
     ApiKeyMonthlyCost,
     LogCostByModel,
@@ -24,8 +26,34 @@ from app.domain.log import (
     RequestLogCreate,
     RequestLogModel,
     RequestLogQuery,
+    RequestLogSummary,
 )
 from app.repositories.log_repo import LogRepository
+
+
+# Columns selected for list/summary queries (excludes large JSON/Text fields)
+_SUMMARY_COLUMNS = [
+    RequestLogORM.id,
+    RequestLogORM.request_time,
+    RequestLogORM.api_key_id,
+    RequestLogORM.api_key_name,
+    RequestLogORM.requested_model,
+    RequestLogORM.target_model,
+    RequestLogORM.provider_id,
+    RequestLogORM.provider_name,
+    RequestLogORM.retry_count,
+    RequestLogORM.matched_provider_count,
+    RequestLogORM.first_byte_delay_ms,
+    RequestLogORM.total_time_ms,
+    RequestLogORM.input_tokens,
+    RequestLogORM.output_tokens,
+    RequestLogORM.total_cost,
+    RequestLogORM.input_cost,
+    RequestLogORM.output_cost,
+    RequestLogORM.response_status,
+    RequestLogORM.trace_id,
+    RequestLogORM.is_stream,
+]
 
 
 def _pg_make_interval_minutes(minutes):
@@ -50,8 +78,9 @@ class SQLAlchemyLogRepository(LogRepository):
         self.session = session
 
     def _to_domain(self, entity: RequestLogORM) -> RequestLogModel:
-        """Convert ORM entity to domain model"""
+        """Convert ORM entity to domain model (with detail data from relationship or fallback)"""
         request_time = ensure_utc(entity.request_time)
+        detail = entity.detail
         return RequestLogModel(
             id=entity.id,
             request_time=request_time,
@@ -76,27 +105,54 @@ class SQLAlchemyLogRepository(LogRepository):
             if entity.output_cost is not None
             else None,
             price_source=entity.price_source,
-            request_headers=entity.request_headers,
-            response_headers=entity.response_headers,
-            request_body=entity.request_body,
+            # Large fields: prefer detail table, fallback to main table (for unmigrated records)
+            request_headers=detail.request_headers if detail else entity.request_headers,
+            response_headers=detail.response_headers if detail else entity.response_headers,
+            request_body=detail.request_body if detail else entity.request_body,
             response_status=entity.response_status,
-            response_body=entity.response_body,
-            usage_details=entity.usage_details,
-            error_info=entity.error_info,
+            response_body=detail.response_body if detail else entity.response_body,
+            usage_details=detail.usage_details if detail else entity.usage_details,
+            error_info=detail.error_info if detail else entity.error_info,
             matched_provider_count=entity.matched_provider_count,
             trace_id=entity.trace_id,
             is_stream=entity.is_stream,
             request_protocol=entity.request_protocol,
             supplier_protocol=entity.supplier_protocol,
-            converted_request_body=entity.converted_request_body,
-            upstream_response_body=entity.upstream_response_body,
+            converted_request_body=detail.converted_request_body if detail else entity.converted_request_body,
+            upstream_response_body=detail.upstream_response_body if detail else entity.upstream_response_body,
             request_path=entity.request_path,
             request_method=entity.request_method,
             upstream_url=entity.upstream_url,
         )
 
+    def _row_to_summary(self, row) -> RequestLogSummary:
+        """Convert a column-selected row mapping to a summary domain model"""
+        return RequestLogSummary(
+            id=row["id"],
+            request_time=ensure_utc(row["request_time"]),
+            api_key_id=row["api_key_id"],
+            api_key_name=row["api_key_name"],
+            requested_model=row["requested_model"],
+            target_model=row["target_model"],
+            provider_id=row["provider_id"],
+            provider_name=row["provider_name"],
+            retry_count=row["retry_count"],
+            matched_provider_count=row["matched_provider_count"],
+            first_byte_delay_ms=row["first_byte_delay_ms"],
+            total_time_ms=row["total_time_ms"],
+            input_tokens=row["input_tokens"],
+            output_tokens=row["output_tokens"],
+            total_cost=float(row["total_cost"]) if row["total_cost"] is not None else None,
+            input_cost=float(row["input_cost"]) if row["input_cost"] is not None else None,
+            output_cost=float(row["output_cost"]) if row["output_cost"] is not None else None,
+            response_status=row["response_status"],
+            trace_id=row["trace_id"],
+            is_stream=row["is_stream"],
+        )
+
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
-        """Create request log"""
+        """Create request log with detail separation"""
+        # Main table: scalar/summary fields only, large fields set to NULL
         entity = RequestLogORM(
             request_time=to_utc_naive(data.request_time),
             api_key_id=data.api_key_id,
@@ -115,44 +171,101 @@ class SQLAlchemyLogRepository(LogRepository):
             input_cost=data.input_cost,
             output_cost=data.output_cost,
             price_source=data.price_source,
-            request_headers=data.request_headers,
-            response_headers=data.response_headers,
-            request_body=data.request_body,
             response_status=data.response_status,
-            response_body=data.response_body,
-            usage_details=data.usage_details,
-            error_info=data.error_info,
             trace_id=data.trace_id,
             is_stream=data.is_stream,
             request_protocol=data.request_protocol,
             supplier_protocol=data.supplier_protocol,
-            converted_request_body=data.converted_request_body,
-            upstream_response_body=data.upstream_response_body,
             request_path=data.request_path,
             request_method=data.request_method,
             upstream_url=data.upstream_url,
+            # Large fields NULL on main table (stored in detail table)
+            request_headers=None,
+            response_headers=None,
+            request_body=None,
+            response_body=None,
+            converted_request_body=None,
+            upstream_response_body=None,
+            usage_details=None,
+            error_info=None,
         )
         self.session.add(entity)
+        await self.session.flush()  # Get the ID without committing
+
+        # Detail table: store full large field data
+        detail_entity = RequestLogDetailORM(
+            log_id=entity.id,
+            request_body=data.request_body,
+            response_body=data.response_body,
+            request_headers=data.request_headers,
+            response_headers=data.response_headers,
+            converted_request_body=data.converted_request_body,
+            upstream_response_body=data.upstream_response_body,
+            usage_details=data.usage_details,
+            error_info=data.error_info,
+        )
+        self.session.add(detail_entity)
         await self.session.commit()
         await self.session.refresh(entity)
-        return self._to_domain(entity)
+
+        # Build domain model directly from entity + data (detail relationship
+        # is not loaded after refresh due to lazy="noload")
+        request_time = ensure_utc(entity.request_time)
+        return RequestLogModel(
+            id=entity.id,
+            request_time=request_time,
+            api_key_id=entity.api_key_id,
+            api_key_name=entity.api_key_name,
+            requested_model=entity.requested_model,
+            target_model=entity.target_model,
+            provider_id=entity.provider_id,
+            provider_name=entity.provider_name,
+            retry_count=entity.retry_count,
+            first_byte_delay_ms=entity.first_byte_delay_ms,
+            total_time_ms=entity.total_time_ms,
+            input_tokens=entity.input_tokens,
+            output_tokens=entity.output_tokens,
+            total_cost=float(entity.total_cost) if entity.total_cost is not None else None,
+            input_cost=float(entity.input_cost) if entity.input_cost is not None else None,
+            output_cost=float(entity.output_cost) if entity.output_cost is not None else None,
+            price_source=entity.price_source,
+            request_headers=data.request_headers,
+            response_headers=data.response_headers,
+            request_body=data.request_body,
+            response_status=entity.response_status,
+            response_body=data.response_body,
+            usage_details=data.usage_details,
+            error_info=data.error_info,
+            matched_provider_count=entity.matched_provider_count,
+            trace_id=entity.trace_id,
+            is_stream=entity.is_stream,
+            request_protocol=entity.request_protocol,
+            supplier_protocol=entity.supplier_protocol,
+            converted_request_body=data.converted_request_body,
+            upstream_response_body=data.upstream_response_body,
+            request_path=entity.request_path,
+            request_method=entity.request_method,
+            upstream_url=entity.upstream_url,
+        )
 
     async def get_by_id(self, id: int) -> Optional[RequestLogModel]:
-        """Get log by ID"""
+        """Get log by ID with full detail"""
         result = await self.session.execute(
-            select(RequestLogORM).where(RequestLogORM.id == id)
+            select(RequestLogORM)
+            .options(joinedload(RequestLogORM.detail))
+            .where(RequestLogORM.id == id)
         )
-        entity = result.scalar_one_or_none()
+        entity = result.unique().scalar_one_or_none()
         return self._to_domain(entity) if entity else None
 
-    async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogModel], int]:
+    async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogSummary], int]:
         """
-        Query log list
+        Query log list (summary view, no large fields)
 
         Supports multi-condition filtering, pagination, and sorting.
         """
-        # Build base query
-        stmt = select(RequestLogORM)
+        # Build base query with only summary columns
+        stmt = select(*_SUMMARY_COLUMNS)
         count_stmt = select(func.count()).select_from(RequestLogORM)
 
         # Build filter conditions list
@@ -188,9 +301,22 @@ class SQLAlchemyLogRepository(LogRepository):
         if query.status_max is not None:
             conditions.append(RequestLogORM.response_status <= query.status_max)
 
-        # Has error
+        # Has error (join detail table for error_info check)
         if query.has_error is not None:
+            stmt = stmt.outerjoin(
+                RequestLogDetailORM,
+                RequestLogORM.id == RequestLogDetailORM.log_id,
+            )
+            count_stmt = count_stmt.outerjoin(
+                RequestLogDetailORM,
+                RequestLogORM.id == RequestLogDetailORM.log_id,
+            )
             has_error_condition = or_(
+                and_(
+                    RequestLogDetailORM.error_info.isnot(None),
+                    RequestLogDetailORM.error_info != "",
+                ),
+                # Fallback: check main table for unmigrated records
                 and_(
                     RequestLogORM.error_info.isnot(None),
                     RequestLogORM.error_info != "",
@@ -252,13 +378,13 @@ class SQLAlchemyLogRepository(LogRepository):
 
         # Execute query
         result = await self.session.execute(stmt)
-        entities = result.scalars().all()
+        rows = result.mappings().all()
 
-        return [self._to_domain(e) for e in entities], total
+        return [self._row_to_summary(r) for r in rows], total
 
     async def cleanup_old_logs(self, days_to_keep: int) -> int:
         """
-        Delete logs older than specified days
+        Delete logs older than specified days (from both main and detail tables)
 
         Args:
             days_to_keep: Number of days to keep logs
@@ -269,6 +395,28 @@ class SQLAlchemyLogRepository(LogRepository):
         cutoff_time = to_utc_naive(utc_now() - timedelta(days=days_to_keep))
         if cutoff_time is None:
             return 0
+
+        # Get IDs of logs to delete (needed for detail table cleanup)
+        id_stmt = select(RequestLogORM.id).where(
+            RequestLogORM.request_time < cutoff_time
+        )
+        id_result = await self.session.execute(id_stmt)
+        log_ids = [row[0] for row in id_result.all()]
+
+        if not log_ids:
+            return 0
+
+        # Delete from detail table first (child records), in batches
+        batch_size = 500
+        for i in range(0, len(log_ids), batch_size):
+            batch = log_ids[i : i + batch_size]
+            await self.session.execute(
+                delete(RequestLogDetailORM).where(
+                    RequestLogDetailORM.log_id.in_(batch)
+                )
+            )
+
+        # Delete from main table
         stmt = delete(RequestLogORM).where(RequestLogORM.request_time < cutoff_time)
         result = await self.session.execute(stmt)
         await self.session.commit()
@@ -307,10 +455,7 @@ class SQLAlchemyLogRepository(LogRepository):
         sum_in_tokens = func.coalesce(func.sum(RequestLogORM.input_tokens), 0)
         sum_out_tokens = func.coalesce(func.sum(RequestLogORM.output_tokens), 0)
 
-        error_condition = or_(
-            RequestLogORM.error_info.isnot(None),
-            RequestLogORM.response_status >= 400,
-        )
+        error_condition = RequestLogORM.response_status >= 400
         sum_error = func.coalesce(func.sum(case((error_condition, 1), else_=0)), 0)
 
         summary_stmt = select(
@@ -528,10 +673,7 @@ class SQLAlchemyLogRepository(LogRepository):
 
         where_clause = and_(*conditions) if conditions else None
 
-        error_condition = or_(
-            RequestLogORM.error_info.isnot(None),
-            RequestLogORM.response_status >= 400,
-        )
+        error_condition = RequestLogORM.response_status >= 400
 
         avg_total_time = func.avg(RequestLogORM.total_time_ms)
         avg_first_byte = func.avg(
@@ -593,10 +735,7 @@ class SQLAlchemyLogRepository(LogRepository):
 
         where_clause = and_(*conditions) if conditions else None
 
-        error_condition = or_(
-            RequestLogORM.error_info.isnot(None),
-            RequestLogORM.response_status >= 400,
-        )
+        error_condition = RequestLogORM.response_status >= 400
 
         avg_total_time = func.avg(RequestLogORM.total_time_ms)
         avg_first_byte = func.avg(

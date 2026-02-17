@@ -108,6 +108,40 @@ class RequestLogModel(RequestLogCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RequestLogSummary(BaseModel):
+    """Request Log Summary Model (for list queries, no large fields)"""
+
+    id: int = Field(..., description="Log ID")
+    request_time: datetime = Field(..., description="Request Time")
+    api_key_id: Optional[int] = Field(None, description="API Key ID")
+    api_key_name: Optional[str] = Field(None, description="API Key Name")
+    requested_model: Optional[str] = Field(None, description="Requested Model Name")
+    target_model: Optional[str] = Field(None, description="Target Model Name")
+    provider_id: Optional[int] = Field(None, description="Provider ID")
+    provider_name: Optional[str] = Field(None, description="Provider Name")
+    retry_count: int = Field(0, description="Retry Count")
+    matched_provider_count: Optional[int] = None
+    first_byte_delay_ms: Optional[int] = None
+    total_time_ms: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_cost: Optional[float] = None
+    input_cost: Optional[float] = None
+    output_cost: Optional[float] = None
+    response_status: Optional[int] = None
+    trace_id: Optional[str] = None
+    is_stream: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("request_time", mode="after")
+    @classmethod
+    def _request_time_utc(cls, v: datetime) -> datetime:
+        dt = ensure_utc(v)
+        assert dt is not None
+        return dt
+
+
 class RequestLogResponse(RequestLogBase):
     """Request Log Response Model (List View)"""
     

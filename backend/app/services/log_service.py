@@ -78,39 +78,39 @@ class LogService:
     ) -> tuple[list[RequestLogResponse], int]:
         """
         Query Log List
-        
+
         Args:
             query: Query conditions
-        
+
         Returns:
             tuple[list[RequestLogResponse], int]: (Log list, Total count)
         """
-        logs, total = await self.repo.query(query)
-        
-        # Convert to response model (list view does not include detailed request/response body)
+        summaries, total = await self.repo.query(query)
+
+        # Convert summary models to response models (fields are identical)
         responses = [
             RequestLogResponse(
-                id=log.id,
-                request_time=log.request_time,
-                api_key_id=log.api_key_id,
-                api_key_name=log.api_key_name,
-                requested_model=log.requested_model,
-                target_model=log.target_model,
-                provider_id=log.provider_id,
-                provider_name=log.provider_name,
-                retry_count=log.retry_count,
-                first_byte_delay_ms=log.first_byte_delay_ms,
-                total_time_ms=log.total_time_ms,
-                input_tokens=log.input_tokens,
-                output_tokens=log.output_tokens,
-                total_cost=log.total_cost,
-                input_cost=log.input_cost,
-                output_cost=log.output_cost,
-                response_status=log.response_status,
-                trace_id=log.trace_id,
-                is_stream=log.is_stream,
+                id=s.id,
+                request_time=s.request_time,
+                api_key_id=s.api_key_id,
+                api_key_name=s.api_key_name,
+                requested_model=s.requested_model,
+                target_model=s.target_model,
+                provider_id=s.provider_id,
+                provider_name=s.provider_name,
+                retry_count=s.retry_count,
+                first_byte_delay_ms=s.first_byte_delay_ms,
+                total_time_ms=s.total_time_ms,
+                input_tokens=s.input_tokens,
+                output_tokens=s.output_tokens,
+                total_cost=s.total_cost,
+                input_cost=s.input_cost,
+                output_cost=s.output_cost,
+                response_status=s.response_status,
+                trace_id=s.trace_id,
+                is_stream=s.is_stream,
             )
-            for log in logs
+            for s in summaries
         ]
 
         return responses, total
