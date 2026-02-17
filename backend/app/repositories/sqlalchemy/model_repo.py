@@ -420,11 +420,19 @@ class SQLAlchemyModelRepository(ModelRepository):
         return result.scalar() or 0
 
     async def get_active_provider_count(self, requested_model: str) -> int:
-        """Get the count of active providers associated with the model"""
+        """Get the count of active providers associated with the model.
+        
+        Active means both the mapping is_active AND the provider is_active.
+        """
         result = await self.session.execute(
             select(func.count())
             .select_from(ModelMappingProviderORM)
+            .join(
+                ServiceProvider,
+                ModelMappingProviderORM.provider_id == ServiceProvider.id
+            )
             .where(ModelMappingProviderORM.requested_model == requested_model)
             .where(ModelMappingProviderORM.is_active.is_(True))
+            .where(ServiceProvider.is_active.is_(True))
         )
         return result.scalar() or 0

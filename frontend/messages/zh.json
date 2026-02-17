@@ -377,6 +377,7 @@
       "priority": "优先级",
       "active": "启用",
       "inactive": "停用",
+      "pendingConfig": "待配置",
       "reset": "重置",
       "filter": "筛选"
     },

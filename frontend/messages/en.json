@@ -377,6 +377,7 @@
       "priority": "Priority",
       "active": "Active",
       "inactive": "Inactive",
+      "pendingConfig": "Pending Config",
       "reset": "Reset",
       "filter": "Filter"
     },
