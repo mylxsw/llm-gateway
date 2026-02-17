@@ -32,7 +32,12 @@ export interface BillingSubmitData {
     max_input_tokens: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled: boolean | null;
+  cached_input_price: number | null;
+  cached_output_price: number | null;
 }
 
 interface BillingFormValues {
@@ -41,7 +46,10 @@ interface BillingFormValues {
   output_price: string;
   per_request_price: string;
   per_image_price: string;
-  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string; cached_input_price: string; cached_output_price: string }>;
+  cache_billing_enabled: boolean;
+  cached_input_price: string;
+  cached_output_price: string;
 }
 
 /**
@@ -60,6 +68,9 @@ export function buildBillingSubmitData(
       per_request_price: null,
       per_image_price: null,
       tiered_pricing: null,
+      cache_billing_enabled: null,
+      cached_input_price: null,
+      cached_output_price: null,
     };
   }
 
@@ -74,6 +85,9 @@ export function buildBillingSubmitData(
       input_price: null,
       output_price: null,
       tiered_pricing: null,
+      cache_billing_enabled: null,
+      cached_input_price: null,
+      cached_output_price: null,
     };
   }
 
@@ -86,6 +100,9 @@ export function buildBillingSubmitData(
       input_price: null,
       output_price: null,
       tiered_pricing: null,
+      cache_billing_enabled: null,
+      cached_input_price: null,
+      cached_output_price: null,
     };
   }
 
@@ -98,12 +115,19 @@ export function buildBillingSubmitData(
           max_input_tokens: maxStr === '' ? null : Number(maxStr),
           input_price: Number(t.input_price || '0'),
           output_price: Number(t.output_price || '0'),
+          cached_input_price: values.cache_billing_enabled && t.cached_input_price.trim()
+            ? Number(t.cached_input_price) : null,
+          cached_output_price: values.cache_billing_enabled && t.cached_output_price.trim()
+            ? Number(t.cached_output_price) : null,
         };
       }),
       per_request_price: null,
       per_image_price: null,
       input_price: null,
       output_price: null,
+      cache_billing_enabled: values.cache_billing_enabled || null,
+      cached_input_price: null,
+      cached_output_price: null,
     };
   }
 
@@ -117,5 +141,10 @@ export function buildBillingSubmitData(
     per_request_price: null,
     per_image_price: null,
     tiered_pricing: null,
+    cache_billing_enabled: values.cache_billing_enabled || null,
+    cached_input_price: values.cache_billing_enabled && values.cached_input_price.trim()
+      ? Number(values.cached_input_price) : null,
+    cached_output_price: values.cache_billing_enabled && values.cached_output_price.trim()
+      ? Number(values.cached_output_price) : null,
   };
 }

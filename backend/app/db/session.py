@@ -107,6 +107,9 @@ def _run_migrations(sync_conn) -> None:
             "per_request_price": "per_request_price NUMERIC(12,4)",
             "per_image_price": "per_image_price NUMERIC(12,4)",
             "tiered_pricing": "tiered_pricing JSON",
+            "cache_billing_enabled": "cache_billing_enabled BOOLEAN DEFAULT FALSE",
+            "cached_input_price": "cached_input_price NUMERIC(12,4)",
+            "cached_output_price": "cached_output_price NUMERIC(12,4)",
         },
     )
     ensure_columns(
@@ -118,6 +121,9 @@ def _run_migrations(sync_conn) -> None:
             "per_request_price": "per_request_price NUMERIC(12,4)",
             "per_image_price": "per_image_price NUMERIC(12,4)",
             "tiered_pricing": "tiered_pricing JSON",
+            "cache_billing_enabled": "cache_billing_enabled BOOLEAN DEFAULT FALSE",
+            "cached_input_price": "cached_input_price NUMERIC(12,4)",
+            "cached_output_price": "cached_output_price NUMERIC(12,4)",
         },
     )
     ensure_columns(
@@ -135,6 +141,8 @@ def _run_migrations(sync_conn) -> None:
             "request_path": "request_path VARCHAR(200)",
             "request_method": "request_method VARCHAR(10)",
             "upstream_url": "upstream_url VARCHAR(500)",
+            "cached_input_cost": "cached_input_cost NUMERIC(12,4)",
+            "cached_output_cost": "cached_output_cost NUMERIC(12,4)",
         },
     )
     ensure_columns(

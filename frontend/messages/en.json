@@ -455,7 +455,8 @@
         "perImage": "Per image: {price}",
         "tieredPreview": "Tiered: {preview}{more}",
         "tieredPreviewMore": " (+{count})",
-        "tieredEntry": "≤{max}: {input}/{output}"
+        "tieredEntry": "≤{max}: {input}/{output}",
+        "cacheSuffix": "Cached: {cachedInput}/{cachedOutput}"
       }
     },
     "providerForm": {
@@ -511,7 +512,13 @@
       "enabledStatus": "Enabled Status",
       "selectProviderModelTitle": "Select Provider Model",
       "noProviderModels": "No models found.",
-      "useSelectedModel": "Use selected model"
+      "useSelectedModel": "Use selected model",
+      "cacheBilling": "Cache Billing",
+      "cachedInputPrice": "Cached Input Price (USD / 1M tokens)",
+      "cachedOutputPrice": "Cached Output Price (USD / 1M tokens)",
+      "cachedPricePlaceholder": "Empty = same as standard price",
+      "tierCachedInputPrice": "Cached Input (USD / 1M)",
+      "tierCachedOutputPrice": "Cached Output (USD / 1M)"
     },
     "ruleBuilder": {
       "title": "🎯 Matching Rules",

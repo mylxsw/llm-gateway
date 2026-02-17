@@ -455,7 +455,8 @@
         "perImage": "按图片计费：{price}",
         "tieredPreview": "分档：{preview}{more}",
         "tieredPreviewMore": " (+{count})",
-        "tieredEntry": "≤{max}: {input}/{output}"
+        "tieredEntry": "≤{max}: {input}/{output}",
+        "cacheSuffix": "缓存：{cachedInput}/{cachedOutput}"
       }
     },
     "providerForm": {
@@ -511,7 +512,13 @@
       "enabledStatus": "启用状态",
       "selectProviderModelTitle": "选择供应商模型",
       "noProviderModels": "未找到模型。",
-      "useSelectedModel": "使用所选模型"
+      "useSelectedModel": "使用所选模型",
+      "cacheBilling": "缓存计费",
+      "cachedInputPrice": "输入价格-缓存（美元/1M tokens）",
+      "cachedOutputPrice": "输出价格-缓存（美元/1M tokens）",
+      "cachedPricePlaceholder": "留空则同标准价格",
+      "tierCachedInputPrice": "输入-缓存（美元/1M）",
+      "tierCachedOutputPrice": "输出-缓存（美元/1M）"
     },
     "ruleBuilder": {
       "title": "🎯 匹配规则",

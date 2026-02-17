@@ -28,7 +28,12 @@ export interface ModelMapping {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   provider_count?: number;            // Associated provider count
   active_provider_count?: number;     // Associated active provider count
   providers?: ModelMappingProvider[]; // Detail contains provider list
@@ -60,7 +65,12 @@ export interface ModelMappingProvider {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   priority: number;
   weight: number;
   is_active: boolean;
@@ -84,7 +94,12 @@ export interface ModelMappingCreate {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
 }
 
 /** Update Model Mapping Request */
@@ -102,7 +117,12 @@ export interface ModelMappingUpdate {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
 }
 
 /** Create Model-Provider Mapping Request */
@@ -120,7 +140,12 @@ export interface ModelMappingProviderCreate {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -139,7 +164,12 @@ export interface ModelMappingProviderUpdate {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -159,7 +189,12 @@ export interface ModelProviderBulkUpgradeRequest {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
 }
 
 export interface ModelProviderBulkUpgradeResponse {
@@ -200,7 +235,12 @@ export interface ModelProviderExport {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   priority?: number;
   weight?: number;
   is_active?: boolean;
@@ -251,7 +291,12 @@ export interface ModelMatchProvider {
     max_input_tokens?: number | null;
     input_price: number;
     output_price: number;
+    cached_input_price?: number | null;
+    cached_output_price?: number | null;
   }> | null;
+  cache_billing_enabled?: boolean | null;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
   model_input_price?: number | null;
   model_output_price?: number | null;
   estimated_cost?: number | null;

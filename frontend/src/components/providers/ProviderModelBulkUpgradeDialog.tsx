@@ -50,7 +50,10 @@ interface FormData {
   output_price: string;
   per_request_price: string;
   per_image_price: string;
-  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string; cached_input_price: string; cached_output_price: string }>;
+  cache_billing_enabled: boolean;
+  cached_input_price: string;
+  cached_output_price: string;
 }
 
 function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormData, 'new_target_model_name'> {
@@ -61,7 +64,10 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       output_price: '0',
       per_request_price: '0',
       per_image_price: '0',
-      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
     };
   }
 
@@ -74,7 +80,10 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       output_price: '0',
       per_request_price: String(mapping.per_request_price ?? 0),
       per_image_price: '0',
-      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
     };
   }
 
@@ -85,7 +94,10 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       output_price: '0',
       per_request_price: '0',
       per_image_price: String(mapping.per_image_price ?? 0),
-      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
     };
   }
 
@@ -99,8 +111,10 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
                 : String(tier.max_input_tokens),
             input_price: String(tier.input_price ?? 0),
             output_price: String(tier.output_price ?? 0),
+            cached_input_price: tier.cached_input_price != null ? String(tier.cached_input_price) : '',
+            cached_output_price: tier.cached_output_price != null ? String(tier.cached_output_price) : '',
           }))
-        : [{ max_input_tokens: '', input_price: '0', output_price: '0' }];
+        : [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }];
 
     return {
       billing_mode: billingMode,
@@ -109,6 +123,9 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
       per_request_price: '0',
       per_image_price: '0',
       tiers,
+      cache_billing_enabled: !!mapping.cache_billing_enabled,
+      cached_input_price: '',
+      cached_output_price: '',
     };
   }
 
@@ -118,7 +135,10 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
     output_price: String(mapping.output_price ?? 0),
     per_request_price: '0',
     per_image_price: '0',
-    tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+    tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+    cache_billing_enabled: !!mapping.cache_billing_enabled,
+    cached_input_price: mapping.cached_input_price != null ? String(mapping.cached_input_price) : '',
+    cached_output_price: mapping.cached_output_price != null ? String(mapping.cached_output_price) : '',
   };
 }
 
@@ -150,7 +170,10 @@ export function ProviderModelBulkUpgradeDialog({
       output_price: '0',
       per_request_price: '0',
       per_image_price: '0',
-      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
     },
   });
 
@@ -187,6 +210,9 @@ export function ProviderModelBulkUpgradeDialog({
       per_request_price: null,
       per_image_price: null,
       tiered_pricing: null,
+      cache_billing_enabled: null,
+      cached_input_price: null,
+      cached_output_price: null,
     };
 
     if (data.billing_mode === 'per_request') {
@@ -198,10 +224,16 @@ export function ProviderModelBulkUpgradeDialog({
         max_input_tokens: tier.max_input_tokens.trim() ? Number(tier.max_input_tokens.trim()) : null,
         input_price: Number(tier.input_price.trim() || '0'),
         output_price: Number(tier.output_price.trim() || '0'),
+        cached_input_price: data.cache_billing_enabled && tier.cached_input_price.trim() ? Number(tier.cached_input_price) : undefined,
+        cached_output_price: data.cache_billing_enabled && tier.cached_output_price.trim() ? Number(tier.cached_output_price) : undefined,
       }));
+      payload.cache_billing_enabled = data.cache_billing_enabled || null;
     } else {
       payload.input_price = Number(data.input_price.trim() || '0');
       payload.output_price = Number(data.output_price.trim() || '0');
+      payload.cache_billing_enabled = data.cache_billing_enabled || null;
+      payload.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
+      payload.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
     }
 
     onSubmit(payload);
@@ -279,6 +311,8 @@ export function ProviderModelBulkUpgradeDialog({
               tierFields={tierFields}
               appendTier={appendTier}
               removeTier={removeTier}
+              cacheBillingEnabled={watch('cache_billing_enabled')}
+              setCacheBillingEnabled={(value) => setValue('cache_billing_enabled', value)}
             />
 
             <DialogFooter>

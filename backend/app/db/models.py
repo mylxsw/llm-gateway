@@ -109,6 +109,10 @@ class ModelMapping(Base):
     per_request_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     per_image_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
+    # Cache billing (separate pricing for cached tokens)
+    cache_billing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cached_input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time
@@ -119,7 +123,7 @@ class ModelMapping(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
     )
-    
+
     # Relationship: Provider mappings under this model
     providers: Mapped[list["ModelMappingProvider"]] = relationship(
         "ModelMappingProvider", back_populates="model_mapping", cascade="all, delete-orphan"
@@ -168,6 +172,10 @@ class ModelMappingProvider(Base):
     )
     # Tiered pricing config (JSON). Used when billing_mode == "token_tiered"
     tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
+    # Cache billing (separate pricing for cached tokens)
+    cache_billing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cached_input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Priority (Lower value means higher priority)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     # Weight (Used for weighted round-robin, currently unused)
@@ -263,6 +271,9 @@ class RequestLog(Base):
     total_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     input_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     output_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Cached cost fields (USD, 4 decimals)
+    cached_input_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Price source: SupplierOverride / ModelFallback / DefaultZero
     price_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Request Headers (JSON format, sanitized)

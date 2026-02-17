@@ -15,6 +15,8 @@ interface BillingTier {
   max_input_tokens?: number | null;
   input_price: number;
   output_price: number;
+  cached_input_price?: number | null;
+  cached_output_price?: number | null;
 }
 
 interface BillingDisplayProps {
@@ -26,6 +28,9 @@ interface BillingDisplayProps {
   tieredPricing?: BillingTier[] | null;
   fallbackInputPrice?: number | null;
   fallbackOutputPrice?: number | null;
+  cacheBillingEnabled?: boolean | null;
+  cachedInputPrice?: number | null;
+  cachedOutputPrice?: number | null;
   className?: string;
 }
 
@@ -63,6 +68,9 @@ export function BillingDisplay({
   tieredPricing,
   fallbackInputPrice,
   fallbackOutputPrice,
+  cacheBillingEnabled,
+  cachedInputPrice,
+  cachedOutputPrice,
   className,
 }: BillingDisplayProps) {
   const t = useTranslations('models');
@@ -130,6 +138,12 @@ export function BillingDisplay({
         input: formatUsdOrFree(effectiveInput),
         output: formatUsdOrFree(effectiveOutput),
       });
+    }
+    if (cacheBillingEnabled && (cachedInputPrice != null || cachedOutputPrice != null)) {
+      text += ` ${t('detail.billingDisplay.cacheSuffix', {
+        cachedInput: formatUsdCeil4(cachedInputPrice),
+        cachedOutput: formatUsdCeil4(cachedOutputPrice),
+      })}`;
     }
   }
 
