@@ -9,7 +9,7 @@ import React from 'react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
-type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null | undefined;
+type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null | undefined;
 
 interface BillingTier {
   max_input_tokens?: number | null;
@@ -79,6 +79,10 @@ export function BillingDisplay({
     value === 0 ? t('detail.billingDisplay.free') : formatUsdCeil4(value);
 
   const mode = billingMode ?? 'token_flat';
+
+  if (mode === 'inherit_model_default') {
+    return <span className={cn('font-mono', className)}>{t('detail.billingDisplay.inheritModel')}</span>;
+  }
 
   let text = '';
   if (mode === 'per_request') {

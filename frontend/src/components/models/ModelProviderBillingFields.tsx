@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import type { ModelType } from '@/types';
 
-export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
 
 interface TierInputValue {
   max_input_tokens: string;
@@ -53,6 +53,7 @@ interface ModelProviderBillingFieldsProps<TFormValues extends BillingFormValues>
   onLoadHistory?: () => void;
   showHistoryButton?: boolean;
   modelType?: ModelType;
+  showInheritOption?: boolean;
   cacheBillingEnabled: boolean;
   setCacheBillingEnabled: (enabled: boolean) => void;
 }
@@ -69,6 +70,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
   onLoadHistory,
   showHistoryButton = false,
   modelType,
+  showInheritOption = false,
   cacheBillingEnabled,
   setCacheBillingEnabled,
 }: ModelProviderBillingFieldsProps<TFormValues>) {
@@ -102,6 +104,11 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
               <SelectValue placeholder={t('providerForm.billingModePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
+              {showInheritOption && (
+                <SelectItem value="inherit_model_default">
+                  {t('providerForm.billingModeInherit')}
+                </SelectItem>
+              )}
               {modelType !== 'images' && (
                 <SelectItem value="per_request">
                   {t('providerForm.billingModePerRequest')}
@@ -123,7 +130,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
             </SelectContent>
           </Select>
         </div>
-        {billingMode !== 'per_request' && billingMode !== 'per_image' && (
+        {billingMode !== 'per_request' && billingMode !== 'per_image' && billingMode !== 'inherit_model_default' && (
           <div className="flex items-center gap-2 h-9 shrink-0">
             <Switch
               checked={cacheBillingEnabled}
@@ -136,7 +143,11 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
         )}
       </div>
 
-      {billingMode === 'per_request' ? (
+      {billingMode === 'inherit_model_default' ? (
+        <p className="text-sm text-muted-foreground">
+          {t('providerForm.inheritHint')}
+        </p>
+      ) : billingMode === 'per_request' ? (
         <div className="space-y-2">
           <Label htmlFor="per_request_price">
             {t('providerForm.pricePerRequest')}

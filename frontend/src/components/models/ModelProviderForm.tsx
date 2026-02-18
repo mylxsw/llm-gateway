@@ -79,7 +79,7 @@ interface FormData {
   provider_id: string;
   target_model_name: string;
   provider_rules: RuleSet | null;
-  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
   // token_flat
   input_price: string;
   output_price: string;
@@ -176,7 +176,8 @@ export function ModelProviderForm({
         | 'token_flat'
         | 'token_tiered'
         | 'per_request'
-        | 'per_image';
+        | 'per_image'
+        | 'inherit_model_default';
 
       reset({
         provider_id: String(mapping.provider_id),
@@ -420,7 +421,16 @@ export function ModelProviderForm({
 
       if (supportsBilling) {
         submitData.billing_mode = billingMode;
-        if (billingMode === 'per_request') {
+        if (billingMode === 'inherit_model_default') {
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.per_request_price = null;
+          submitData.per_image_price = null;
+          submitData.tiered_pricing = null;
+          submitData.cache_billing_enabled = null;
+          submitData.cached_input_price = null;
+          submitData.cached_output_price = null;
+        } else if (billingMode === 'per_request') {
           const perReq = data.per_request_price.trim();
           submitData.per_request_price = perReq ? Number(perReq) : 0;
           submitData.per_image_price = null;
@@ -473,7 +483,16 @@ export function ModelProviderForm({
 
       if (supportsBilling) {
         submitData.billing_mode = billingMode;
-        if (billingMode === 'per_request') {
+        if (billingMode === 'inherit_model_default') {
+          submitData.input_price = null;
+          submitData.output_price = null;
+          submitData.per_request_price = null;
+          submitData.per_image_price = null;
+          submitData.tiered_pricing = null;
+          submitData.cache_billing_enabled = null;
+          submitData.cached_input_price = null;
+          submitData.cached_output_price = null;
+        } else if (billingMode === 'per_request') {
           const perReq = data.per_request_price.trim();
           submitData.per_request_price = perReq ? Number(perReq) : 0;
           submitData.per_image_price = null;
@@ -619,6 +638,7 @@ export function ModelProviderForm({
               onLoadHistory={handleLoadPriceHistory}
               showHistoryButton
               modelType={modelType}
+              showInheritOption
               cacheBillingEnabled={cacheBillingEnabled}
               setCacheBillingEnabled={(value) => setValue('cache_billing_enabled', value)}
             />

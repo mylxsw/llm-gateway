@@ -20,6 +20,7 @@ BILLING_MODE_TOKEN_FLAT = "token_flat"
 BILLING_MODE_TOKEN_TIERED = "token_tiered"
 BILLING_MODE_PER_REQUEST = "per_request"
 BILLING_MODE_PER_IMAGE = "per_image"
+BILLING_MODE_INHERIT_MODEL_DEFAULT = "inherit_model_default"
 
 
 _ONE_MILLION = Decimal("1000000")
@@ -208,8 +209,19 @@ def resolve_billing(
     Priority: provider billing_mode > model billing_mode > token_flat fallback.
     Within token_flat, price resolution: provider override > model fallback > zero.
     """
+    # When inherit_model_default, ignore all provider pricing
+    if provider_billing_mode == BILLING_MODE_INHERIT_MODEL_DEFAULT:
+        provider_input_price = None
+        provider_output_price = None
+        provider_per_request_price = None
+        provider_per_image_price = None
+        provider_tiered_pricing = None
+        provider_cache_billing_enabled = None
+        provider_cached_input_price = None
+        provider_cached_output_price = None
+
     # Determine effective billing source
-    if provider_billing_mode:
+    if provider_billing_mode and provider_billing_mode != BILLING_MODE_INHERIT_MODEL_DEFAULT:
         mode = provider_billing_mode
         eff_per_request_price = provider_per_request_price
         eff_per_image_price = provider_per_image_price

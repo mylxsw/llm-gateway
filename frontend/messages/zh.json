@@ -457,7 +457,8 @@
         "tieredPreview": "分档：{preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}",
-        "cacheSuffix": "缓存：{cachedInput}/{cachedOutput}"
+        "cacheSuffix": "缓存：{cachedInput}/{cachedOutput}",
+        "inheritModel": "继承模型默认值"
       }
     },
     "providerForm": {
@@ -492,6 +493,8 @@
       "billingModePerImage": "按图片计费",
       "billingModeTokenFlat": "按 token 计费（固定）",
       "billingModeTokenTiered": "按 token 计费（按输入 token 分档）",
+      "billingModeInherit": "继承模型默认值",
+      "inheritHint": "使用模型级别定价，不设置供应商级别价格覆盖。",
       "pricePerRequest": "价格（美元/请求）",
       "pricePerImage": "价格（美元/张）",
       "tieredHint": "先按输入 token 选档，再按档位价格分别计费输入/输出 token。",

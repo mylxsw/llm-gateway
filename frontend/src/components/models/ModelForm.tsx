@@ -216,7 +216,7 @@ export function ModelForm({
 
     if (supportsBilling) {
       const billingMode = data.billing_mode;
-      submitData.billing_mode = billingMode;
+      submitData.billing_mode = billingMode as ModelMappingCreate['billing_mode'];
       if (billingMode === 'per_request') {
         const perReq = data.per_request_price.trim();
         submitData.per_request_price = perReq ? Number(perReq) : 0;

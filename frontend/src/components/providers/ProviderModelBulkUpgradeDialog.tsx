@@ -45,7 +45,7 @@ interface ProviderModelBulkUpgradeDialogProps {
 
 interface FormData {
   new_target_model_name: string;
-  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
   input_price: string;
   output_price: string;
   per_request_price: string;
@@ -72,6 +72,20 @@ function buildDefaultPricing(mapping?: ModelMappingProvider | null): Omit<FormDa
   }
 
   const billingMode = (mapping.billing_mode || 'token_flat') as FormData['billing_mode'];
+
+  if (billingMode === 'inherit_model_default') {
+    return {
+      billing_mode: 'inherit_model_default',
+      input_price: '0',
+      output_price: '0',
+      per_request_price: '0',
+      per_image_price: '0',
+      tiers: [{ max_input_tokens: '32768', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
+    };
+  }
 
   if (billingMode === 'per_request') {
     return {
@@ -215,7 +229,9 @@ export function ProviderModelBulkUpgradeDialog({
       cached_output_price: null,
     };
 
-    if (data.billing_mode === 'per_request') {
+    if (data.billing_mode === 'inherit_model_default') {
+      // All pricing fields already null from initialization
+    } else if (data.billing_mode === 'per_request') {
       payload.per_request_price = Number(data.per_request_price.trim() || '0');
     } else if (data.billing_mode === 'per_image') {
       payload.per_image_price = Number(data.per_image_price.trim() || '0');
@@ -311,6 +327,7 @@ export function ProviderModelBulkUpgradeDialog({
               tierFields={tierFields}
               appendTier={appendTier}
               removeTier={removeTier}
+              showInheritOption
               cacheBillingEnabled={watch('cache_billing_enabled')}
               setCacheBillingEnabled={(value) => setValue('cache_billing_enabled', value)}
             />

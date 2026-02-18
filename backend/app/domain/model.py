@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Literal
 
 
-BillingMode = Literal["token_flat", "token_tiered", "per_request", "per_image"]
+BillingMode = Literal["token_flat", "token_tiered", "per_request", "per_image", "inherit_model_default"]
 SelectionStrategyType = Literal["round_robin", "cost_first", "priority"]
 ModelType = Literal["chat", "speech", "transcription", "embedding", "images"]
 
@@ -70,6 +70,8 @@ class ModelMappingCreate(ModelMappingBase):
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelMappingCreate":
+        if self.billing_mode == "inherit_model_default":
+            raise ValueError("inherit_model_default is not valid for model-level billing")
         if self.billing_mode is None:
             return self
         if self.billing_mode == "per_request" and self.per_request_price is None:
@@ -221,6 +223,8 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelMappingProviderCreate":
+        if self.billing_mode == "inherit_model_default":
+            return self
         if self.billing_mode == "per_request" and self.per_request_price is None:
             raise ValueError("per_request_price is required when billing_mode=per_request")
         if self.billing_mode == "per_image" and self.per_image_price is None:
@@ -276,6 +280,8 @@ class ModelProviderBulkUpgradeRequest(BaseModel):
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelProviderBulkUpgradeRequest":
+        if self.billing_mode == "inherit_model_default":
+            return self
         if self.billing_mode == "per_request" and self.per_request_price is None:
             raise ValueError("per_request_price is required when billing_mode=per_request")
         if self.billing_mode == "per_image" and self.per_image_price is None:
