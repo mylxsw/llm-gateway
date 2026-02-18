@@ -445,6 +445,9 @@ class ProxyService:
                 model_per_request_price=model_mapping.per_request_price,
                 model_per_image_price=model_mapping.per_image_price,
                 model_tiered_pricing=model_mapping.tiered_pricing,
+                model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
+                model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
+                model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
@@ -461,6 +464,15 @@ class ProxyService:
                 if provider_mapping
                 else None,
                 provider_output_price=provider_mapping.output_price
+                if provider_mapping
+                else None,
+                provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
+                if provider_mapping
+                else None,
+                provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
+                if provider_mapping
+                else None,
+                provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
                 if provider_mapping
                 else None,
             )
@@ -749,6 +761,13 @@ class ProxyService:
             input_tokens=input_tokens,
             model_input_price=model_mapping.input_price,
             model_output_price=model_mapping.output_price,
+            model_billing_mode=model_mapping.billing_mode,
+            model_per_request_price=model_mapping.per_request_price,
+            model_per_image_price=model_mapping.per_image_price,
+            model_tiered_pricing=model_mapping.tiered_pricing,
+            model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
+            model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
+            model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
             provider_billing_mode=provider_mapping.billing_mode
             if provider_mapping
             else None,
@@ -767,12 +786,29 @@ class ProxyService:
             provider_output_price=provider_mapping.output_price
             if provider_mapping
             else None,
+            provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
+            if provider_mapping
+            else None,
+            provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
+            if provider_mapping
+            else None,
+            provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
+            if provider_mapping
+            else None,
         )
+        # Extract cached tokens from usage details
+        cached_input_tokens = None
+        if usage_details:
+            cached_input_tokens = (
+                usage_details.get("cached_tokens")
+                or usage_details.get("cache_read_input_tokens")
+            )
         cost = calculate_cost_from_billing(
             billing=billing,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             image_count=image_count,
+            cached_input_tokens=cached_input_tokens,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -797,6 +833,8 @@ class ProxyService:
             total_cost=cost.total_cost,
             input_cost=cost.input_cost,
             output_cost=cost.output_cost,
+            cached_input_cost=cost.cached_input_cost,
+            cached_output_cost=cost.cached_output_cost,
             price_source=billing.price_source,
             request_headers=sanitize_headers(headers),
             response_headers=sanitize_headers(result.response.headers),
@@ -1158,6 +1196,9 @@ class ProxyService:
                 model_per_request_price=model_mapping.per_request_price,
                 model_per_image_price=model_mapping.per_image_price,
                 model_tiered_pricing=model_mapping.tiered_pricing,
+                model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
+                model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
+                model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
@@ -1174,6 +1215,15 @@ class ProxyService:
                 if provider_mapping
                 else None,
                 provider_output_price=provider_mapping.output_price
+                if provider_mapping
+                else None,
+                provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
+                if provider_mapping
+                else None,
+                provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
+                if provider_mapping
+                else None,
+                provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
                 if provider_mapping
                 else None,
             )
@@ -1318,6 +1368,13 @@ class ProxyService:
                     input_tokens=input_tokens,
                     model_input_price=model_mapping.input_price,
                     model_output_price=model_mapping.output_price,
+                    model_billing_mode=model_mapping.billing_mode,
+                    model_per_request_price=model_mapping.per_request_price,
+                    model_per_image_price=model_mapping.per_image_price,
+                    model_tiered_pricing=model_mapping.tiered_pricing,
+                    model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
+                    model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
+                    model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
                     provider_billing_mode=provider_mapping.billing_mode
                     if provider_mapping
                     else None,
@@ -1336,12 +1393,29 @@ class ProxyService:
                     provider_output_price=provider_mapping.output_price
                     if provider_mapping
                     else None,
+                    provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
+                    if provider_mapping
+                    else None,
+                    provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
+                    if provider_mapping
+                    else None,
+                    provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
+                    if provider_mapping
+                    else None,
                 )
+                # Extract cached tokens from stream usage details
+                stream_cached_input_tokens = None
+                if usage_details:
+                    stream_cached_input_tokens = (
+                        usage_details.get("cached_tokens")
+                        or usage_details.get("cache_read_input_tokens")
+                    )
                 cost = calculate_cost_from_billing(
                     billing=billing,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
                     image_count=image_count,
+                    cached_input_tokens=stream_cached_input_tokens,
                 )
                 raw_stream_text = (
                     b"".join(raw_stream_chunks).decode("utf-8", errors="replace")
@@ -1380,6 +1454,8 @@ class ProxyService:
                     total_cost=cost.total_cost,
                     input_cost=cost.input_cost,
                     output_cost=cost.output_cost,
+                    cached_input_cost=cost.cached_input_cost,
+                    cached_output_cost=cost.cached_output_cost,
                     price_source=billing.price_source,
                     request_headers=sanitize_headers(headers),
                     response_headers=sanitize_headers(initial_response.headers),

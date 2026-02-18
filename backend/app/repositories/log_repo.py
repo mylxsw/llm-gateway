@@ -11,6 +11,7 @@ from app.domain.log import (
     RequestLogModel,
     RequestLogCreate,
     RequestLogQuery,
+    RequestLogSummary,
     LogCostStatsQuery,
     LogCostStatsResponse,
     ModelStats,
@@ -49,15 +50,15 @@ class LogRepository(ABC):
         pass
     
     @abstractmethod
-    async def query(self, query: RequestLogQuery) -> Tuple[List[RequestLogModel], int]:
+    async def query(self, query: RequestLogQuery) -> Tuple[List[RequestLogSummary], int]:
         """
-        Query Logs
-        
+        Query Logs (summary view, no large fields)
+
         Args:
             query: Query conditions
-            
+
         Returns:
-            Tuple[List[RequestLogModel], int]: (Log list, Total count)
+            Tuple[List[RequestLogSummary], int]: (Log summary list, Total count)
         """
         pass
     

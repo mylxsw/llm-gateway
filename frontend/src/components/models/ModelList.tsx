@@ -6,6 +6,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Table,
@@ -48,6 +49,7 @@ export function ModelList({
 }: ModelListProps) {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
+  const router = useRouter();
 
   const getStrategyLabel = (strategy: ModelMapping['strategy']) => {
     switch (strategy) {
@@ -99,13 +101,35 @@ export function ModelList({
       </TableHeader>
       <TableBody>
         {models.map((model) => {
-          const status = getActiveStatus(model.is_active);
           const stats = statsByModel?.[model.requested_model];
           const providerCount = model.provider_count ?? model.providers?.length ?? 0;
           const activeProviderCount =
             model.active_provider_count ??
             model.providers?.filter((provider) => provider.is_active).length ??
             0;
+
+          // Determine status display
+          const isPendingConfig = model.is_active && activeProviderCount === 0;
+          const statusDisplay = isPendingConfig
+            ? {
+                text: t('filters.pendingConfig'),
+                className: 'border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300 cursor-pointer hover:bg-amber-500/25',
+              }
+            : {
+                ...getActiveStatus(model.is_active),
+                text: model.is_active ? t('filters.active') : t('filters.inactive'),
+              };
+
+          const handleStatusClick = () => {
+            if (isPendingConfig) {
+              router.push(
+                `/models/detail?model=${encodeURIComponent(model.requested_model)}${
+                  returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ''
+                }`
+              );
+            }
+          };
+
           return (
             <TableRow key={model.requested_model}>
               <TableCell className="font-medium font-mono">
@@ -136,8 +160,11 @@ export function ModelList({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge className={status.className}>
-                  {model.is_active ? t('filters.active') : t('filters.inactive')}
+                <Badge
+                  className={statusDisplay.className}
+                  onClick={handleStatusClick}
+                >
+                  {statusDisplay.text}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">

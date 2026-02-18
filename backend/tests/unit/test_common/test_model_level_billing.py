@@ -216,3 +216,102 @@ class TestBackwardCompatibility:
         )
         assert billing.billing_mode == BILLING_MODE_PER_IMAGE
         assert billing.per_image_price == 0.05
+
+
+class TestModelLevelCacheBillingFallback:
+    """Test model-level cache billing fields are used as fallback."""
+
+    def test_model_cache_billing_used_when_provider_has_none(self):
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            model_billing_mode="token_flat",
+            model_cache_billing_enabled=True,
+            model_cached_input_price=1.0,
+            model_cached_output_price=3.0,
+            provider_billing_mode=None,
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+        )
+        assert billing.billing_mode == BILLING_MODE_TOKEN_FLAT
+        assert billing.price_source == PRICE_SOURCE_MODEL_FALLBACK
+        assert billing.cache_billing_enabled is True
+        assert billing.cached_input_price == 1.0
+        assert billing.cached_output_price == 3.0
+
+    def test_provider_cache_overrides_model_cache(self):
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            model_billing_mode="token_flat",
+            model_cache_billing_enabled=True,
+            model_cached_input_price=1.0,
+            provider_billing_mode="token_flat",
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=3.0,
+            provider_output_price=10.0,
+            provider_cache_billing_enabled=True,
+            provider_cached_input_price=0.5,
+        )
+        assert billing.price_source == PRICE_SOURCE_SUPPLIER_OVERRIDE
+        assert billing.cache_billing_enabled is True
+        assert billing.cached_input_price == 0.5  # provider wins
+
+    def test_model_tiered_cache_billing_fallback(self):
+        tiers = [
+            {"max_input_tokens": 32768, "input_price": 1.0, "output_price": 2.0,
+             "cached_input_price": 0.5},
+            {"max_input_tokens": None, "input_price": 3.0, "output_price": 4.0,
+             "cached_input_price": 1.5},
+        ]
+        billing = resolve_billing(
+            input_tokens=50000,
+            model_input_price=0.0,
+            model_output_price=0.0,
+            model_billing_mode="token_tiered",
+            model_tiered_pricing=tiers,
+            model_cache_billing_enabled=True,
+            provider_billing_mode=None,
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+        )
+        assert billing.billing_mode == BILLING_MODE_TOKEN_TIERED
+        assert billing.price_source == PRICE_SOURCE_MODEL_FALLBACK
+        assert billing.cache_billing_enabled is True
+        assert billing.cached_input_price == 1.5  # tier 2
+        assert billing.input_price == 3.0
+
+    def test_cache_billing_with_cost_calculation(self):
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            model_billing_mode="token_flat",
+            model_cache_billing_enabled=True,
+            model_cached_input_price=1.0,
+            provider_billing_mode=None,
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+        )
+        cost = calculate_cost_from_billing(
+            input_tokens=1_000_000,
+            output_tokens=500_000,
+            billing=billing,
+            cached_input_tokens=300_000,
+        )
+        # non-cached input: 700k/1M * 5 = 3.5
+        # cached input: 300k/1M * 1 = 0.3
+        # output: 500k/1M * 15 = 7.5
+        assert cost.input_cost == 3.8
+        assert cost.cached_input_cost == 0.3
+        assert cost.output_cost == 7.5
+        assert cost.total_cost == 11.3

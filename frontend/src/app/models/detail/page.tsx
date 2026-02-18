@@ -283,6 +283,9 @@ function ModelDetailContent() {
                     perRequestPrice={model.per_request_price}
                     perImagePrice={model.per_image_price}
                     tieredPricing={model.tiered_pricing}
+                    cacheBillingEnabled={model.cache_billing_enabled}
+                    cachedInputPrice={model.cached_input_price}
+                    cachedOutputPrice={model.cached_output_price}
                   />
                 </div>
               </div>
@@ -427,6 +430,9 @@ function ModelDetailContent() {
                             tieredPricing={mapping.tiered_pricing}
                             fallbackInputPrice={model.input_price}
                             fallbackOutputPrice={model.output_price}
+                            cacheBillingEnabled={mapping.cache_billing_enabled}
+                            cachedInputPrice={mapping.cached_input_price}
+                            cachedOutputPrice={mapping.cached_output_price}
                           />
                         </TableCell>
                       )}
