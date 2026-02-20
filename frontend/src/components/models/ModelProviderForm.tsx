@@ -406,6 +406,8 @@ export function ModelProviderForm({
           max_input_tokens: maxInputTokens,
           input_price: inputPrice,
           output_price: outputPrice,
+          cached_input_price: data.cache_billing_enabled && t.cached_input_price.trim() ? Number(t.cached_input_price) : null,
+          cached_output_price: data.cache_billing_enabled && t.cached_output_price.trim() ? Number(t.cached_output_price) : null,
         };
       });
     };
@@ -450,6 +452,9 @@ export function ModelProviderForm({
           submitData.per_image_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
+          submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
+          submitData.cached_input_price = null;
+          submitData.cached_output_price = null;
         } else {
           const flat = buildFlatPricing();
           submitData.input_price = flat.input_price;
@@ -457,6 +462,9 @@ export function ModelProviderForm({
           submitData.per_request_price = null;
           submitData.per_image_price = null;
           submitData.tiered_pricing = null;
+          submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
+          submitData.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
+          submitData.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
         }
       } else {
         submitData.billing_mode = nonBillingOverride.billing_mode;
@@ -512,6 +520,9 @@ export function ModelProviderForm({
           submitData.per_image_price = null;
           submitData.input_price = null;
           submitData.output_price = null;
+          submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
+          submitData.cached_input_price = null;
+          submitData.cached_output_price = null;
         } else {
           const flat = buildFlatPricing();
           submitData.input_price = flat.input_price;
@@ -519,6 +530,9 @@ export function ModelProviderForm({
           submitData.per_request_price = null;
           submitData.per_image_price = null;
           submitData.tiered_pricing = null;
+          submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
+          submitData.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
+          submitData.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
         }
       } else {
         submitData.billing_mode = nonBillingOverride.billing_mode;

@@ -252,7 +252,7 @@ export function ModelForm({
         submitData.per_image_price = null;
         submitData.input_price = null;
         submitData.output_price = null;
-        submitData.cache_billing_enabled = data.cache_billing_enabled || null;
+        submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
         submitData.cached_input_price = null;
         submitData.cached_output_price = null;
       } else {
@@ -264,7 +264,7 @@ export function ModelForm({
         submitData.per_request_price = null;
         submitData.per_image_price = null;
         submitData.tiered_pricing = null;
-        submitData.cache_billing_enabled = data.cache_billing_enabled || null;
+        submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
         submitData.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
         submitData.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
       }
