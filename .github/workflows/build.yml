@@ -41,6 +41,12 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+  
+      - name: Sanitize branch name for Docker tag
+        id: vars
+        run: |
+          SANITIZED_BRANCH_NAME="${BRANCH_NAME////-}"
+          echo "sanitized_branch_name=$SANITIZED_BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -49,7 +55,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.ref_name == 'main' || github.ref_name == 'dev' || github.ref_name == 'uat' || startsWith(github.ref_name, 'v') }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name == 'main' && 'latest' || steps.vars.outputs.sanitized_branch_name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.result }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
