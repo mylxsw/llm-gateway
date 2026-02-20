@@ -10,6 +10,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
 jobs:
   docker:
