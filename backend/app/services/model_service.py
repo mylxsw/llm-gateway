@@ -482,6 +482,8 @@ class ModelService:
             "cached_output_price": existing.cached_output_price,
         }
         merged.update(update_data)
+        if merged.get("cache_billing_enabled") is None:
+            merged["cache_billing_enabled"] = False
         ModelMappingProviderCreate(**merged)
 
         result = await self.model_repo.update_provider_mapping(id, data)
