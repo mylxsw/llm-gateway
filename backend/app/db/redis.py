@@ -6,16 +6,19 @@ Only used when KV_STORE_TYPE is set to "redis".
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
-from redis.asyncio import Redis
+try:
+    from redis.asyncio import Redis
+except ModuleNotFoundError:  # pragma: no cover - depends on runtime deps
+    Redis = None  # type: ignore[assignment]
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 # Global Redis client instance
-_redis_client: Optional[Redis] = None
+_redis_client: Optional[Any] = None
 
 
 async def init_redis() -> None:
@@ -30,6 +33,12 @@ async def init_redis() -> None:
     if _redis_client is not None:
         logger.warning("Redis client already initialized")
         return
+
+    if Redis is None:
+        raise RuntimeError(
+            "Redis backend requested but 'redis' package is not installed. "
+            "Install backend dependencies (pip install -r requirements.txt)."
+        )
 
     settings = get_settings()
     _redis_client = Redis.from_url(
@@ -59,7 +68,7 @@ async def close_redis() -> None:
     logger.info("Redis connection closed")
 
 
-def get_redis() -> Redis:
+def get_redis() -> Any:
     """
     Get Redis Client Instance
 

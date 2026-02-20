@@ -217,7 +217,9 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
         None, description="Tiered pricing (based on input tokens)"
     )
     # Cache billing
-    cache_billing_enabled: bool = Field(False, description="Enable cache billing")
+    cache_billing_enabled: Optional[bool] = Field(
+        None, description="Enable cache billing"
+    )
     cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
 
@@ -274,7 +276,9 @@ class ModelProviderBulkUpgradeRequest(BaseModel):
     tiered_pricing: Optional[list[TokenTierPrice]] = Field(
         None, description="Tiered pricing (based on input tokens)"
     )
-    cache_billing_enabled: bool = Field(False, description="Enable cache billing")
+    cache_billing_enabled: Optional[bool] = Field(
+        None, description="Enable cache billing"
+    )
     cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
 

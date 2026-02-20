@@ -261,7 +261,11 @@ class SQLAlchemyModelRepository(ModelRepository):
             ]
             if data.tiered_pricing is not None
             else None,
-            cache_billing_enabled=data.cache_billing_enabled,
+            cache_billing_enabled=(
+                data.cache_billing_enabled
+                if data.cache_billing_enabled is not None
+                else False
+            ),
             cached_input_price=data.cached_input_price,
             cached_output_price=data.cached_output_price,
             priority=data.priority,
