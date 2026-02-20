@@ -457,7 +457,8 @@
         "tieredPreview": "Tiered: {preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}",
-        "cacheSuffix": "Cached: {cachedInput}/{cachedOutput}"
+        "cacheSuffix": "Cached: {cachedInput}/{cachedOutput}",
+        "inheritModel": "Inherit model default"
       }
     },
     "providerForm": {
@@ -492,6 +493,8 @@
       "billingModePerImage": "Per image",
       "billingModeTokenFlat": "Per token (flat)",
       "billingModeTokenTiered": "Per token (tiered by input tokens)",
+      "billingModeInherit": "Inherit model default",
+      "inheritHint": "Uses model-level pricing. No provider-level override.",
       "pricePerRequest": "Price (USD / request)",
       "pricePerImage": "Price (USD / image)",
       "tieredHint": "Choose the tier by input tokens, then bill input/output tokens separately by that tier’s prices.",

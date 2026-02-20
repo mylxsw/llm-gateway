@@ -54,8 +54,8 @@ export interface ModelMappingProvider {
   // Provider override pricing (USD per 1,000,000 tokens)
   input_price?: number | null;
   output_price?: number | null;
-  // Billing mode: token_flat / token_tiered / per_request / per_image
-  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;
+  // Billing mode: token_flat / token_tiered / per_request / per_image / inherit_model_default
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null;
   // Per-request fixed price (USD), used when billing_mode == per_request
   per_request_price?: number | null;
   // Per-image price (USD), used when billing_mode == per_image
@@ -133,7 +133,7 @@ export interface ModelMappingProviderCreate {
   provider_rules?: RuleSet;
   input_price?: number | null;
   output_price?: number | null;
-  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
   per_request_price?: number | null;
   per_image_price?: number | null;
   tiered_pricing?: Array<{
@@ -157,7 +157,7 @@ export interface ModelMappingProviderUpdate {
   provider_rules?: RuleSet | null;
   input_price?: number | null;
   output_price?: number | null;
-  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null;
   per_request_price?: number | null;
   per_image_price?: number | null;
   tiered_pricing?: Array<{
@@ -180,7 +180,7 @@ export interface ModelProviderBulkUpgradeRequest {
   provider_id: number;
   current_target_model_name: string;
   new_target_model_name: string;
-  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+  billing_mode: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
   input_price?: number | null;
   output_price?: number | null;
   per_request_price?: number | null;
@@ -228,7 +228,7 @@ export interface ModelProviderExport {
   provider_rules?: RuleSet | null;
   input_price?: number | null;
   output_price?: number | null;
-  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null;
   per_request_price?: number | null;
   per_image_price?: number | null;
   tiered_pricing?: Array<{
@@ -282,7 +282,7 @@ export interface ModelMatchProvider {
   protocol: ProtocolType;
   priority: number;
   weight: number;
-  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;
+  billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null;
   input_price?: number | null;
   output_price?: number | null;
   per_request_price?: number | null;
