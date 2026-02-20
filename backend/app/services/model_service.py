@@ -477,6 +477,9 @@ class ModelService:
             "per_request_price": existing.per_request_price,
             "per_image_price": existing.per_image_price,
             "tiered_pricing": existing.tiered_pricing,
+            "cache_billing_enabled": existing.cache_billing_enabled or False,
+            "cached_input_price": existing.cached_input_price,
+            "cached_output_price": existing.cached_output_price,
         }
         merged.update(update_data)
         ModelMappingProviderCreate(**merged)
