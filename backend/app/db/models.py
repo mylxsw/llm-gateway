@@ -109,6 +109,10 @@ class ModelMapping(Base):
     per_request_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     per_image_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
+    # Cache billing (separate pricing for cached tokens)
+    cache_billing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cached_input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time
@@ -119,7 +123,7 @@ class ModelMapping(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
     )
-    
+
     # Relationship: Provider mappings under this model
     providers: Mapped[list["ModelMappingProvider"]] = relationship(
         "ModelMappingProvider", back_populates="model_mapping", cascade="all, delete-orphan"
@@ -168,6 +172,10 @@ class ModelMappingProvider(Base):
     )
     # Tiered pricing config (JSON). Used when billing_mode == "token_tiered"
     tiered_pricing: Mapped[Optional[list]] = mapped_column(SQLiteJSON, nullable=True)
+    # Cache billing (separate pricing for cached tokens)
+    cache_billing_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    cached_input_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_price: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Priority (Lower value means higher priority)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     # Weight (Used for weighted round-robin, currently unused)
@@ -263,6 +271,9 @@ class RequestLog(Base):
     total_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     input_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     output_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    # Cached cost fields (USD, 4 decimals)
+    cached_input_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
+    cached_output_cost: Mapped[Optional[float]] = mapped_column(Numeric(12, 4), nullable=True)
     # Price source: SupplierOverride / ModelFallback / DefaultZero
     price_source: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # Request Headers (JSON format, sanitized)
@@ -302,14 +313,50 @@ class RequestLog(Base):
     # Indices for optimizing queries
     __table_args__ = (
         Index("idx_request_logs_time", "request_time"),
-        Index("idx_request_logs_api_key", "api_key_id"),
+        Index("idx_request_logs_time_model", "request_time", "requested_model"),
+        Index("idx_request_logs_time_provider", "request_time", "provider_id"),
+        Index("idx_request_logs_time_status", "request_time", "response_status"),
+        Index("idx_request_logs_time_apikey", "request_time", "api_key_id"),
         Index("idx_request_logs_model", "requested_model"),
-        Index("idx_request_logs_provider", "provider_id"),
-        Index("idx_request_logs_status", "response_status"),
+        Index("idx_request_logs_api_key", "api_key_id"),
     )
-    
+
     # Relationships
     api_key: Mapped[Optional["ApiKey"]] = relationship("ApiKey", back_populates="logs")
+    detail: Mapped[Optional["RequestLogDetail"]] = relationship(
+        "RequestLogDetail", uselist=False, cascade="all, delete-orphan", lazy="noload"
+    )
+
+
+class RequestLogDetail(Base):
+    """
+    Request Log Detail Table
+
+    Stores large request/response bodies separately from the summary table
+    to optimize list query performance.
+    """
+    __tablename__ = "request_log_details"
+
+    # Foreign key to request_logs.id, also serves as primary key (1:1)
+    log_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("request_logs.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Full request body (JSON)
+    request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Full response body (Text)
+    response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Request headers (JSON, sanitized)
+    request_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Response headers (JSON)
+    response_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Converted request body (after protocol conversion)
+    converted_request_body: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Upstream response body (original response before protocol conversion)
+    upstream_response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Usage details (JSON)
+    usage_details: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Error info
+    error_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class KeyValueStore(Base):

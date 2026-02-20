@@ -10,6 +10,7 @@ import { Loader2, MousePointerClick } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -19,12 +20,14 @@ import {
 } from '@/components/ui/select';
 import type { ModelType } from '@/types';
 
-export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image';
+export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default';
 
 interface TierInputValue {
   max_input_tokens: string;
   input_price: string;
   output_price: string;
+  cached_input_price: string;
+  cached_output_price: string;
 }
 
 type BillingFormValues = FieldValues & {
@@ -33,6 +36,9 @@ type BillingFormValues = FieldValues & {
   per_request_price: string;
   per_image_price: string;
   tiers: TierInputValue[];
+  cache_billing_enabled: boolean;
+  cached_input_price: string;
+  cached_output_price: string;
 };
 
 interface ModelProviderBillingFieldsProps<TFormValues extends BillingFormValues> {
@@ -47,6 +53,9 @@ interface ModelProviderBillingFieldsProps<TFormValues extends BillingFormValues>
   onLoadHistory?: () => void;
   showHistoryButton?: boolean;
   modelType?: ModelType;
+  showInheritOption?: boolean;
+  cacheBillingEnabled: boolean;
+  setCacheBillingEnabled: (enabled: boolean) => void;
 }
 
 export function ModelProviderBillingFields<TFormValues extends BillingFormValues>({
@@ -61,6 +70,9 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
   onLoadHistory,
   showHistoryButton = false,
   modelType,
+  showInheritOption = false,
+  cacheBillingEnabled,
+  setCacheBillingEnabled,
 }: ModelProviderBillingFieldsProps<TFormValues>) {
   return (
     <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
@@ -84,14 +96,19 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
+      <div className="flex items-end gap-4">
+        <div className="flex-1 space-y-2">
           <Label>{t('providerForm.billingMode')}</Label>
           <Select value={billingMode} onValueChange={(value) => setBillingMode(value as BillingMode)}>
             <SelectTrigger>
               <SelectValue placeholder={t('providerForm.billingModePlaceholder')} />
             </SelectTrigger>
             <SelectContent>
+              {showInheritOption && (
+                <SelectItem value="inherit_model_default">
+                  {t('providerForm.billingModeInherit')}
+                </SelectItem>
+              )}
               {modelType !== 'images' && (
                 <SelectItem value="per_request">
                   {t('providerForm.billingModePerRequest')}
@@ -113,9 +130,24 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
             </SelectContent>
           </Select>
         </div>
+        {billingMode !== 'per_request' && billingMode !== 'per_image' && billingMode !== 'inherit_model_default' && (
+          <div className="flex items-center gap-2 h-9 shrink-0">
+            <Switch
+              checked={cacheBillingEnabled}
+              onCheckedChange={setCacheBillingEnabled}
+            />
+            <Label className="text-sm cursor-pointer" onClick={() => setCacheBillingEnabled(!cacheBillingEnabled)}>
+              {t('providerForm.cacheBilling')}
+            </Label>
+          </div>
+        )}
       </div>
 
-      {billingMode === 'per_request' ? (
+      {billingMode === 'inherit_model_default' ? (
+        <p className="text-sm text-muted-foreground">
+          {t('providerForm.inheritHint')}
+        </p>
+      ) : billingMode === 'per_request' ? (
         <div className="space-y-2">
           <Label htmlFor="per_request_price">
             {t('providerForm.pricePerRequest')}
@@ -148,53 +180,83 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
           </div>
           <div className="space-y-2">
             {tierFields.map((field, idx) => (
-              <div key={field.id} className="grid grid-cols-7 gap-2 items-end">
-                <div className="col-span-2 space-y-1">
-                  <Label>{t('providerForm.maxInputTokens')}</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    placeholder={t('providerForm.tierMaxPlaceholder')}
-                    {...register(`tiers.${idx}.max_input_tokens` as Path<TFormValues>)}
-                  />
+              <div key={field.id} className="space-y-1">
+                {/* Row 1: Max tokens + standard input/output prices + remove button */}
+                <div className="grid grid-cols-7 gap-2 items-end">
+                  <div className="col-span-2 space-y-1">
+                    <Label>{t('providerForm.maxInputTokens')}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder={t('providerForm.tierMaxPlaceholder')}
+                      {...register(`tiers.${idx}.max_input_tokens` as Path<TFormValues>)}
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label>{t('providerForm.tierInputPrice')}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      placeholder={t('providerForm.tierInputPlaceholder')}
+                      {...register(`tiers.${idx}.input_price` as Path<TFormValues>)}
+                    />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label>{t('providerForm.tierOutputPrice')}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.0001"
+                      placeholder={t('providerForm.tierOutputPlaceholder')}
+                      {...register(`tiers.${idx}.output_price` as Path<TFormValues>)}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => removeTier(idx)}
+                      disabled={tierFields.length <= 1}
+                    >
+                      {t('providerForm.removeTier')}
+                    </Button>
+                  </div>
                 </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>{t('providerForm.tierInputPrice')}</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    placeholder={t('providerForm.tierInputPlaceholder')}
-                    {...register(`tiers.${idx}.input_price` as Path<TFormValues>)}
-                  />
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>{t('providerForm.tierOutputPrice')}</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.0001"
-                    placeholder={t('providerForm.tierOutputPlaceholder')}
-                    {...register(`tiers.${idx}.output_price` as Path<TFormValues>)}
-                  />
-                </div>
-                <div className="col-span-1 flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => removeTier(idx)}
-                    disabled={tierFields.length <= 1}
-                  >
-                    {t('providerForm.removeTier')}
-                  </Button>
-                </div>
+                {/* Row 2: Cached prices, aligned under input/output columns */}
+                {cacheBillingEnabled && (
+                  <div className="grid grid-cols-7 gap-2 items-end">
+                    <div className="col-span-2" />
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-muted-foreground">{t('providerForm.tierCachedInputPrice')}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        placeholder={t('providerForm.cachedPricePlaceholder')}
+                        {...register(`tiers.${idx}.cached_input_price` as Path<TFormValues>)}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-muted-foreground">{t('providerForm.tierCachedOutputPrice')}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        placeholder={t('providerForm.cachedPricePlaceholder')}
+                        {...register(`tiers.${idx}.cached_output_price` as Path<TFormValues>)}
+                      />
+                    </div>
+                    <div className="col-span-1" />
+                  </div>
+                )}
               </div>
             ))}
             <Button
               type="button"
               variant="outline"
               onClick={() =>
-                appendTier({ max_input_tokens: '', input_price: '', output_price: '' })
+                appendTier({ max_input_tokens: '', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' })
               }
             >
               {t('providerForm.addTier')}
@@ -225,6 +287,32 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
               />
             </div>
           </div>
+          {cacheBillingEnabled && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="cached_input_price">{t('providerForm.cachedInputPrice')}</Label>
+                <Input
+                  id="cached_input_price"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder={t('providerForm.cachedPricePlaceholder')}
+                  {...register('cached_input_price' as Path<TFormValues>)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cached_output_price">{t('providerForm.cachedOutputPrice')}</Label>
+                <Input
+                  id="cached_output_price"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder={t('providerForm.cachedPricePlaceholder')}
+                  {...register('cached_output_price' as Path<TFormValues>)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 

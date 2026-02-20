@@ -737,7 +737,11 @@ class ModelService:
                 requested_model=mapping.requested_model
             )
             provider_count = len(providers)
-            active_provider_count = sum(1 for provider in providers if provider.is_active)
+            # Active provider count requires both: mapping is_active AND provider is_active
+            active_provider_count = sum(
+                1 for provider in providers 
+                if provider.is_active and provider.provider_is_active is not False
+            )
         else:
             provider_count = await self.model_repo.get_provider_count(
                 mapping.requested_model

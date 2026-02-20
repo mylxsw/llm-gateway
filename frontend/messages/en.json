@@ -377,6 +377,7 @@
       "priority": "Priority",
       "active": "Active",
       "inactive": "Inactive",
+      "pendingConfig": "Pending Config",
       "reset": "Reset",
       "filter": "Filter"
     },
@@ -455,7 +456,9 @@
         "perImage": "Per image: {price}",
         "tieredPreview": "Tiered: {preview}{more}",
         "tieredPreviewMore": " (+{count})",
-        "tieredEntry": "≤{max}: {input}/{output}"
+        "tieredEntry": "≤{max}: {input}/{output}",
+        "cacheSuffix": "Cached: {cachedInput}/{cachedOutput}",
+        "inheritModel": "Inherit model default"
       }
     },
     "providerForm": {
@@ -490,6 +493,8 @@
       "billingModePerImage": "Per image",
       "billingModeTokenFlat": "Per token (flat)",
       "billingModeTokenTiered": "Per token (tiered by input tokens)",
+      "billingModeInherit": "Inherit model default",
+      "inheritHint": "Uses model-level pricing. No provider-level override.",
       "pricePerRequest": "Price (USD / request)",
       "pricePerImage": "Price (USD / image)",
       "tieredHint": "Choose the tier by input tokens, then bill input/output tokens separately by that tier’s prices.",
@@ -511,7 +516,13 @@
       "enabledStatus": "Enabled Status",
       "selectProviderModelTitle": "Select Provider Model",
       "noProviderModels": "No models found.",
-      "useSelectedModel": "Use selected model"
+      "useSelectedModel": "Use selected model",
+      "cacheBilling": "Cache Billing",
+      "cachedInputPrice": "Cached Input Price (USD / 1M tokens)",
+      "cachedOutputPrice": "Cached Output Price (USD / 1M tokens)",
+      "cachedPricePlaceholder": "Empty = same as standard price",
+      "tierCachedInputPrice": "Cached Input (USD / 1M)",
+      "tierCachedOutputPrice": "Cached Output (USD / 1M)"
     },
     "ruleBuilder": {
       "title": "🎯 Matching Rules",

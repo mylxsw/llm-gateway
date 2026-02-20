@@ -62,7 +62,10 @@ interface FormData {
   output_price: string;
   per_request_price: string;
   per_image_price: string;
-  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string }>;
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string; cached_input_price: string; cached_output_price: string }>;
+  cache_billing_enabled: boolean;
+  cached_input_price: string;
+  cached_output_price: string;
 }
 
 /**
@@ -101,7 +104,10 @@ export function ModelForm({
       output_price: '',
       per_request_price: '',
       per_image_price: '',
-      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
+      cache_billing_enabled: false,
+      cached_input_price: '',
+      cached_output_price: '',
     },
   });
 
@@ -114,6 +120,7 @@ export function ModelForm({
   const modelType = watch('model_type');
   const strategy = watch('strategy');
   const billingMode = watch('billing_mode');
+  const cacheBillingEnabled = watch('cache_billing_enabled');
   const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
 
   useEffect(() => {
@@ -148,6 +155,9 @@ export function ModelForm({
           model.per_image_price === null || model.per_image_price === undefined
             ? ''
             : String(model.per_image_price),
+        cache_billing_enabled: !!model.cache_billing_enabled,
+        cached_input_price: model.cached_input_price === null || model.cached_input_price === undefined ? '' : String(model.cached_input_price),
+        cached_output_price: model.cached_output_price === null || model.cached_output_price === undefined ? '' : String(model.cached_output_price),
         tiers:
           model.tiered_pricing && model.tiered_pricing.length > 0
             ? model.tiered_pricing.map((t) => ({
@@ -157,8 +167,10 @@ export function ModelForm({
                     : String(t.max_input_tokens),
                 input_price: String(t.input_price),
                 output_price: String(t.output_price),
+                cached_input_price: t.cached_input_price === null || t.cached_input_price === undefined ? '' : String(t.cached_input_price),
+                cached_output_price: t.cached_output_price === null || t.cached_output_price === undefined ? '' : String(t.cached_output_price),
               }))
-            : [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
+            : [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
       });
     } else {
       reset({
@@ -171,7 +183,10 @@ export function ModelForm({
         output_price: '',
         per_request_price: '',
         per_image_price: '',
-        tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '' }],
+        tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
+        cache_billing_enabled: false,
+        cached_input_price: '',
+        cached_output_price: '',
       });
     }
   }, [model, reset]);
@@ -201,7 +216,7 @@ export function ModelForm({
 
     if (supportsBilling) {
       const billingMode = data.billing_mode;
-      submitData.billing_mode = billingMode;
+      submitData.billing_mode = billingMode as ModelMappingCreate['billing_mode'];
       if (billingMode === 'per_request') {
         const perReq = data.per_request_price.trim();
         submitData.per_request_price = perReq ? Number(perReq) : 0;
@@ -209,6 +224,9 @@ export function ModelForm({
         submitData.input_price = null;
         submitData.output_price = null;
         submitData.tiered_pricing = null;
+        submitData.cache_billing_enabled = null;
+        submitData.cached_input_price = null;
+        submitData.cached_output_price = null;
       } else if (billingMode === 'per_image') {
         const perImg = data.per_image_price.trim();
         submitData.per_image_price = perImg ? Number(perImg) : 0;
@@ -216,6 +234,9 @@ export function ModelForm({
         submitData.input_price = null;
         submitData.output_price = null;
         submitData.tiered_pricing = null;
+        submitData.cache_billing_enabled = null;
+        submitData.cached_input_price = null;
+        submitData.cached_output_price = null;
       } else if (billingMode === 'token_tiered') {
         submitData.tiered_pricing = (data.tiers || []).map((t) => {
           const maxStr = t.max_input_tokens.trim();
@@ -223,12 +244,17 @@ export function ModelForm({
             max_input_tokens: maxStr === '' ? null : Number(maxStr),
             input_price: Number(t.input_price || '0'),
             output_price: Number(t.output_price || '0'),
+            cached_input_price: data.cache_billing_enabled && t.cached_input_price.trim() ? Number(t.cached_input_price) : undefined,
+            cached_output_price: data.cache_billing_enabled && t.cached_output_price.trim() ? Number(t.cached_output_price) : undefined,
           };
         });
         submitData.per_request_price = null;
         submitData.per_image_price = null;
         submitData.input_price = null;
         submitData.output_price = null;
+        submitData.cache_billing_enabled = data.cache_billing_enabled || null;
+        submitData.cached_input_price = null;
+        submitData.cached_output_price = null;
       } else {
         // token_flat
         const inputPrice = data.input_price.trim();
@@ -238,6 +264,9 @@ export function ModelForm({
         submitData.per_request_price = null;
         submitData.per_image_price = null;
         submitData.tiered_pricing = null;
+        submitData.cache_billing_enabled = data.cache_billing_enabled || null;
+        submitData.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
+        submitData.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
       }
     } else {
       submitData.billing_mode = null;
@@ -246,6 +275,9 @@ export function ModelForm({
       submitData.per_request_price = null;
       submitData.per_image_price = null;
       submitData.tiered_pricing = null;
+      submitData.cache_billing_enabled = null;
+      submitData.cached_input_price = null;
+      submitData.cached_output_price = null;
     }
 
     onSubmit(submitData);
@@ -329,6 +361,8 @@ export function ModelForm({
               appendTier={appendTier}
               removeTier={removeTier}
               modelType={modelType}
+              cacheBillingEnabled={cacheBillingEnabled}
+              setCacheBillingEnabled={(value) => setValue('cache_billing_enabled', value)}
             />
           )}
 

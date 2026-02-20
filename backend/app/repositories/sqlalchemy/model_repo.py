@@ -59,10 +59,13 @@ class SQLAlchemyModelRepository(ModelRepository):
             per_request_price=float(entity.per_request_price) if entity.per_request_price is not None else None,
             per_image_price=float(entity.per_image_price) if entity.per_image_price is not None else None,
             tiered_pricing=entity.tiered_pricing,
+            cache_billing_enabled=entity.cache_billing_enabled,
+            cached_input_price=float(entity.cached_input_price) if entity.cached_input_price is not None else None,
+            cached_output_price=float(entity.cached_output_price) if entity.cached_output_price is not None else None,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
         )
-    
+
     def _provider_mapping_to_domain(
         self,
         entity: ModelMappingProviderORM,
@@ -90,13 +93,16 @@ class SQLAlchemyModelRepository(ModelRepository):
             if entity.per_image_price is not None
             else None,
             tiered_pricing=entity.tiered_pricing,
+            cache_billing_enabled=entity.cache_billing_enabled,
+            cached_input_price=float(entity.cached_input_price) if entity.cached_input_price is not None else None,
+            cached_output_price=float(entity.cached_output_price) if entity.cached_output_price is not None else None,
             priority=entity.priority,
             weight=entity.weight,
             is_active=entity.is_active,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
         )
-    
+
     # ============ Model Mapping Operations ============
     
     async def create_mapping(self, data: ModelMappingCreate) -> ModelMapping:
@@ -110,6 +116,17 @@ class SQLAlchemyModelRepository(ModelRepository):
             is_active=data.is_active,
             input_price=data.input_price,
             output_price=data.output_price,
+            billing_mode=data.billing_mode,
+            per_request_price=data.per_request_price,
+            per_image_price=data.per_image_price,
+            tiered_pricing=[
+                t.model_dump() for t in (data.tiered_pricing or [])
+            ]
+            if data.tiered_pricing is not None
+            else None,
+            cache_billing_enabled=data.cache_billing_enabled or False,
+            cached_input_price=data.cached_input_price,
+            cached_output_price=data.cached_output_price,
         )
         self.session.add(entity)
         await self.session.commit()
@@ -420,11 +437,19 @@ class SQLAlchemyModelRepository(ModelRepository):
         return result.scalar() or 0
 
     async def get_active_provider_count(self, requested_model: str) -> int:
-        """Get the count of active providers associated with the model"""
+        """Get the count of active providers associated with the model.
+        
+        Active means both the mapping is_active AND the provider is_active.
+        """
         result = await self.session.execute(
             select(func.count())
             .select_from(ModelMappingProviderORM)
+            .join(
+                ServiceProvider,
+                ModelMappingProviderORM.provider_id == ServiceProvider.id
+            )
             .where(ModelMappingProviderORM.requested_model == requested_model)
             .where(ModelMappingProviderORM.is_active.is_(True))
+            .where(ServiceProvider.is_active.is_(True))
         )
         return result.scalar() or 0

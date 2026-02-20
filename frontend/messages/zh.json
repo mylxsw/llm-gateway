@@ -377,6 +377,7 @@
       "priority": "优先级",
       "active": "启用",
       "inactive": "停用",
+      "pendingConfig": "待配置",
       "reset": "重置",
       "filter": "筛选"
     },
@@ -455,7 +456,9 @@
         "perImage": "按图片计费：{price}",
         "tieredPreview": "分档：{preview}{more}",
         "tieredPreviewMore": " (+{count})",
-        "tieredEntry": "≤{max}: {input}/{output}"
+        "tieredEntry": "≤{max}: {input}/{output}",
+        "cacheSuffix": "缓存：{cachedInput}/{cachedOutput}",
+        "inheritModel": "继承模型默认值"
       }
     },
     "providerForm": {
@@ -490,6 +493,8 @@
       "billingModePerImage": "按图片计费",
       "billingModeTokenFlat": "按 token 计费（固定）",
       "billingModeTokenTiered": "按 token 计费（按输入 token 分档）",
+      "billingModeInherit": "继承模型默认值",
+      "inheritHint": "使用模型级别定价，不设置供应商级别价格覆盖。",
       "pricePerRequest": "价格（美元/请求）",
       "pricePerImage": "价格（美元/张）",
       "tieredHint": "先按输入 token 选档，再按档位价格分别计费输入/输出 token。",
@@ -511,7 +516,13 @@
       "enabledStatus": "启用状态",
       "selectProviderModelTitle": "选择供应商模型",
       "noProviderModels": "未找到模型。",
-      "useSelectedModel": "使用所选模型"
+      "useSelectedModel": "使用所选模型",
+      "cacheBilling": "缓存计费",
+      "cachedInputPrice": "输入价格-缓存（美元/1M tokens）",
+      "cachedOutputPrice": "输出价格-缓存（美元/1M tokens）",
+      "cachedPricePlaceholder": "留空则同标准价格",
+      "tierCachedInputPrice": "输入-缓存（美元/1M）",
+      "tierCachedOutputPrice": "输出-缓存（美元/1M）"
     },
     "ruleBuilder": {
       "title": "🎯 匹配规则",
