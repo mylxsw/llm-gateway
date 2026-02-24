@@ -60,7 +60,7 @@ class ProtocolConversionHooks:
         supplier_protocol: str,
     ) -> dict[str, Any]:
         if supplier_protocol == "openai" and self._kv_repo:
-            await self._inject_tool_call_extra_content(supplier_body)
+            await self._inject_cached_content(supplier_body)
 
         return supplier_body
 
@@ -144,14 +144,44 @@ class ProtocolConversionHooks:
                 if not line.startswith("data: ") or line.strip() == "data: [DONE]":
                     continue
 
-                for choice in json.loads(line[6:]).get("choices", []):
-                    for tool_call in choice.get("delta", {}).get("tool_calls", []):
+                try:
+                    data = json.loads(line[6:])
+                except Exception:
+                    continue
+
+                chat_id = data.get("id", "")
+
+                for choice in data.get("choices", []):
+                    delta = choice.get("delta", {})
+
+                    # Accumulate reasoning_content keyed by chat_id
+                    reasoning_content = delta.get("reasoning_content")
+                    if reasoning_content and chat_id and self._kv_repo:
+                        cache_key = f"chat_reasoning:{chat_id}"
+                        try:
+                            cached = await self._kv_repo.get(cache_key)
+                            new_val = cached.value + reasoning_content if cached else reasoning_content
+                            await self._kv_repo.set(cache_key, new_val, ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL)
+                        except Exception as e:
+                            logger.debug(f"Error caching reasoning_content: {e}")
+
+                    # Process tool_calls
+                    for tool_call in delta.get("tool_calls", []):
+                        tool_call_id = tool_call.get("id", "")
+                        
+                        # Link tool_call_id to chat_id for reasoning_content recovery
+                        if tool_call_id and chat_id and self._kv_repo:
+                            link_key = f"tool_call_chat_id:{tool_call_id}"
+                            try:
+                                await self._kv_repo.set(link_key, chat_id, ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL)
+                            except Exception as e:
+                                logger.debug(f"Error linking tool_call to chat_id: {e}")
+
                         # for google: https://ai.google.dev/gemini-api/docs/thought-signatures#openai
                         extra_content = tool_call.get("extra_content")
                         if not extra_content:
                             continue
 
-                        tool_call_id = tool_call.get("id", "")
                         if not tool_call_id or not self._kv_repo:
                             continue
 
@@ -173,20 +203,32 @@ class ProtocolConversionHooks:
         self, supplier_body: dict[str, Any]
     ) -> None:
         """
-        Cache extra_content from tool_calls in non-streaming response.
-
-        For non-streaming responses, extract extra_content from tool_calls
-        and store in KV cache for later injection into subsequent requests.
+        Cache extra_content and reasoning_content from tool_calls in non-streaming response.
         """
         choices = supplier_body.get("choices", [])
         for choice in choices:
-            for tool_call in choice.get("message", {}).get("tool_calls", []):
-                extra_content = tool_call.get("extra_content")
-                if not extra_content:
-                    continue
+            message = choice.get("message", {})
+            reasoning_content = message.get("reasoning_content")
 
+            for tool_call in message.get("tool_calls", []):
                 tool_call_id = tool_call.get("id", "")
                 if not tool_call_id:
+                    continue
+
+                if reasoning_content and self._kv_repo:
+                    cache_key = f"tool_call_reasoning:{tool_call_id}"
+                    try:
+                        await self._kv_repo.set(
+                            cache_key,
+                            reasoning_content,
+                            ttl_seconds=TOOL_CALL_EXTRA_CONTENT_TTL,
+                        )
+                        logger.info(f"Cached reasoning_content (non-stream): id={tool_call_id}")
+                    except Exception as e:
+                        logger.warning(f"Error caching reasoning_content for {tool_call_id}: {e}")
+
+                extra_content = tool_call.get("extra_content")
+                if not extra_content:
                     continue
 
                 cache_key = f"tool_call_extra:{tool_call_id}"
@@ -204,14 +246,11 @@ class ProtocolConversionHooks:
                         f"Error caching extra_content for tool_call {tool_call_id}: {e}"
                     )
 
-    async def _inject_tool_call_extra_content(
+    async def _inject_cached_content(
         self, supplier_body: dict[str, Any]
     ) -> None:
         """
-        Inject extra_content from KV store into tool_calls in messages.
-
-        For openai protocol, look up cached extra_content by tool_call_id
-        and insert it into the corresponding tool_call.
+        Inject cached extra_content and reasoning_content from KV store into messages.
         """
         messages = supplier_body.get("messages", [])
         for message in messages:
@@ -219,6 +258,36 @@ class ProtocolConversionHooks:
                 continue
 
             tool_calls = message.get("tool_calls", [])
+            
+            # Inject reasoning_content if missing
+            if tool_calls and not message.get("reasoning_content"):
+                for tool_call in tool_calls:
+                    tool_call_id = tool_call.get("id", "")
+                    if not tool_call_id or not self._kv_repo:
+                        continue
+
+                    reasoning_content = None
+                    try:
+                        # 1. Direct fetch
+                        cached = await self._kv_repo.get(f"tool_call_reasoning:{tool_call_id}")
+                        if cached:
+                            reasoning_content = cached.value
+                        else:
+                            # 2. Indirect fetch (from stream)
+                            link_cached = await self._kv_repo.get(f"tool_call_chat_id:{tool_call_id}")
+                            if link_cached:
+                                chat_id = link_cached.value
+                                content_cached = await self._kv_repo.get(f"chat_reasoning:{chat_id}")
+                                if content_cached:
+                                    reasoning_content = content_cached.value
+                    except Exception as e:
+                        logger.warning(f"Error retrieving reasoning_content for {tool_call_id}: {e}")
+
+                    if reasoning_content:
+                        message["reasoning_content"] = reasoning_content
+                        logger.info(f"Injected reasoning_content for message with tool_call: id={tool_call_id}")
+                        break
+
             for tool_call in tool_calls:
                 tool_call_id = tool_call.get("id", "")
                 if not tool_call_id:
