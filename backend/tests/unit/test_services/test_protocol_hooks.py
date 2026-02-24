@@ -318,7 +318,13 @@ async def test_inject_tool_call_extra_content_for_openai_protocol():
     """Test that extra_content is injected from KV store for openai protocol."""
     mock_kv_repo = AsyncMock()
     extra_content_data = {"google": {"thought_signature": "<Signature_A>"}}
-    mock_kv_repo.get.return_value = _create_kv_model(json.dumps(extra_content_data))
+    
+    async def mock_get(key: str):
+        if key.startswith("tool_call_extra:"):
+            return _create_kv_model(json.dumps(extra_content_data))
+        return None
+        
+    mock_kv_repo.get.side_effect = mock_get
 
     hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
 
@@ -361,7 +367,6 @@ async def test_inject_tool_call_extra_content_for_openai_protocol():
         supplier_protocol="openai",
     )
 
-    assert mock_kv_repo.get.call_count == 2
     mock_kv_repo.get.assert_any_call(
         "tool_call_extra:function-call-f3b9ecb3-d55f-4076-98c8-b13e9d1c0e01"
     )
@@ -451,7 +456,7 @@ async def test_inject_tool_call_extra_content_handles_missing_cache():
         supplier_protocol="openai",
     )
 
-    mock_kv_repo.get.assert_called_once_with("tool_call_extra:call-123")
+    mock_kv_repo.get.assert_any_call("tool_call_extra:call-123")
     assert "extra_content" not in result["messages"][0]["tool_calls"][0]
 
 

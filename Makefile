@@ -15,4 +15,7 @@ start-backend:
 start-frontend:
 	cd frontend && npm install && npm run dev
 
-.PHONY: start-backend start-frontend test test-backend
+dev:
+	./start-dev.sh
+
+.PHONY: start-backend start-frontend test test-backend dev
