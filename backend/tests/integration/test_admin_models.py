@@ -137,6 +137,61 @@ async def test_admin_bulk_upgrade_model_providers(db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_admin_create_model_provider_allows_null_cache_billing_enabled(
+    db_session, monkeypatch
+):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        provider_resp = await ac.post(
+            "/api/admin/providers",
+            json={
+                "name": "null-cache-billing-provider",
+                "base_url": "https://example.com",
+                "protocol": "openai",
+                "api_type": "chat",
+                "is_active": True,
+            },
+        )
+        assert provider_resp.status_code == 201, provider_resp.text
+        provider_id = provider_resp.json()["id"]
+
+        model_resp = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "null-cache-billing-model",
+                "strategy": "round_robin",
+                "is_active": True,
+            },
+        )
+        assert model_resp.status_code == 201, model_resp.text
+
+        create_mapping_resp = await ac.post(
+            "/api/admin/model-providers",
+            json={
+                "requested_model": "null-cache-billing-model",
+                "provider_id": provider_id,
+                "target_model_name": "qwen3-max",
+                "priority": 0,
+                "weight": 1,
+                "is_active": True,
+                "billing_mode": "inherit_model_default",
+                "cache_billing_enabled": None,
+            },
+        )
+        assert create_mapping_resp.status_code == 201, create_mapping_resp.text
+        payload = create_mapping_resp.json()
+        assert payload["cache_billing_enabled"] is False
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
 async def test_admin_match_model_includes_multiple_mappings_for_same_provider(
     db_session, monkeypatch
 ):
