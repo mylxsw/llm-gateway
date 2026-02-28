@@ -1,12 +1,24 @@
+# Development Docker Compose Configuration
+#
+# Required environment variables (create .env file or export them):
+#   - POSTGRES_PASSWORD: PostgreSQL password (required for security)
+#   - REDIS_PASSWORD: Redis password (optional, recommended for production-like testing)
+#   - ADMIN_USERNAME: Admin login username (optional)
+#   - ADMIN_PASSWORD: Admin login password (optional)
+#
+# Example .env file:
+#   POSTGRES_PASSWORD=your_secure_password_here
+#   REDIS_PASSWORD=your_redis_password_here
+#   ADMIN_USERNAME=admin
+#   ADMIN_PASSWORD=your_admin_password_here
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-llm_gateway}
       POSTGRES_USER: ${POSTGRES_USER:-llm_gateway}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-llm_gateway_password}
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +30,16 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: >
+      sh -c '
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          redis-server --requirepass "$$REDIS_PASSWORD"
+        else
+          redis-server
+        fi
+      '
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -42,11 +64,12 @@ services:
     environment:
       DEBUG: ${DEBUG:-false}
       DATABASE_TYPE: ${DATABASE_TYPE:-postgresql}
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://llm_gateway:llm_gateway_password@postgres:5432/llm_gateway}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-llm_gateway}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-llm_gateway}
+      REDIS_URL: ${REDIS_URL:-${REDIS_PASSWORD:+redis://:${REDIS_PASSWORD}@}redis:6379}
       KV_STORE_TYPE: ${KV_STORE_TYPE:-redis}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     volumes:
       - ./data:/data
     restart: unless-stopped

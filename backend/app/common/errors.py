@@ -4,7 +4,11 @@ Error Definitions
 Defines custom exception classes used in the application for unified error handling.
 """
 
+import logging
+import traceback
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
@@ -39,10 +43,13 @@ class AppError(Exception):
         self.details = details or {}
         self.status_code = status_code
     
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, include_details: bool = True) -> dict[str, Any]:
         """
         Convert to dictionary format (for API response)
-        
+
+        Args:
+            include_details: Whether to include details in response
+
         Returns:
             dict: Error information dictionary
         """
@@ -53,9 +60,38 @@ class AppError(Exception):
                 "code": self.code,
             }
         }
-        if self.details:
+        if include_details and self.details:
             result["error"]["details"] = self.details
         return result
+
+
+class InternalError(AppError):
+    """
+    Internal Server Error
+
+    Raised when an unexpected error occurs. Details are logged but not exposed to users.
+    """
+
+    def __init__(
+        self,
+        message: str = "Internal server error",
+        detail: Optional[str] = None,
+        code: str = "internal_error",
+    ):
+        # Log the detail for debugging
+        if detail:
+            logger.error("Internal error detail: %s", detail)
+
+        super().__init__(
+            message=message,
+            error_type="internal_error",
+            code=code,
+            details=None,  # Never expose internal details
+            status_code=500,
+        )
+        # Override details to ensure it's None, not {}
+        self.details = None
+        self._internal_detail = detail  # Store for logging purposes only
 
 
 class AuthenticationError(AppError):

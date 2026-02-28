@@ -9,6 +9,7 @@ Defines all database table structures for the system, including:
 - request_logs: Request Logs Table
 """
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -25,7 +26,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from app.common.encryption import decrypt, encrypt, is_encrypted
 from app.common.time import utc_now_naive
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -36,11 +40,11 @@ class Base(DeclarativeBase):
 class ServiceProvider(Base):
     """
     Service Providers Table
-    
+
     Stores configuration for upstream LLM providers, including base URL, protocol type, etc.
     """
     __tablename__ = "service_providers"
-    
+
     # Primary Key ID
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     # Provider Name, unique
@@ -53,8 +57,8 @@ class ServiceProvider(Base):
     protocol: Mapped[str] = mapped_column(String(50), nullable=False)
     # API Type: chat / completion / embedding (deprecated)
     api_type: Mapped[str] = mapped_column(String(50), nullable=False, default="chat")
-    # Provider API Key (Encrypted storage recommended)
-    api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Provider API Key (Encrypted storage)
+    _api_key: Mapped[Optional[str]] = mapped_column("api_key", Text, nullable=True)
     # Extra Headers (JSON format)
     extra_headers: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Provider Options (JSON format)
@@ -73,11 +77,46 @@ class ServiceProvider(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, onupdate=utc_now_naive, nullable=False
     )
-    
+
     # Relationship: Model mappings under this provider
     model_mappings: Mapped[list["ModelMappingProvider"]] = relationship(
         "ModelMappingProvider", back_populates="provider"
     )
+
+    @property
+    def api_key(self) -> Optional[str]:
+        """
+        Get API key (automatically decrypts if encrypted)
+
+        Returns:
+            Optional[str]: Decrypted API key or None
+        """
+        if self._api_key is None:
+            return None
+        try:
+            return decrypt(self._api_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt API key for provider {self.id}: {e}")
+            # Return the raw value for backward compatibility
+            # This handles cases where the key might not be encrypted yet
+            return self._api_key
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]) -> None:
+        """
+        Set API key (automatically encrypts before storage)
+
+        Args:
+            value: Plain text API key to encrypt and store
+        """
+        if value is None or value == "":
+            self._api_key = None
+        elif is_encrypted(value):
+            # Already encrypted, store as-is
+            self._api_key = value
+        else:
+            # Encrypt before storing
+            self._api_key = encrypt(value)
 
 
 class ModelMapping(Base):
