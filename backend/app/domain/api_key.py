@@ -4,17 +4,34 @@ API Key Domain Model
 Defines API Key related Data Transfer Objects (DTOs).
 """
 
+import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ApiKeyBase(BaseModel):
     """API Key Base Model"""
-    
+
     # Key Name
     key_name: str = Field(..., min_length=1, max_length=100, description="Key Name")
+
+    @field_validator("key_name")
+    @classmethod
+    def validate_key_name(cls, v: str) -> str:
+        """Validate key_name to prevent injection attacks"""
+        # Trim whitespace
+        v = v.strip()
+        if not v:
+            raise ValueError("key_name cannot be empty or whitespace only")
+        # Check for potentially dangerous characters
+        # Allow alphanumeric, underscores, hyphens, spaces, and common CJK characters
+        if not re.match(r"^[\w\s\-\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]+$", v):
+            raise ValueError(
+                "key_name can only contain letters, numbers, underscores, hyphens, spaces, and CJK characters"
+            )
+        return v
 
 
 class ApiKeyCreate(ApiKeyBase):

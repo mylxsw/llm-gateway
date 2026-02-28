@@ -4,7 +4,9 @@ LLM Gateway Application Entry Point
 FastAPI application main entry, including router registration and application configuration.
 """
 
+import logging
 import os
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,7 +24,10 @@ from app.config import get_settings
 from app.db.redis import close_redis, init_redis
 from app.db.session import init_db
 from app.logging_config import setup_logging
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.scheduler import shutdown_scheduler, start_scheduler
+
+logger = logging.getLogger(__name__)
 
 # Initialize logging configuration
 setup_logging()
@@ -67,13 +72,29 @@ app = FastAPI(
 )
 
 # Configure CORS
+# Parse ALLOWED_ORIGINS from comma-separated string to list
+allowed_origins_str = settings.ALLOWED_ORIGINS.strip()
+if allowed_origins_str:
+    allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+else:
+    # In development mode with DEBUG=True, allow localhost origins
+    # In production, empty list means no CORS
+    if settings.DEBUG:
+        allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    else:
+        allowed_origins = []
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Should restrict specific domains in production
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add Rate Limit Middleware (should be added after CORS)
+app.add_middleware(RateLimitMiddleware)
+logger.info(f"Rate limiting enabled: {settings.RATE_LIMIT_ENABLED}")
 
 
 # Global Exception Handler
@@ -81,10 +102,15 @@ app.add_middleware(
 async def app_error_handler(request: Request, exc: AppError):
     """
     Handle application custom exceptions
+
+    In production mode, error details are hidden to prevent information leakage.
     """
+    settings = get_settings()
+    # Hide details in production mode
+    include_details = settings.DEBUG
     return JSONResponse(
         status_code=exc.status_code,
-        content=exc.to_dict(),
+        content=exc.to_dict(include_details=include_details),
     )
 
 
@@ -92,7 +118,33 @@ async def app_error_handler(request: Request, exc: AppError):
 async def general_exception_handler(request: Request, exc: Exception):
     """
     Handle uncaught exceptions
+
+    In production mode, stack traces and error details are logged but not returned to clients.
     """
+    settings = get_settings()
+    # Log the full error for debugging
+    logger.error(
+        "Uncaught exception: %s\nPath: %s\nTraceback:\n%s",
+        str(exc),
+        request.url.path,
+        traceback.format_exc(),
+    )
+
+    # In debug mode, return detailed error information
+    if settings.DEBUG:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "message": str(exc),
+                    "type": type(exc).__name__,
+                    "code": "internal_error",
+                    "traceback": traceback.format_exc().split("\n"),
+                }
+            },
+        )
+
+    # In production, return generic error message
     return JSONResponse(
         status_code=500,
         content={

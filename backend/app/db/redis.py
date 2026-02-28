@@ -6,7 +6,9 @@ Only used when KV_STORE_TYPE is set to "redis".
 """
 
 import logging
+import warnings
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 try:
     from redis.asyncio import Redis
@@ -19,6 +21,34 @@ logger = logging.getLogger(__name__)
 
 # Global Redis client instance
 _redis_client: Optional[Any] = None
+
+
+def _check_redis_security(redis_url: str) -> None:
+    """
+    Check Redis connection security.
+
+    Warns if Redis URL has no password and is not a localhost connection.
+    """
+    parsed = urlparse(redis_url)
+
+    # Check if password is present in URL
+    has_password = bool(parsed.password)
+
+    # Check if connecting to localhost
+    is_localhost = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+
+    if not has_password and not is_localhost:
+        warnings.warn(
+            "SECURITY WARNING: Redis connection has no password and is not connecting to localhost. "
+            "This is insecure for production environments. "
+            "Please set a password in REDIS_URL using the format: redis://:password@host:port/db",
+            UserWarning,
+            stacklevel=3,
+        )
+        logger.warning(
+            "Redis connection without password to non-localhost host detected. "
+            "Consider adding password authentication for production."
+        )
 
 
 async def init_redis() -> None:
@@ -41,6 +71,10 @@ async def init_redis() -> None:
         )
 
     settings = get_settings()
+
+    # Security check for Redis connection
+    _check_redis_security(settings.REDIS_URL)
+
     _redis_client = Redis.from_url(
         settings.REDIS_URL,
         decode_responses=True,

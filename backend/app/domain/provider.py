@@ -4,17 +4,21 @@ Provider Domain Model
 Defines Provider related Data Transfer Objects (DTOs).
 """
 
+import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.common.provider_protocols import FRONTEND_PROTOCOL_PATTERN
+from app.common.url_validator import validate_provider_url_loose
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderBase(BaseModel):
     """Provider Base Model"""
-    
+
     # Provider Name
     name: str = Field(..., min_length=1, max_length=100, description="Provider Name")
     # Remark
@@ -35,6 +39,16 @@ class ProviderBase(BaseModel):
     proxy_enabled: bool = Field(False, description="Proxy Enabled")
     # Proxy URL (schema://auth@host:port)
     proxy_url: Optional[str] = Field(None, description="Proxy URL")
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        """Validate base_url to prevent SSRF"""
+        try:
+            return validate_provider_url_loose(v)
+        except Exception as e:
+            logger.warning("Provider base_url validation failed: %s", str(e))
+            raise ValueError(f"Invalid base_url: {str(e)}")
 
 
 class ProviderCreate(ProviderBase):
