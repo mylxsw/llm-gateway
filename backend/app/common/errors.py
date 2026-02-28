@@ -89,6 +89,8 @@ class InternalError(AppError):
             details=None,  # Never expose internal details
             status_code=500,
         )
+        # Override details to ensure it's None, not {}
+        self.details = None
         self._internal_detail = detail  # Store for logging purposes only
 
 
