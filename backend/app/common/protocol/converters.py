@@ -466,15 +466,21 @@ def _openai_content_to_gemini_parts(content: Any) -> list[Dict[str, Any]]:
 def _clean_gemini_schema(schema: Any) -> Any:
     """Recursively remove unsupported keys from JSON schema for Gemini API."""
     if isinstance(schema, list):
-        return [_clean_gemini_schema(item) for item in schema]
+        cleaned_list = [_clean_gemini_schema(item) for item in schema]
+        return [item for item in cleaned_list if item not in (None, {}, [], ())]
     if not isinstance(schema, dict):
         return schema
-    
+
     cleaned = {}
     for k, v in schema.items():
         if k in ("patternProperties", "additionalProperties"):
             continue
-        cleaned[k] = _clean_gemini_schema(v)
+        cleaned_value = _clean_gemini_schema(v)
+        if k == "required" and cleaned_value == []:
+            continue
+        if cleaned_value in (None, {}, [], ()):
+            continue
+        cleaned[k] = cleaned_value
     return cleaned
 
 
@@ -498,7 +504,11 @@ def _openai_tools_to_gemini_tools(tools: Any) -> Optional[list[Dict[str, Any]]]:
             decl["description"] = fn["description"]
         params = fn.get("parameters")
         if isinstance(params, dict):
-            decl["parameters"] = _clean_gemini_schema(params)
+            cleaned_params = _clean_gemini_schema(params)
+            if cleaned_params.get("properties"):
+                decl["parameters"] = cleaned_params
+            elif cleaned_params.get("type") and len(cleaned_params) > 1:
+                decl["parameters"] = cleaned_params
         declarations.append(decl)
 
     if not declarations:
@@ -549,6 +559,7 @@ def _openai_chat_to_gemini_request(
 
     contents: list[Dict[str, Any]] = []
     system_parts: list[Dict[str, Any]] = []
+    tool_call_names: dict[str, str] = {}
 
     for msg in messages:
         if not isinstance(msg, dict):
@@ -584,7 +595,8 @@ def _openai_chat_to_gemini_request(
                     call_id = tc.get("id")
                     if call_id:
                         fc_payload["id"] = call_id
-                        
+                        tool_call_names[str(call_id)] = name
+
                     part: Dict[str, Any] = {"functionCall": fc_payload}
                     extra_content = tc.get("extra_content")
                     if isinstance(extra_content, dict):
@@ -596,7 +608,12 @@ def _openai_chat_to_gemini_request(
                     parts.append(part)
 
         if role == "tool":
-            response_name = msg.get("name") or "tool"
+            tool_call_id = msg.get("tool_call_id")
+            response_name = (
+                msg.get("name")
+                or (tool_call_names.get(str(tool_call_id)) if tool_call_id else None)
+                or "tool"
+            )
             tool_payload: Any = msg.get("content")
             if isinstance(tool_payload, str):
                 tool_payload = _safe_json_loads(tool_payload)
@@ -604,7 +621,6 @@ def _openai_chat_to_gemini_request(
                 "name": response_name,
                 "response": {"content": tool_payload},
             }
-            tool_call_id = msg.get("tool_call_id")
             if tool_call_id:
                 tool_response["id"] = tool_call_id
             parts.append(

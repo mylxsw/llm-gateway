@@ -1035,6 +1035,75 @@ def test_convert_request_openai_to_gemini_chat():
     assert out_body["generationConfig"]["maxOutputTokens"] == 64
 
 
+def test_convert_request_openai_to_gemini_preserves_tool_response_name():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/chat/completions",
+        body={
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "user", "content": "Run ls"},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_123",
+                            "type": "function",
+                            "function": {
+                                "name": "exec",
+                                "arguments": "{\"command\":\"ls\"}",
+                            },
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "call_123",
+                    "content": "file-a\nfile-b",
+                },
+            ],
+        },
+        target_model="gemini-2.0-flash",
+    )
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    assert out_body["contents"][1]["role"] == "model"
+    assert out_body["contents"][1]["parts"][0]["functionCall"]["name"] == "exec"
+    assert out_body["contents"][2]["role"] == "user"
+    assert (
+        out_body["contents"][2]["parts"][0]["functionResponse"]["name"] == "exec"
+    )
+    assert out_body["contents"][2]["parts"][0]["functionResponse"]["id"] == "call_123"
+
+
+def test_convert_request_openai_to_gemini_omits_empty_tool_parameters():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/chat/completions",
+        body={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "List agents"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "agents_list",
+                        "description": "List agents",
+                        "parameters": {"type": "object", "properties": {}, "required": []},
+                    },
+                }
+            ],
+        },
+        target_model="gemini-2.0-flash",
+    )
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    decl = out_body["tools"][0]["functionDeclarations"][0]
+    assert decl["name"] == "agents_list"
+    assert "parameters" not in decl
+
+
 def test_convert_request_openai_completion_to_gemini():
     path, out_body = convert_request_for_supplier(
         request_protocol="openai",
