@@ -10,6 +10,7 @@ from typing import Any, AsyncGenerator, Optional
 
 import httpx
 
+from app.common.upstream_url import build_upstream_url
 from app.common.timer import Timer
 from app.config import get_settings
 from app.providers.base import ProviderClient, ProviderResponse
@@ -65,13 +66,7 @@ class OpenAIClient(ProviderClient):
             ProviderResponse: Provider response
         """
         # Prepare request
-        cleaned_base = base_url.rstrip('/')
-        cleaned_path = path
-        if cleaned_path.startswith('/v1/'):
-            cleaned_path = cleaned_path[3:]
-        elif cleaned_path == '/v1':
-            cleaned_path = ''
-        url = f"{cleaned_base}{cleaned_path}"
+        url = build_upstream_url(base_url, path)
         prepared_body = self._prepare_body(body, target_model)
         multipart = self._split_multipart_body(prepared_body)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
@@ -185,13 +180,7 @@ class OpenAIClient(ProviderClient):
         """
         List available models from OpenAI-compatible provider
         """
-        cleaned_base = base_url.rstrip('/')
-        cleaned_path = "/v1/models"
-        if cleaned_path.startswith('/v1/'):
-            cleaned_path = cleaned_path[3:]
-        elif cleaned_path == '/v1':
-            cleaned_path = ''
-        url = f"{cleaned_base}{cleaned_path}"
+        url = build_upstream_url(base_url, "/v1/models")
         prepared_headers = self._prepare_headers({}, api_key, extra_headers)
 
         logger.debug(
@@ -285,13 +274,7 @@ class OpenAIClient(ProviderClient):
             tuple[bytes, ProviderResponse]: (Data chunk, Response info)
         """
         # Prepare request
-        cleaned_base = base_url.rstrip('/')
-        cleaned_path = path
-        if cleaned_path.startswith('/v1/'):
-            cleaned_path = cleaned_path[3:]
-        elif cleaned_path == '/v1':
-            cleaned_path = ''
-        url = f"{cleaned_base}{cleaned_path}"
+        url = build_upstream_url(base_url, path)
         prepared_body = self._prepare_body(body, target_model)
         multipart = self._split_multipart_body(prepared_body)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
