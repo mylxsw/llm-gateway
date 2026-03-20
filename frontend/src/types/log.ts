@@ -50,6 +50,13 @@ export interface RequestLogDetail extends RequestLog {
   upstream_response_body?: any;
 }
 
+export interface RetryLogResponse {
+  response_status: number;
+  response_body?: unknown;
+  new_log_id?: number | null;
+  trace_id?: string | null;
+}
+
 /** Log Query Params */
 export interface LogQueryParams {
   // Time range

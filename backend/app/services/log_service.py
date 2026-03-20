@@ -72,6 +72,43 @@ class LogService:
                 code="log_not_found",
             )
         return log
+
+    async def get_by_trace_id(self, trace_id: str) -> RequestLogModel:
+        """
+        Get Log Details by trace ID
+
+        Args:
+            trace_id: Request trace ID
+
+        Returns:
+            RequestLogModel: Log details
+
+        Raises:
+            NotFoundError: Log not found
+        """
+        log = await self.repo.get_by_trace_id(trace_id)
+        if not log:
+            raise NotFoundError(
+                message=f"Request log with trace_id {trace_id} not found",
+                code="log_not_found",
+            )
+        return log
+
+    async def find_latest_retry_candidate(
+        self,
+        *,
+        min_id: int,
+        api_key_id: int,
+        request_path: str,
+    ) -> RequestLogModel | None:
+        """
+        Find the latest retry candidate created after the original log.
+        """
+        return await self.repo.find_latest_retry_candidate(
+            min_id=min_id,
+            api_key_id=api_key_id,
+            request_path=request_path,
+        )
     
     async def query(
         self, query: RequestLogQuery

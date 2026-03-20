@@ -4,15 +4,18 @@ Log Query API
 Provides request log query endpoints.
 """
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+import httpx
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from app.api.deps import LogServiceDep, require_admin_auth
-from app.common.errors import AppError
+from app.api.deps import ApiKeyServiceDep, LogServiceDep, require_admin_auth
+from app.common.errors import AppError, ValidationError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
 from app.domain.log import (
@@ -48,6 +51,112 @@ class CleanupResponse(BaseModel):
     """Log Cleanup Response"""
     deleted_count: int
     message: str
+
+
+class RetryLogResponse(BaseModel):
+    """Retry log response payload"""
+
+    response_status: int
+    response_body: object | str | None
+    new_log_id: int | None = None
+    trace_id: str | None = None
+
+
+def _build_retry_headers(
+    log: RequestLogDetailResponse,
+    raw_key: str,
+) -> tuple[dict[str, str], dict[str, str]]:
+    original_headers = log.request_headers or {}
+    sanitized_lower_headers = {
+        str(k).lower(): str(v) for k, v in original_headers.items()
+    }
+
+    retry_headers: dict[str, str] = {}
+    for key, value in original_headers.items():
+        lower_key = str(key).lower()
+        if lower_key in {
+            "authorization",
+            "x-api-key",
+            "api-key",
+            "host",
+            "content-length",
+        }:
+            continue
+        retry_headers[str(key)] = str(value)
+
+    if (
+        log.request_protocol == "anthropic"
+        or "x-api-key" in sanitized_lower_headers
+        or "api-key" in sanitized_lower_headers
+    ):
+        retry_headers["x-api-key"] = raw_key
+    else:
+        retry_headers["Authorization"] = f"Bearer {raw_key}"
+
+    if (
+        "content-type" not in sanitized_lower_headers
+        and "Content-Type" not in retry_headers
+    ):
+        retry_headers["Content-Type"] = "application/json"
+
+    return retry_headers, sanitized_lower_headers
+
+
+def _build_retry_target(
+    log: RequestLogDetailResponse,
+    sanitized_lower_headers: dict[str, str],
+) -> tuple[str, str]:
+    path_with_query = log.request_path or "/"
+    base_url = "http://retry.internal"
+
+    if log.request_url:
+        parsed = urlsplit(log.request_url)
+        if parsed.scheme and parsed.netloc:
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+        if parsed.path:
+            path_with_query = parsed.path
+            if parsed.query:
+                path_with_query = f"{path_with_query}?{parsed.query}"
+        return base_url, path_with_query
+
+    forwarded_proto = sanitized_lower_headers.get("x-forwarded-proto")
+    forwarded_host = sanitized_lower_headers.get("x-forwarded-host")
+    host = sanitized_lower_headers.get("host")
+    origin = sanitized_lower_headers.get("origin")
+    if forwarded_proto and forwarded_host:
+        base_url = f"{forwarded_proto}://{forwarded_host}"
+    elif host:
+        base_url = f"{forwarded_proto or 'http'}://{host}"
+    elif origin:
+        base_url = origin
+    return base_url, path_with_query
+
+
+async def _resolve_retry_log_id(
+    *,
+    log_service,
+    original_log_id: int,
+    api_key_id: int,
+    request_path: str,
+    trace_id: str | None,
+) -> int | None:
+    if trace_id:
+        try:
+            retried_log = await log_service.get_by_trace_id(trace_id)
+            return retried_log.id
+        except AppError:
+            pass
+
+    retry_candidate = await log_service.find_latest_retry_candidate(
+        min_id=original_log_id,
+        api_key_id=api_key_id,
+        request_path=request_path,
+    )
+    return retry_candidate.id if retry_candidate else None
+
+
+def _sse_event(event: str, data: object) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @router.get("/stats", response_model=LogCostStatsResponse)
@@ -223,6 +332,123 @@ async def get_log(
             response_body=try_parse_json_object(log.response_body)
             if log.response_body
             else None,
+        )
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.post("/{log_id}/retry")
+async def retry_log(
+    log_id: int,
+    request: Request,
+    log_service: LogServiceDep,
+    api_key_service: ApiKeyServiceDep,
+):
+    """
+    Replay a previously recorded request through the original proxy controller.
+    """
+    try:
+        log = await log_service.get_by_id(log_id)
+        original_log_id = log.id
+
+        if not log.request_path:
+            raise ValidationError(
+                message="Request path is missing for this log",
+                code="retry_request_path_missing",
+            )
+        if not log.api_key_id:
+            raise ValidationError(
+                message="API key is missing for this log",
+                code="retry_api_key_missing",
+            )
+        if isinstance(log.request_body, dict) and log.request_body.get("_files"):
+            raise ValidationError(
+                message="Multipart requests cannot be retried from logs",
+                code="retry_multipart_unsupported",
+            )
+
+        raw_key = await api_key_service.get_raw_key_value(log.api_key_id)
+        retry_headers, sanitized_lower_headers = _build_retry_headers(log, raw_key)
+        base_url, path_with_query = _build_retry_target(log, sanitized_lower_headers)
+        timeout = httpx.Timeout(300.0, connect=30.0)
+
+        transport = httpx.ASGITransport(app=request.app)
+        method = (log.request_method or "POST").upper()
+
+        if log.is_stream:
+            async def event_stream():
+                trace_id: str | None = None
+                response_status: int | None = None
+                async with httpx.AsyncClient(
+                    transport=transport,
+                    base_url=base_url,
+                    timeout=timeout,
+                ) as client:
+                    async with client.stream(
+                        method=method,
+                        url=path_with_query,
+                        headers=retry_headers,
+                        json=log.request_body,
+                    ) as response:
+                        trace_id = response.headers.get("x-lgw-trace-id")
+                        response_status = response.status_code
+                        yield _sse_event(
+                            "status",
+                            {"response_status": response.status_code},
+                        )
+                        async for chunk in response.aiter_text():
+                            if not chunk:
+                                continue
+                            yield _sse_event("chunk", {"content": chunk})
+
+                new_log_id = await _resolve_retry_log_id(
+                    log_service=log_service,
+                    original_log_id=original_log_id,
+                    api_key_id=log.api_key_id,
+                    request_path=log.request_path,
+                    trace_id=trace_id,
+                )
+                yield _sse_event(
+                    "done",
+                    {
+                        "response_status": response_status,
+                        "new_log_id": new_log_id,
+                        "trace_id": trace_id,
+                    },
+                )
+
+            return StreamingResponse(
+                event_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"},
+            )
+
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url=base_url,
+            timeout=timeout,
+        ) as client:
+            response = await client.request(
+                method=method,
+                url=path_with_query,
+                headers=retry_headers,
+                json=log.request_body,
+            )
+
+        trace_id = response.headers.get("x-lgw-trace-id")
+        new_log_id = await _resolve_retry_log_id(
+            log_service=log_service,
+            original_log_id=original_log_id,
+            api_key_id=log.api_key_id,
+            request_path=log.request_path,
+            trace_id=trace_id,
+        )
+
+        return RetryLogResponse(
+            response_status=response.status_code,
+            response_body=try_parse_json_object(response.text) if response.text else None,
+            new_log_id=new_log_id,
+            trace_id=trace_id,
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)

@@ -24,11 +24,14 @@ import {
   Clock,
   Columns,
   Copy,
+  Loader2,
   Play,
+  RotateCcw,
   Rows,
   Server,
   Shield,
   Terminal,
+  WrapText,
   Waves,
 } from "lucide-react";
 import { RequestLogDetail } from "@/types";
@@ -38,12 +41,13 @@ import {
   formatDuration,
   formatUsd,
 } from "@/lib/utils";
-import { JsonViewer } from "@/components/common/JsonViewer";
+import { ConfirmDialog, JsonViewer } from "@/components/common";
 import {
   StreamJsonViewer,
   isStreamPayload,
 } from "@/components/common/StreamJsonViewer";
 import { useTranslations } from "next-intl";
+import { getStoredAdminToken } from "@/lib/api/client";
 
 interface LogDetailProps {
   /** Log data */
@@ -55,6 +59,8 @@ interface DebugSection {
   language: "json" | "text";
   content: unknown;
 }
+
+const RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 const MAX_DEBUG_FIELD_LENGTH = 200;
 
@@ -147,6 +153,7 @@ function resolveOriginalRequestUrl(
  */
 export function LogDetail({ log }: LogDetailProps) {
   const t = useTranslations("logs");
+  const tc = useTranslations("common");
   const [activeTab, setActiveTab] = useState<
     "request" | "response" | "headers"
   >("request");
@@ -156,6 +163,18 @@ export function LogDetail({ log }: LogDetailProps) {
   const [convertedCurlCopied, setConvertedCurlCopied] = useState(false);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
   const [debugCopied, setDebugCopied] = useState(false);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [retryDialogOpen, setRetryDialogOpen] = useState(false);
+  const [retryWrapLines, setRetryWrapLines] = useState(false);
+  const [retryStreamContent, setRetryStreamContent] = useState("");
+  const [retryLoading, setRetryLoading] = useState(false);
+  const [retryIsStreamingResult, setRetryIsStreamingResult] = useState(false);
+  const [retryResult, setRetryResult] = useState<{
+    response_status: number;
+    response_body?: unknown;
+    new_log_id?: number | null;
+  } | null>(null);
+  const [retryErrorMessage, setRetryErrorMessage] = useState<string | null>(null);
   const [clientOrigin, setClientOrigin] = useState<string | null>(null);
 
   useEffect(() => {
@@ -359,6 +378,123 @@ export function LogDetail({ log }: LogDetailProps) {
     setTimeout(() => setDebugCopied(false), 1500);
   };
 
+  const handleRetryRequest = async () => {
+    if (!log?.id) return;
+    setRetryDialogOpen(true);
+    setRetryWrapLines(false);
+    setRetryStreamContent("");
+    setRetryIsStreamingResult(Boolean(log.is_stream));
+    setRetryResult(null);
+    setRetryErrorMessage(null);
+    setRetryLoading(true);
+
+    try {
+      const token = getStoredAdminToken();
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => {
+        controller.abort();
+      }, RETRY_TIMEOUT_MS);
+      try {
+        const response = await fetch(`/api/admin/logs/${log.id}/retry`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || t("detail.retryFailed"));
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream")) {
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let streamedContent = "";
+          if (!reader) {
+            throw new Error(t("detail.retryFailed"));
+          }
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            let separatorIndex = buffer.indexOf("\n\n");
+            while (separatorIndex >= 0) {
+              const rawEvent = buffer.slice(0, separatorIndex);
+              buffer = buffer.slice(separatorIndex + 2);
+
+              const lines = rawEvent.split(/\r?\n/);
+              const eventType =
+                lines.find((line) => line.startsWith("event:"))?.slice(6).trim() ||
+                "message";
+              const dataPayload = lines
+                .filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim())
+                .join("\n");
+
+              if (dataPayload) {
+                const payload = JSON.parse(dataPayload) as {
+                  content?: string;
+                  response_status?: number;
+                  new_log_id?: number | null;
+                };
+
+                if (eventType === "status") {
+                  setRetryResult((current) => ({
+                    response_status:
+                      payload.response_status ?? current?.response_status ?? 0,
+                    response_body: current?.response_body,
+                    new_log_id: current?.new_log_id,
+                  }));
+                } else if (eventType === "chunk") {
+                  const chunk = payload.content || "";
+                  streamedContent += chunk;
+                  setRetryStreamContent(streamedContent);
+                } else if (eventType === "done") {
+                  setRetryResult({
+                    response_status: payload.response_status ?? 0,
+                    response_body: streamedContent,
+                    new_log_id: payload.new_log_id ?? null,
+                  });
+                }
+              }
+
+              separatorIndex = buffer.indexOf("\n\n");
+            }
+          }
+        } else {
+          const result = await response.json();
+          setRetryIsStreamingResult(false);
+          setRetryResult(result);
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      setRetryErrorMessage(
+        error instanceof Error && error.name === "AbortError"
+          ? t("detail.retryTimeout")
+          : error instanceof Error
+            ? error.message
+            : t("detail.retryFailed"),
+      );
+    } finally {
+      setRetryLoading(false);
+    }
+  };
+
+  const handleOpenRetriedLog = () => {
+    const newLogId = retryResult?.new_log_id;
+    if (!newLogId || typeof window === "undefined") return;
+    const currentLocation = `${window.location.pathname}${window.location.search}`;
+    window.location.href =
+      `/logs/detail?id=${encodeURIComponent(String(newLogId))}` +
+      `&returnTo=${encodeURIComponent(currentLocation)}`;
+  };
+
   const tabButtonClass = (tab: typeof activeTab) =>
     `inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
       activeTab === tab
@@ -374,6 +510,13 @@ export function LogDetail({ log }: LogDetailProps) {
   };
 
   if (!log) return null;
+
+  const retryUnsupported =
+    !log.request_path ||
+    !log.api_key_id ||
+    (typeof log.request_body === "object" &&
+      log.request_body !== null &&
+      "_files" in log.request_body);
 
   return (
     <div className="space-y-6">
@@ -694,6 +837,28 @@ export function LogDetail({ log }: LogDetailProps) {
               variant="outline"
               size="sm"
               className="gap-2"
+              onClick={() => setRetryConfirmOpen(true)}
+              disabled={retryLoading || retryUnsupported}
+              title={retryUnsupported ? t("detail.retryUnsupported") : undefined}
+            >
+              {retryLoading ? (
+                <Loader2
+                  className="h-4 w-4 animate-spin"
+                  suppressHydrationWarning
+                />
+              ) : (
+                <RotateCcw className="h-4 w-4" suppressHydrationWarning />
+              )}
+              <span>
+                {retryLoading
+                  ? t("detail.retryRunning")
+                  : t("detail.retry")}
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
               onClick={() => setDebugDialogOpen(true)}
             >
               <Bug className="h-4 w-4" suppressHydrationWarning />
@@ -1008,6 +1173,117 @@ export function LogDetail({ log }: LogDetailProps) {
                   </code>
                 </pre>
               </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={retryConfirmOpen}
+        onOpenChange={setRetryConfirmOpen}
+        title={t("detail.retryConfirmTitle")}
+        description={t("detail.retryConfirmDescription")}
+        confirmText={t("detail.retryConfirmAction")}
+        onConfirm={() => {
+          setRetryConfirmOpen(false);
+          void handleRetryRequest();
+        }}
+        loading={retryLoading}
+      />
+
+      <Dialog open={retryDialogOpen} onOpenChange={setRetryDialogOpen}>
+        <DialogContent className="w-[min(96vw,1000px)] max-w-none overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-col">
+            <DialogHeader className="pr-8">
+              <DialogTitle>{t("detail.retryDialogTitle")}</DialogTitle>
+              <DialogDescription>
+                {t("detail.retryDialogDescription")}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+              <div className="text-muted-foreground">
+                {t("detail.retryStatus")}
+              </div>
+              <div className="font-medium">
+                {retryResult?.response_status ?? "-"}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium">
+                  {t("detail.retryResult")}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setRetryWrapLines((value) => !value)}
+                >
+                  <WrapText className="h-4 w-4" suppressHydrationWarning />
+                  <span>
+                    {retryWrapLines
+                      ? tc("jsonViewer.noWrap")
+                      : tc("jsonViewer.wrap")}
+                  </span>
+                </Button>
+              </div>
+              {retryErrorMessage ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                  {retryErrorMessage}
+                </div>
+              ) : retryLoading ? (
+                <div className="flex min-h-32 items-center justify-center rounded-lg border bg-muted/30">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      suppressHydrationWarning
+                    />
+                    <span>{t("detail.retryRunning")}</span>
+                  </div>
+                </div>
+              ) : retryIsStreamingResult ? (
+                <div className="min-w-0 max-w-full overflow-hidden rounded-lg border bg-muted/50">
+                  <div
+                    className="max-w-full overflow-x-auto overflow-y-auto p-3 text-sm font-mono"
+                    style={{ maxHeight: "50vh" }}
+                  >
+                    <code
+                      className={
+                        retryWrapLines
+                          ? "block min-w-0 whitespace-pre-wrap break-words"
+                          : "block min-w-max whitespace-pre"
+                      }
+                    >
+                      {retryStreamContent}
+                    </code>
+                  </div>
+                </div>
+              ) : (
+                <JsonViewer
+                  data={retryResult?.response_body ?? {}}
+                  maxHeight="50vh"
+                  wrapLines={retryWrapLines}
+                  onWrapLinesChange={setRetryWrapLines}
+                  showWrapToggle={false}
+                />
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setRetryDialogOpen(false)}
+              >
+                {tc("close")}
+              </Button>
+              <Button
+                onClick={handleOpenRetriedLog}
+                disabled={!retryResult?.new_log_id}
+              >
+                {t("detail.openRetriedLog")}
+              </Button>
             </div>
           </div>
         </DialogContent>

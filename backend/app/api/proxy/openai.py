@@ -18,6 +18,16 @@ from app.common.proxy_headers import sanitize_upstream_response_headers
 router = APIRouter(tags=["Proxy - OpenAI"])
 
 
+def _with_trace_id_header(
+    headers: dict[str, str],
+    trace_id: str | None,
+) -> dict[str, str]:
+    merged = dict(headers)
+    if trace_id:
+        merged["x-lgw-trace-id"] = trace_id
+    return merged
+
+
 @router.get("/v1/models")
 async def list_models(
     api_key: CurrentApiKey,
@@ -86,22 +96,31 @@ async def _handle_proxy_request_with_body(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=sanitize_upstream_response_headers(
-                            initial_response.headers
+                        headers=_with_trace_id_header(
+                            sanitize_upstream_response_headers(
+                                initial_response.headers
+                            ),
+                            log_info.get("trace_id") if log_info else None,
                         ),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=sanitize_upstream_response_headers(
-                        initial_response.headers
+                    headers=_with_trace_id_header(
+                        sanitize_upstream_response_headers(
+                            initial_response.headers
+                        ),
+                        log_info.get("trace_id") if log_info else None,
                     ),
                 )
 
             return StreamingResponse(
                 stream_gen,
                 status_code=initial_response.status_code,
-                headers=sanitize_upstream_response_headers(initial_response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(initial_response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
                 media_type="text/event-stream",
             )
 
@@ -121,12 +140,18 @@ async def _handle_proxy_request_with_body(
             return JSONResponse(
                 content=content,
                 status_code=response.status_code,
-                headers=sanitize_upstream_response_headers(response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
             )
         return Response(
             content=content,
             status_code=response.status_code,
-            headers=sanitize_upstream_response_headers(response.headers),
+            headers=_with_trace_id_header(
+                sanitize_upstream_response_headers(response.headers),
+                log_info.get("trace_id") if log_info else None,
+            ),
         )
 
     except AppError as e:
@@ -389,22 +414,31 @@ async def _handle_proxy_request_openai_responses(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=sanitize_upstream_response_headers(
-                            initial_response.headers
+                        headers=_with_trace_id_header(
+                            sanitize_upstream_response_headers(
+                                initial_response.headers
+                            ),
+                            log_info.get("trace_id") if log_info else None,
                         ),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=sanitize_upstream_response_headers(
-                        initial_response.headers
+                    headers=_with_trace_id_header(
+                        sanitize_upstream_response_headers(
+                            initial_response.headers
+                        ),
+                        log_info.get("trace_id") if log_info else None,
                     ),
                 )
 
             return StreamingResponse(
                 stream_gen,
                 status_code=initial_response.status_code,
-                headers=sanitize_upstream_response_headers(initial_response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(initial_response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
                 media_type="text/event-stream",
             )
 
@@ -424,12 +458,18 @@ async def _handle_proxy_request_openai_responses(
             return JSONResponse(
                 content=content,
                 status_code=response.status_code,
-                headers=sanitize_upstream_response_headers(response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
             )
         return Response(
             content=content,
             status_code=response.status_code,
-            headers=sanitize_upstream_response_headers(response.headers),
+            headers=_with_trace_id_header(
+                sanitize_upstream_response_headers(response.headers),
+                log_info.get("trace_id") if log_info else None,
+            ),
         )
 
     except AppError as e:

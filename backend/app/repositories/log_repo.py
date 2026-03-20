@@ -48,6 +48,40 @@ class LogRepository(ABC):
             RequestLogModel | None: Log model or None
         """
         pass
+
+    @abstractmethod
+    async def get_by_trace_id(self, trace_id: str) -> RequestLogModel | None:
+        """
+        Get Log Details by trace ID
+
+        Args:
+            trace_id: Request trace ID
+
+        Returns:
+            RequestLogModel | None: Log model or None
+        """
+        pass
+
+    @abstractmethod
+    async def find_latest_retry_candidate(
+        self,
+        *,
+        min_id: int,
+        api_key_id: int,
+        request_path: str,
+    ) -> RequestLogModel | None:
+        """
+        Find the latest log created after a given log ID for retry fallback.
+
+        Args:
+            min_id: Lower bound for new log ID
+            api_key_id: API key ID used by the replayed request
+            request_path: Original request path
+
+        Returns:
+            RequestLogModel | None: Candidate log or None
+        """
+        pass
     
     @abstractmethod
     async def query(self, query: RequestLogQuery) -> Tuple[List[RequestLogSummary], int]:

@@ -31,6 +31,12 @@ interface JsonViewerProps {
   className?: string;
   /** Extra action buttons rendered at the start of the toolbar right section */
   extraActions?: React.ReactNode;
+  /** Controlled wrap state */
+  wrapLines?: boolean;
+  /** Controlled wrap change callback */
+  onWrapLinesChange?: (value: boolean) => void;
+  /** Whether to show the built-in wrap toggle */
+  showWrapToggle?: boolean;
 }
 
 /**
@@ -43,12 +49,16 @@ export function JsonViewer({
   maxHeight = "400px",
   className,
   extraActions,
+  wrapLines: controlledWrapLines,
+  onWrapLinesChange,
+  showWrapToggle = true,
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [wrapLines, setWrapLines] = useState(false);
+  const [internalWrapLines, setInternalWrapLines] = useState(false);
   const [useRawView, setUseRawView] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const wrapLines = controlledWrapLines ?? internalWrapLines;
 
   const parsedJson = useMemo(() => {
     if (typeof data !== "string") {
@@ -180,10 +190,19 @@ export function JsonViewer({
     }
   };
 
+  const handleWrapToggle = () => {
+    const nextValue = !wrapLines;
+    if (onWrapLinesChange) {
+      onWrapLinesChange(nextValue);
+      return;
+    }
+    setInternalWrapLines(nextValue);
+  };
+
   return (
-    <div className={cn("relative rounded-md border bg-muted/50", className)}>
+    <div className={cn("relative min-w-0 max-w-full rounded-md border bg-muted/50", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div className="flex min-w-0 items-center justify-between border-b px-3 py-2">
         <button
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -195,13 +214,13 @@ export function JsonViewer({
           )}
           <span>{expanded ? "Collapse" : "Expand"}</span>
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {extraActions}
-          {!showJsonView && (
+          {showWrapToggle && !showJsonView && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setWrapLines((value) => !value)}
+              onClick={handleWrapToggle}
               className="h-7 gap-1 px-2"
             >
               <WrapText className="h-3.5 w-3.5" suppressHydrationWarning />
@@ -247,7 +266,10 @@ export function JsonViewer({
       {expanded && (
         <>
           {showJsonView ? (
-            <div className="overflow-auto p-3 text-sm" style={{ maxHeight }}>
+            <div
+              className="min-w-0 max-w-full overflow-auto p-3 text-sm"
+              style={{ maxHeight }}
+            >
               <ReactJsonView
                 value={jsonValue as Record<string, unknown> | unknown[]}
                 style={isDark ? darkTheme : lightTheme}
@@ -256,14 +278,14 @@ export function JsonViewer({
           ) : (
             <pre
               className={cn(
-                "overflow-auto p-3 text-sm font-mono",
+                "max-w-full overflow-x-auto overflow-y-auto p-3 text-sm font-mono",
                 wrapLines
                   ? "whitespace-pre-wrap break-words"
                   : "whitespace-pre",
               )}
               style={{ maxHeight }}
             >
-              <code>
+              <code className={cn("block max-w-full", wrapLines ? "min-w-0" : "min-w-max")}>
                 {tokens.map((token, index) => (
                   <span
                     key={`${token.type}-${index}`}

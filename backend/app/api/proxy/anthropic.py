@@ -16,6 +16,16 @@ from app.common.proxy_headers import sanitize_upstream_response_headers
 router = APIRouter(tags=["Proxy - Anthropic"])
 
 
+def _with_trace_id_header(
+    headers: dict[str, str],
+    trace_id: str | None,
+) -> dict[str, str]:
+    merged = dict(headers)
+    if trace_id:
+        merged["x-lgw-trace-id"] = trace_id
+    return merged
+
+
 @router.post("/v1/messages")
 async def create_message(
     request: Request,
@@ -55,18 +65,27 @@ async def create_message(
                     return JSONResponse(
                         content=content,
                         status_code=initial_response.status_code,
-                        headers=sanitize_upstream_response_headers(initial_response.headers),
+                        headers=_with_trace_id_header(
+                            sanitize_upstream_response_headers(initial_response.headers),
+                            log_info.get("trace_id") if log_info else None,
+                        ),
                     )
                 return Response(
                     content=content,
                     status_code=initial_response.status_code,
-                    headers=sanitize_upstream_response_headers(initial_response.headers),
+                    headers=_with_trace_id_header(
+                        sanitize_upstream_response_headers(initial_response.headers),
+                        log_info.get("trace_id") if log_info else None,
+                    ),
                 )
             
             return StreamingResponse(
                 stream_gen,
                 status_code=initial_response.status_code,
-                headers=sanitize_upstream_response_headers(initial_response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(initial_response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
                 media_type="text/event-stream",
             )
         else:
@@ -86,12 +105,18 @@ async def create_message(
                 return JSONResponse(
                     content=content,
                     status_code=response.status_code,
-                    headers=sanitize_upstream_response_headers(response.headers),
+                    headers=_with_trace_id_header(
+                        sanitize_upstream_response_headers(response.headers),
+                        log_info.get("trace_id") if log_info else None,
+                    ),
                 )
             return Response(
                 content=content,
                 status_code=response.status_code,
-                headers=sanitize_upstream_response_headers(response.headers),
+                headers=_with_trace_id_header(
+                    sanitize_upstream_response_headers(response.headers),
+                    log_info.get("trace_id") if log_info else None,
+                ),
             )
             
     except AppError as e:

@@ -3,16 +3,18 @@
  * Corresponds to backend /api/admin/logs route
  */
 
-import { get } from './client';
+import { get, post } from './client';
 import {
   RequestLog,
   RequestLogDetail,
   LogQueryParams,
   LogCostStatsResponse,
   PaginatedResponse,
+  RetryLogResponse,
 } from '@/types';
 
 const BASE_URL = '/api/admin/logs';
+const RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Query Request Logs List
@@ -38,6 +40,12 @@ export async function getLogs(
  */
 export async function getLogDetail(id: number): Promise<RequestLogDetail> {
   return get<RequestLogDetail>(`${BASE_URL}/${id}`);
+}
+
+export async function retryLog(id: number): Promise<RetryLogResponse> {
+  return post<RetryLogResponse>(`${BASE_URL}/${id}/retry`, undefined, {
+    timeout: RETRY_TIMEOUT_MS,
+  });
 }
 
 /**

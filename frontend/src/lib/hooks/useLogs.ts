@@ -3,8 +3,8 @@
  * Provides data fetching and caching management
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { getLogs, getLogDetail, getLogCostStats } from '@/lib/api';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { getLogs, getLogDetail, getLogCostStats, retryLog } from '@/lib/api';
 import { LogQueryParams } from '@/types';
 
 /** Query Keys */
@@ -44,5 +44,11 @@ export function useLogCostStats(params?: LogQueryParams) {
     queryKey: QUERY_KEYS.costStats(params),
     queryFn: () => getLogCostStats(params),
     staleTime: 30 * 1000,
+  });
+}
+
+export function useRetryLog() {
+  return useMutation({
+    mutationFn: (id: number) => retryLog(id),
   });
 }

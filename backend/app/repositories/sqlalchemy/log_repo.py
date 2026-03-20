@@ -261,6 +261,40 @@ class SQLAlchemyLogRepository(LogRepository):
         entity = result.unique().scalar_one_or_none()
         return self._to_domain(entity) if entity else None
 
+    async def get_by_trace_id(self, trace_id: str) -> Optional[RequestLogModel]:
+        """Get the latest log by trace ID with full detail."""
+        result = await self.session.execute(
+            select(RequestLogORM)
+            .options(joinedload(RequestLogORM.detail))
+            .where(RequestLogORM.trace_id == trace_id)
+            .order_by(RequestLogORM.id.desc())
+            .limit(1)
+        )
+        entity = result.unique().scalars().first()
+        return self._to_domain(entity) if entity else None
+
+    async def find_latest_retry_candidate(
+        self,
+        *,
+        min_id: int,
+        api_key_id: int,
+        request_path: str,
+    ) -> Optional[RequestLogModel]:
+        """Find the latest log created by a retried request."""
+        result = await self.session.execute(
+            select(RequestLogORM)
+            .options(joinedload(RequestLogORM.detail))
+            .where(
+                RequestLogORM.id > min_id,
+                RequestLogORM.api_key_id == api_key_id,
+                RequestLogORM.request_path == request_path,
+            )
+            .order_by(RequestLogORM.id.desc())
+            .limit(1)
+        )
+        entity = result.unique().scalar_one_or_none()
+        return self._to_domain(entity) if entity else None
+
     async def query(self, query: RequestLogQuery) -> tuple[list[RequestLogSummary], int]:
         """
         Query log list (summary view, no large fields)
