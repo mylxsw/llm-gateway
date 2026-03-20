@@ -1104,6 +1104,120 @@ def test_convert_request_openai_to_gemini_omits_empty_tool_parameters():
     assert "parameters" not in decl
 
 
+def test_convert_request_openai_to_gemini_strips_unsupported_tool_schema_keywords():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/chat/completions",
+        body={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Check tool schemas"}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "exec",
+                        "parameters": {
+                            "type": "object",
+                            "required": ["command"],
+                            "properties": {
+                                "command": {"type": "string"},
+                                "env": {
+                                    "type": "object",
+                                    "patternProperties": {
+                                        "^(.*)$": {"type": "string"}
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "browser",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "fields": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {},
+                                        "additionalProperties": True,
+                                    },
+                                },
+                                "request": {
+                                    "type": "object",
+                                    "properties": {
+                                        "fields": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {},
+                                                "additionalProperties": True,
+                                            },
+                                        }
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ],
+        },
+        target_model="gemini-2.0-flash",
+    )
+
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    tools = out_body["tools"][0]["functionDeclarations"]
+    exec_params = tools[0]["parameters"]
+    browser_params = tools[1]["parameters"]
+
+    assert "patternProperties" not in json.dumps(exec_params)
+    assert "additionalProperties" not in json.dumps(browser_params)
+    assert exec_params["properties"]["env"] == {"type": "object"}
+    assert browser_params["properties"]["fields"]["items"] == {"type": "object"}
+    assert (
+        browser_params["properties"]["request"]["properties"]["fields"]["items"]
+        == {"type": "object"}
+    )
+
+
+def test_convert_request_openai_to_gemini_strips_unsupported_response_schema_keywords():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="gemini",
+        path="/v1/chat/completions",
+        body={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "Return JSON"}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "env": {
+                                "type": "object",
+                                "patternProperties": {
+                                    "^(.*)$": {"type": "string"}
+                                },
+                            }
+                        },
+                    }
+                },
+            },
+        },
+        target_model="gemini-2.0-flash",
+    )
+
+    assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
+    response_schema = out_body["generationConfig"]["responseSchema"]
+    assert "patternProperties" not in json.dumps(response_schema)
+    assert response_schema["properties"]["env"] == {"type": "object"}
+
+
 def test_convert_request_openai_completion_to_gemini():
     path, out_body = convert_request_for_supplier(
         request_protocol="openai",

@@ -484,6 +484,42 @@ def _clean_gemini_schema(schema: Any) -> Any:
     return cleaned
 
 
+def _sanitize_gemini_request_body(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip unsupported schema keywords from Gemini request payloads."""
+    out = copy.deepcopy(body)
+
+    tools = out.get("tools")
+    if isinstance(tools, list):
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            declarations = tool.get("functionDeclarations")
+            if not isinstance(declarations, list):
+                continue
+            for decl in declarations:
+                if not isinstance(decl, dict):
+                    continue
+                params = decl.get("parameters")
+                if isinstance(params, dict):
+                    cleaned_params = _clean_gemini_schema(params)
+                    if cleaned_params:
+                        decl["parameters"] = cleaned_params
+                    else:
+                        decl.pop("parameters", None)
+
+    generation_config = out.get("generationConfig")
+    if isinstance(generation_config, dict):
+        response_schema = generation_config.get("responseSchema")
+        if isinstance(response_schema, dict):
+            cleaned_schema = _clean_gemini_schema(response_schema)
+            if cleaned_schema:
+                generation_config["responseSchema"] = cleaned_schema
+            else:
+                generation_config.pop("responseSchema", None)
+
+    return out
+
+
 def _openai_tools_to_gemini_tools(tools: Any) -> Optional[list[Dict[str, Any]]]:
     if not isinstance(tools, list):
         return None
@@ -697,7 +733,7 @@ def _openai_chat_to_gemini_request(
     stream = bool(body.get("stream"))
     return ConversionResult(
         path=_build_gemini_generate_path(target_model, stream),
-        body=out,
+        body=_sanitize_gemini_request_body(out),
     )
 
 
