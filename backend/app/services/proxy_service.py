@@ -347,6 +347,7 @@ class ProxyService:
         api_key_name: Optional[str],
         request_protocol: str,
         path: str,
+        request_url: Optional[str],
         method: str,
         headers: dict[str, str],
         body: dict[str, Any],
@@ -504,6 +505,7 @@ class ProxyService:
                 trace_id=trace_id,
                 is_stream=False,
                 request_path=path,
+                request_url=request_url,
                 request_method=method,
                 upstream_url=conversion_data.get("upstream_url"),
                 # Protocol conversion fields
@@ -849,6 +851,7 @@ class ProxyService:
             trace_id=trace_id,
             is_stream=False,
             request_path=path,
+            request_url=request_url,
             request_method=method,
             upstream_url=conversion_data.get("upstream_url"),
             # Protocol conversion fields
@@ -889,6 +892,7 @@ class ProxyService:
         api_key_name: Optional[str],
         request_protocol: str,
         path: str,
+        request_url: Optional[str],
         method: str,
         headers: dict[str, str],
         body: dict[str, Any],
@@ -1259,6 +1263,7 @@ class ProxyService:
                 trace_id=trace_id,
                 is_stream=True,
                 request_path=path,
+                request_url=request_url,
                 request_method=method,
                 upstream_url=stream_conversion_data.get("upstream_url"),
                 # Protocol conversion fields
@@ -1474,6 +1479,7 @@ class ProxyService:
                     trace_id=trace_id,
                     is_stream=True,
                     request_path=path,
+                    request_url=request_url,
                     request_method=method,
                     upstream_url=stream_conversion_data.get("upstream_url"),
                     # Protocol conversion fields

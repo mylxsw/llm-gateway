@@ -340,6 +340,8 @@ class RequestLog(Base):
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Request path (e.g., /v1/chat/completions)
     request_path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Original request URL used by the client
+    request_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     # Request HTTP method (e.g., POST)
     request_method: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     # Upstream URL (full URL sent to provider)

@@ -147,6 +147,7 @@ def _run_migrations(sync_conn) -> None:
             "upstream_response_body": "upstream_response_body TEXT",
             "response_headers": "response_headers JSON",
             "request_path": "request_path VARCHAR(200)",
+            "request_url": "request_url VARCHAR(1000)",
             "request_method": "request_method VARCHAR(10)",
             "upstream_url": "upstream_url VARCHAR(500)",
             "cached_input_cost": "cached_input_cost NUMERIC(12,4)",

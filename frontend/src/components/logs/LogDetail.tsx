@@ -5,7 +5,7 @@
 
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +111,37 @@ function renderMarkdownCodeLine(line: string, key: string) {
   );
 }
 
+function resolveOriginalRequestUrl(
+  requestUrl: string | undefined,
+  requestPath: string | undefined,
+  requestHeaders: Record<string, string> | undefined,
+  clientOrigin: string | null,
+) {
+  if (requestUrl) return requestUrl;
+  if (!requestPath) return null;
+
+  const forwardedProto =
+    requestHeaders?.["x-forwarded-proto"] || requestHeaders?.["X-Forwarded-Proto"];
+  const forwardedHost =
+    requestHeaders?.["x-forwarded-host"] || requestHeaders?.["X-Forwarded-Host"];
+  const host = requestHeaders?.host || requestHeaders?.Host;
+  const origin = requestHeaders?.origin || requestHeaders?.Origin;
+
+  const baseUrl =
+    (forwardedProto && forwardedHost && `${forwardedProto}://${forwardedHost}`) ||
+    (host && `${forwardedProto || "http"}://${host}`) ||
+    origin ||
+    clientOrigin;
+
+  if (!baseUrl) return requestPath;
+
+  try {
+    return new URL(requestPath, baseUrl).toString();
+  } catch {
+    return requestPath;
+  }
+}
+
 /**
  * Log Detail Component
  */
@@ -121,9 +152,16 @@ export function LogDetail({ log }: LogDetailProps) {
   >("request");
   const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const [traceCopied, setTraceCopied] = useState(false);
-  const [curlCopied, setCurlCopied] = useState(false);
+  const [originalCurlCopied, setOriginalCurlCopied] = useState(false);
+  const [convertedCurlCopied, setConvertedCurlCopied] = useState(false);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
   const [debugCopied, setDebugCopied] = useState(false);
+  const [clientOrigin, setClientOrigin] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setClientOrigin(window.location.origin);
+  }, []);
 
   const responseStatus = log?.response_status;
   const statusVariant = useMemo<BadgeProps["variant"]>(() => {
@@ -142,6 +180,17 @@ export function LogDetail({ log }: LogDetailProps) {
     if (requestedModel === targetModel) return requestedModel || "-";
     return `${requestedModel || "-"} → ${targetModel || "-"}`;
   }, [log?.requested_model, log?.target_model]);
+
+  const originalRequestUrl = useMemo(
+    () =>
+      resolveOriginalRequestUrl(
+        log?.request_url,
+        log?.request_path,
+        log?.request_headers,
+        clientOrigin,
+      ),
+    [clientOrigin, log?.request_headers, log?.request_path, log?.request_url],
+  );
 
   // Token usage details - only show fields with non-zero values
   const tokenUsageItems = useMemo(() => {
@@ -183,7 +232,25 @@ export function LogDetail({ log }: LogDetailProps) {
     setTimeout(() => setTraceCopied(false), 1500);
   };
 
-  const handleCopyAsCurl = async () => {
+  const handleCopyOriginalAsCurl = async () => {
+    if (!log) return;
+    const method = (log.request_method || "POST").toUpperCase();
+    const url = originalRequestUrl || "<URL>";
+    const body = JSON.stringify(log.request_body || {}, null, 2);
+    const lines = [
+      `curl -X ${method} '${url}'`,
+      `  -H 'Content-Type: application/json'`,
+      `  -H 'Authorization: Bearer YOUR_AUTH_TOKEN'`,
+      `  -d '${body.replace(/'/g, "'\\''")}'`,
+    ];
+    const curl = lines.join(" \\\n");
+    const ok = await copyToClipboard(curl);
+    if (!ok) return;
+    setOriginalCurlCopied(true);
+    setTimeout(() => setOriginalCurlCopied(false), 1500);
+  };
+
+  const handleCopyConvertedAsCurl = async () => {
     if (!log?.converted_request_body) return;
     const method = (log.request_method || "POST").toUpperCase();
     const url = log.upstream_url || "<URL>";
@@ -197,8 +264,8 @@ export function LogDetail({ log }: LogDetailProps) {
     const curl = lines.join(" \\\n");
     const ok = await copyToClipboard(curl);
     if (!ok) return;
-    setCurlCopied(true);
-    setTimeout(() => setCurlCopied(false), 1500);
+    setConvertedCurlCopied(true);
+    setTimeout(() => setConvertedCurlCopied(false), 1500);
   };
 
   const debugSections = useMemo<DebugSection[]>(() => {
@@ -208,7 +275,7 @@ export function LogDetail({ log }: LogDetailProps) {
       {
         title: t("detail.debugSections.userRequestUrl"),
         language: "text",
-        content: `${(log.request_method || "POST").toUpperCase()} ${log.request_path || "-"}`,
+        content: `${(log.request_method || "POST").toUpperCase()} ${originalRequestUrl || "-"}`,
       },
       {
         title: t("detail.debugSections.userRequestBody"),
@@ -261,7 +328,7 @@ export function LogDetail({ log }: LogDetailProps) {
         },
       },
     ];
-  }, [log, t]);
+  }, [log, originalRequestUrl, t]);
 
   const debugMarkdown = useMemo(() => {
     if (!log) return "";
@@ -690,7 +757,7 @@ export function LogDetail({ log }: LogDetailProps) {
                   : "space-y-6"
               }
             >
-              {(log.request_path || log.upstream_url) && (
+              {(log.request_url || log.request_path || log.upstream_url) && (
                 <div
                   className={
                     layout === "horizontal" && log.converted_request_body
@@ -699,7 +766,7 @@ export function LogDetail({ log }: LogDetailProps) {
                   }
                 >
                   <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                    {log.request_path && (
+                    {originalRequestUrl && (
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-muted-foreground shrink-0">
                           {t("detail.requestUrl")}
@@ -710,11 +777,11 @@ export function LogDetail({ log }: LogDetailProps) {
                               {log.request_method}{" "}
                             </span>
                           )}
-                          {log.request_path}
+                          {originalRequestUrl}
                         </code>
                       </div>
                     )}
-                    {log.request_path && log.upstream_url && (
+                    {originalRequestUrl && log.upstream_url && (
                       <ArrowRight
                         className="h-4 w-4 shrink-0 text-muted-foreground"
                         suppressHydrationWarning
@@ -752,6 +819,34 @@ export function LogDetail({ log }: LogDetailProps) {
                 <JsonViewer
                   data={log.request_body}
                   maxHeight={layout === "horizontal" ? "65vh" : "45vh"}
+                  extraActions={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2"
+                      onClick={handleCopyOriginalAsCurl}
+                    >
+                      {originalCurlCopied ? (
+                        <>
+                          <Check
+                            className="h-3.5 w-3.5 text-green-600"
+                            suppressHydrationWarning
+                          />
+                          <span className="text-green-600">
+                            {t("detail.copied")}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Terminal
+                            className="h-3.5 w-3.5"
+                            suppressHydrationWarning
+                          />
+                          <span>{t("detail.copyAsCurl")}</span>
+                        </>
+                      )}
+                    </Button>
+                  }
                 />
               </div>
 
@@ -775,9 +870,9 @@ export function LogDetail({ log }: LogDetailProps) {
                         variant="ghost"
                         size="sm"
                         className="h-7 gap-1 px-2"
-                        onClick={handleCopyAsCurl}
+                        onClick={handleCopyConvertedAsCurl}
                       >
-                        {curlCopied ? (
+                        {convertedCurlCopied ? (
                           <>
                             <Check
                               className="h-3.5 w-3.5 text-green-600"

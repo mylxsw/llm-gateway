@@ -121,6 +121,7 @@ class SQLAlchemyLogRepository(LogRepository):
             converted_request_body=detail.converted_request_body if detail else entity.converted_request_body,
             upstream_response_body=detail.upstream_response_body if detail else entity.upstream_response_body,
             request_path=entity.request_path,
+            request_url=entity.request_url,
             request_method=entity.request_method,
             upstream_url=entity.upstream_url,
         )
@@ -177,6 +178,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_protocol=data.request_protocol,
             supplier_protocol=data.supplier_protocol,
             request_path=data.request_path,
+            request_url=data.request_url,
             request_method=data.request_method,
             upstream_url=data.upstream_url,
             # Large fields NULL on main table (stored in detail table)
@@ -244,6 +246,7 @@ class SQLAlchemyLogRepository(LogRepository):
             converted_request_body=data.converted_request_body,
             upstream_response_body=data.upstream_response_body,
             request_path=entity.request_path,
+            request_url=entity.request_url,
             request_method=entity.request_method,
             upstream_url=entity.upstream_url,
         )

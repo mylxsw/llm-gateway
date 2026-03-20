@@ -82,6 +82,7 @@ class RequestLogCreate(RequestLogBase):
     is_stream: bool = Field(False, description="Is Stream Request")
     # Request path and method
     request_path: Optional[str] = Field(None, description="Request Path")
+    request_url: Optional[str] = Field(None, description="Original Request URL")
     request_method: Optional[str] = Field(None, description="Request HTTP Method")
     # Upstream URL (full URL sent to provider)
     upstream_url: Optional[str] = Field(None, description="Upstream URL")

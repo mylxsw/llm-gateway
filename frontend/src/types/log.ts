@@ -41,6 +41,7 @@ export interface RequestLogDetail extends RequestLog {
   request_protocol?: string;
   supplier_protocol?: string;
   request_path?: string;
+  request_url?: string;
   request_method?: string;
   upstream_url?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
