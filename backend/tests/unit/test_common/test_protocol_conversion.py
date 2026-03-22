@@ -1118,6 +1118,7 @@ def test_convert_request_openai_to_gemini_strips_unsupported_tool_schema_keyword
                     "function": {
                         "name": "exec",
                         "parameters": {
+                            "$schema": "http://json-schema.org/draft-07/schema#",
                             "type": "object",
                             "required": ["command"],
                             "properties": {
@@ -1174,6 +1175,7 @@ def test_convert_request_openai_to_gemini_strips_unsupported_tool_schema_keyword
     exec_params = tools[0]["parameters"]
     browser_params = tools[1]["parameters"]
 
+    assert "$schema" not in exec_params
     assert "patternProperties" not in json.dumps(exec_params)
     assert "additionalProperties" not in json.dumps(browser_params)
     assert exec_params["properties"]["env"] == {"type": "object"}
@@ -1196,6 +1198,7 @@ def test_convert_request_openai_to_gemini_strips_unsupported_response_schema_key
                 "type": "json_schema",
                 "json_schema": {
                     "schema": {
+                        "$schema": "http://json-schema.org/draft-07/schema#",
                         "type": "object",
                         "properties": {
                             "env": {
@@ -1214,6 +1217,7 @@ def test_convert_request_openai_to_gemini_strips_unsupported_response_schema_key
 
     assert path == "/v1beta/models/gemini-2.0-flash:generateContent"
     response_schema = out_body["generationConfig"]["responseSchema"]
+    assert "$schema" not in response_schema
     assert "patternProperties" not in json.dumps(response_schema)
     assert response_schema["properties"]["env"] == {"type": "object"}
 

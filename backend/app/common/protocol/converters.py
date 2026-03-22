@@ -473,7 +473,7 @@ def _clean_gemini_schema(schema: Any) -> Any:
 
     cleaned = {}
     for k, v in schema.items():
-        if k in ("patternProperties", "additionalProperties"):
+        if k in ("patternProperties", "additionalProperties") or k.startswith("$"):
             continue
         cleaned_value = _clean_gemini_schema(v)
         if k == "required" and cleaned_value == []:
