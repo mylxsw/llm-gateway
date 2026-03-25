@@ -10,6 +10,7 @@ from typing import Any, AsyncGenerator, Optional
 
 import httpx
 
+from app.common.protocol import sanitize_gemini_request_body
 from app.common.timer import Timer
 from app.config import get_settings
 from app.providers.base import ProviderClient, ProviderResponse
@@ -91,6 +92,7 @@ class GeminiClient(ProviderClient):
         url = self._build_url(base_url, path)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         prepared_headers["Content-Type"] = "application/json"
+        body = sanitize_gemini_request_body(body)
 
         logger.debug(
             "Gemini Request: method=%s url=%s headers=%s body=%s",
@@ -250,6 +252,7 @@ class GeminiClient(ProviderClient):
         url = self._build_url(base_url, path)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
         prepared_headers["Content-Type"] = "application/json"
+        body = sanitize_gemini_request_body(body)
 
         logger.debug(
             "Gemini Stream Request: method=%s url=%s headers=%s body=%s",

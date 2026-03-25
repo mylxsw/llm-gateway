@@ -69,6 +69,7 @@ from .converters import (
     SDKRequestConverter,
     SDKResponseConverter,
     SDKStreamConverter,
+    sanitize_gemini_request_body,
 )
 
 logger = logging.getLogger(__name__)
@@ -389,6 +390,7 @@ __all__ = [
     "convert_stream",
     "normalize_protocol",
     "reset_registry",
+    "sanitize_gemini_request_body",
     # Types
     "Protocol",
     "ConversionContext",

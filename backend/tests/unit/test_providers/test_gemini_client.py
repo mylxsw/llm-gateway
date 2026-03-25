@@ -51,6 +51,107 @@ async def test_gemini_forward_url_construction():
 
 
 @pytest.mark.asyncio
+async def test_gemini_forward_sanitizes_tool_schema_before_request():
+    client = GeminiClient()
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.request.return_value = MagicMock(
+            status_code=200,
+            headers={},
+            text='{"ok":true}',
+            json=lambda: {"ok": True},
+        )
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        await client.forward(
+            base_url="https://generativelanguage.googleapis.com",
+            api_key="k",
+            path="/v1beta/models/gemini-2.0-flash:generateContent",
+            method="POST",
+            headers={},
+            body={
+                "contents": [{"parts": [{"text": "hi"}]}],
+                "tools": [
+                    {
+                        "functionDeclarations": [
+                            {
+                                "name": "format_final_json_response",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {"content": {"type": "string"}},
+                                    "$schema": "http://json-schema.org/draft-07/schema#",
+                                },
+                            }
+                        ]
+                    }
+                ],
+            },
+            target_model="gemini-2.0-flash",
+        )
+
+        sent_body = mock_client.request.call_args.kwargs["json"]
+        params = sent_body["tools"][0]["functionDeclarations"][0]["parameters"]
+        assert "$schema" not in params
+
+
+@pytest.mark.asyncio
+async def test_gemini_forward_stream_sanitizes_tool_schema_before_request():
+    client = GeminiClient()
+
+    class MockStreamResponse:
+        status_code = 200
+        headers = {}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def aiter_bytes(self):
+            if False:
+                yield b""
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = MagicMock()
+        mock_client.stream.return_value = MockStreamResponse()
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        chunks = []
+        async for chunk, _ in client.forward_stream(
+            base_url="https://generativelanguage.googleapis.com",
+            api_key="k",
+            path="/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse",
+            method="POST",
+            headers={},
+            body={
+                "contents": [{"parts": [{"text": "hi"}]}],
+                "tools": [
+                    {
+                        "functionDeclarations": [
+                            {
+                                "name": "format_final_json_response",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {"content": {"type": "string"}},
+                                    "$schema": "http://json-schema.org/draft-07/schema#",
+                                },
+                            }
+                        ]
+                    }
+                ],
+            },
+            target_model="gemini-2.0-flash",
+        ):
+            chunks.append(chunk)
+
+        sent_body = mock_client.stream.call_args.kwargs["json"]
+        params = sent_body["tools"][0]["functionDeclarations"][0]["parameters"]
+        assert "$schema" not in params
+        assert chunks == []
+
+
+@pytest.mark.asyncio
 async def test_gemini_list_models_path():
     client = GeminiClient()
     with patch("httpx.AsyncClient") as mock_client_cls:

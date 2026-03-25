@@ -473,7 +473,7 @@ def _clean_gemini_schema(schema: Any) -> Any:
 
     cleaned = {}
     for k, v in schema.items():
-        if k in ("patternProperties", "additionalProperties"):
+        if k in ("patternProperties", "additionalProperties") or k.startswith("$"):
             continue
         cleaned_value = _clean_gemini_schema(v)
         if k == "required" and cleaned_value == []:
@@ -484,7 +484,7 @@ def _clean_gemini_schema(schema: Any) -> Any:
     return cleaned
 
 
-def _sanitize_gemini_request_body(body: Dict[str, Any]) -> Dict[str, Any]:
+def sanitize_gemini_request_body(body: Dict[str, Any]) -> Dict[str, Any]:
     """Strip unsupported schema keywords from Gemini request payloads."""
     out = copy.deepcopy(body)
 
@@ -518,6 +518,11 @@ def _sanitize_gemini_request_body(body: Dict[str, Any]) -> Dict[str, Any]:
                 generation_config.pop("responseSchema", None)
 
     return out
+
+
+def _sanitize_gemini_request_body(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Backward-compatible private alias for Gemini request sanitization."""
+    return sanitize_gemini_request_body(body)
 
 
 def _openai_tools_to_gemini_tools(tools: Any) -> Optional[list[Dict[str, Any]]]:
@@ -733,7 +738,7 @@ def _openai_chat_to_gemini_request(
     stream = bool(body.get("stream"))
     return ConversionResult(
         path=_build_gemini_generate_path(target_model, stream),
-        body=_sanitize_gemini_request_body(out),
+        body=sanitize_gemini_request_body(out),
     )
 
 
