@@ -341,6 +341,45 @@ class TestAnthropicClientHeaders:
             assert headers["X-Custom-Header"] == "custom-value"
             assert headers["anthropic-beta"] == "prompt-caching-2024-07-31"
 
+    @pytest.mark.asyncio
+    async def test_minimax_strips_incompatible_headers(self):
+        """Test: MiniMax compatibility endpoint strips Anthropic beta headers."""
+        client = AnthropicClient()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.request.return_value = MagicMock(
+                status_code=200,
+                headers={},
+                text='{"id": "msg_123"}',
+                json=lambda: {"id": "msg_123"},
+            )
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            await client.forward(
+                base_url="https://api.minimaxi.com/anthropic",
+                api_key="sk-ant-test",
+                path="/v1/messages",
+                method="POST",
+                headers={
+                    "anthropic-beta": "interleaved-thinking-2025-05-14",
+                    "anthropic-dangerous-direct-browser-access": "true",
+                    "x-stainless-runtime": "node",
+                    "x-app": "cli",
+                    "accept": "application/json",
+                },
+                body={"model": "claude-3-5-sonnet-20241022", "max_tokens": 1024, "messages": []},
+                target_model="claude-3-5-sonnet-20241022",
+            )
+
+            call_args = mock_client.request.call_args
+            headers = call_args.kwargs["headers"]
+            assert "anthropic-beta" not in headers
+            assert "anthropic-dangerous-direct-browser-access" not in headers
+            assert "x-stainless-runtime" not in headers
+            assert "x-app" not in headers
+            assert headers["accept"] == "application/json"
+
 
 class TestAnthropicClientBody:
     """Test body preparation logic."""
@@ -428,6 +467,54 @@ class TestAnthropicClientBody:
             assert body["stop_sequences"] == ["END"]
             assert body["stream"] is False
             assert body["tools"] == [{"name": "test", "input_schema": {"type": "object"}}]
+
+    @pytest.mark.asyncio
+    async def test_minimax_strips_incompatible_body_fields(self):
+        """Test: MiniMax compatibility endpoint strips unsupported Anthropic fields."""
+        client = AnthropicClient()
+
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.request.return_value = MagicMock(
+                status_code=200,
+                headers={},
+                text='{"id": "msg_123"}',
+                json=lambda: {"id": "msg_123"},
+            )
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            await client.forward(
+                base_url="https://api.minimaxi.com/anthropic",
+                api_key="sk-ant-test",
+                path="/v1/messages",
+                method="POST",
+                headers={},
+                body={
+                    "model": "claude-requested",
+                    "max_tokens": 1024,
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "system": "You are helpful.",
+                    "tools": [{"name": "test", "input_schema": {"type": "object"}}],
+                    "thinking": {"type": "enabled", "budget_tokens": 1000},
+                    "context_management": {"edits": [{"type": "clear_thinking_20251015"}]},
+                    "mcp_servers": [{"name": "context7"}],
+                    "container": {"type": "auto"},
+                    "service_tier": "standard",
+                },
+                target_model="MiniMax-M2.5",
+            )
+
+            call_args = mock_client.request.call_args
+            body = call_args.kwargs["json"]
+            assert body["model"] == "MiniMax-M2.5"
+            assert body["messages"] == [{"role": "user", "content": "Hi"}]
+            assert body["system"] == "You are helpful."
+            assert body["tools"] == [{"name": "test", "input_schema": {"type": "object"}}]
+            assert "thinking" not in body
+            assert "context_management" not in body
+            assert "mcp_servers" not in body
+            assert "container" not in body
+            assert "service_tier" not in body
 
 
 class TestAnthropicClientResponseModes:

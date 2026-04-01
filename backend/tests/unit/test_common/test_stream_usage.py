@@ -53,6 +53,22 @@ def test_anthropic_stream_accumulates_text_and_uses_output_tokens():
     assert result.output_tokens == 9
 
 
+def test_anthropic_stream_counts_thinking_delta_when_usage_missing():
+    acc = StreamUsageAccumulator(protocol="anthropic", model="claude-3")
+    chunks = [
+        b"data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me think.\"}}\r\n\r\n",
+        b"data: [DONE]\r\n\r\n",
+    ]
+    for c in chunks:
+        acc.feed(c)
+
+    result = acc.finalize()
+    assert result.output_text == "Let me think."
+
+    expected = get_token_counter("anthropic").count_tokens("Let me think.", "claude-3")
+    assert result.output_tokens == expected
+
+
 def test_openai_stream_includes_tool_calls_in_output_text():
     acc = StreamUsageAccumulator(protocol="openai", model="gpt-4")
     chunks = [

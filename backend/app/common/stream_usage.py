@@ -256,6 +256,10 @@ class StreamUsageAccumulator:
                 if isinstance(text, str) and text:
                     self._text_parts.append(text)
 
+                thinking = delta.get("thinking")
+                if isinstance(thinking, str) and thinking:
+                    self._text_parts.append(thinking)
+
                 # Handle tool arguments streaming
                 if delta.get("type") == "input_json_delta" and isinstance(index, int):
                     partial_json = delta.get("partial_json")
