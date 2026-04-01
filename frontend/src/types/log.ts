@@ -57,6 +57,23 @@ export interface RetryLogResponse {
   trace_id?: string | null;
 }
 
+export interface LogPlaygroundExecuteRequest {
+  protocol: string;
+  request_path?: string | null;
+  request_headers?: Record<string, string>;
+  request_body?: unknown;
+}
+
+export interface LogPlaygroundExecuteResponse {
+  response_status: number;
+  response_body?: unknown;
+  trace_id?: string | null;
+  provider_name?: string | null;
+  target_model?: string | null;
+  first_byte_delay_ms?: number | null;
+  total_time_ms?: number | null;
+}
+
 /** Log Query Params */
 export interface LogQueryParams {
   // Time range

@@ -31,6 +31,7 @@ import {
   Server,
   Shield,
   Terminal,
+  FlaskConical,
   WrapText,
   Waves,
 } from "lucide-react";
@@ -285,6 +286,14 @@ export function LogDetail({ log }: LogDetailProps) {
     if (!ok) return;
     setConvertedCurlCopied(true);
     setTimeout(() => setConvertedCurlCopied(false), 1500);
+  };
+
+  const handleOpenPlayground = () => {
+    if (!log?.id || typeof window === "undefined") return;
+    const currentLocation = `${window.location.pathname}${window.location.search}`;
+    window.location.href =
+      `/playground?id=${encodeURIComponent(String(log.id))}` +
+      `&returnTo=${encodeURIComponent(currentLocation)}`;
   };
 
   const debugSections = useMemo<DebugSection[]>(() => {
@@ -985,32 +994,46 @@ export function LogDetail({ log }: LogDetailProps) {
                   data={log.request_body}
                   maxHeight={layout === "horizontal" ? "65vh" : "45vh"}
                   extraActions={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 px-2"
-                      onClick={handleCopyOriginalAsCurl}
-                    >
-                      {originalCurlCopied ? (
-                        <>
-                          <Check
-                            className="h-3.5 w-3.5 text-green-600"
-                            suppressHydrationWarning
-                          />
-                          <span className="text-green-600">
-                            {t("detail.copied")}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Terminal
-                            className="h-3.5 w-3.5"
-                            suppressHydrationWarning
-                          />
-                          <span>{t("detail.copyAsCurl")}</span>
-                        </>
-                      )}
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-2"
+                        onClick={handleOpenPlayground}
+                      >
+                        <FlaskConical
+                          className="h-3.5 w-3.5"
+                          suppressHydrationWarning
+                        />
+                        <span>{t("detail.openPlayground")}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-2"
+                        onClick={handleCopyOriginalAsCurl}
+                      >
+                        {originalCurlCopied ? (
+                          <>
+                            <Check
+                              className="h-3.5 w-3.5 text-green-600"
+                              suppressHydrationWarning
+                            />
+                            <span className="text-green-600">
+                              {t("detail.copied")}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Terminal
+                              className="h-3.5 w-3.5"
+                              suppressHydrationWarning
+                            />
+                            <span>{t("detail.copyAsCurl")}</span>
+                          </>
+                        )}
+                      </Button>
+                    </>
                   }
                 />
               </div>

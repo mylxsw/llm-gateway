@@ -11,7 +11,9 @@ import {
   LogCostStatsResponse,
   PaginatedResponse,
   RetryLogResponse,
+  LogPlaygroundExecuteRequest,
 } from '@/types';
+import { getStoredAdminToken } from './client';
 
 const BASE_URL = '/api/admin/logs';
 const RETRY_TIMEOUT_MS = 5 * 60 * 1000;
@@ -45,6 +47,21 @@ export async function getLogDetail(id: number): Promise<RequestLogDetail> {
 export async function retryLog(id: number): Promise<RetryLogResponse> {
   return post<RetryLogResponse>(`${BASE_URL}/${id}/retry`, undefined, {
     timeout: RETRY_TIMEOUT_MS,
+  });
+}
+
+export async function executeLogPlaygroundRequest(
+  id: number,
+  data: LogPlaygroundExecuteRequest
+): Promise<Response> {
+  const token = getStoredAdminToken();
+  return fetch(`${BASE_URL}/${id}/playground`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
   });
 }
 

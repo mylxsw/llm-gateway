@@ -6,7 +6,7 @@ Provides request log query endpoints.
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,7 +14,18 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from app.api.deps import ApiKeyServiceDep, LogServiceDep, require_admin_auth
+from app.api.deps import (
+    ApiKeyServiceDep,
+    LogServiceDep,
+    ProxyServiceDep,
+    require_admin_auth,
+)
+from app.common.provider_protocols import (
+    ANTHROPIC_PROTOCOL,
+    GEMINI_PROTOCOL,
+    OPENAI_RESPONSES_PROTOCOL,
+    resolve_implementation_protocol,
+)
 from app.common.errors import AppError, ValidationError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
@@ -60,6 +71,27 @@ class RetryLogResponse(BaseModel):
     response_body: object | str | None
     new_log_id: int | None = None
     trace_id: str | None = None
+
+
+class PlaygroundExecuteRequest(BaseModel):
+    """Editable playground request payload"""
+
+    protocol: str | None = None
+    request_path: str | None = None
+    request_headers: dict[str, str] | None = None
+    request_body: dict[str, Any] | list[Any] | str | int | float | bool | None = None
+
+
+class PlaygroundExecuteResponse(BaseModel):
+    """Playground execution response payload"""
+
+    response_status: int
+    response_body: object | str | None
+    trace_id: str | None = None
+    provider_name: str | None = None
+    target_model: str | None = None
+    first_byte_delay_ms: int | None = None
+    total_time_ms: int | None = None
 
 
 def _build_retry_headers(
@@ -157,6 +189,197 @@ async def _resolve_retry_log_id(
 
 def _sse_event(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _sanitize_playground_headers(
+    original_headers: dict[str, str] | None,
+    overridden_headers: dict[str, str] | None,
+) -> dict[str, str]:
+    headers = dict(original_headers or {})
+    if overridden_headers is not None:
+        headers = dict(overridden_headers)
+
+    sanitized: dict[str, str] = {}
+    for key, value in headers.items():
+        lower_key = str(key).lower()
+        if lower_key in {"authorization", "x-api-key", "api-key", "host", "content-length"}:
+            continue
+        sanitized[str(key)] = str(value)
+
+    if not any(str(key).lower() == "content-type" for key in sanitized):
+        sanitized["Content-Type"] = "application/json"
+
+    return sanitized
+
+
+def _build_playground_request_path(
+    protocol: str | None,
+    request_body: Any,
+    fallback_path: str | None,
+) -> str:
+    implementation = resolve_implementation_protocol(protocol)
+
+    if implementation == ANTHROPIC_PROTOCOL:
+        return "/v1/messages"
+
+    if implementation == OPENAI_RESPONSES_PROTOCOL:
+        return "/v1/responses"
+
+    if implementation == GEMINI_PROTOCOL:
+        if not isinstance(request_body, dict):
+            raise ValidationError(
+                message="Gemini requests require a JSON object request body",
+                code="playground_gemini_body_invalid",
+            )
+        model = request_body.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValidationError(
+                message="Gemini requests require a model field",
+                code="playground_gemini_model_missing",
+            )
+        is_stream = bool(request_body.get("stream"))
+        action = "streamGenerateContent?alt=sse" if is_stream else "generateContent"
+        return f"/v1beta/models/{model}:{action}"
+
+    return fallback_path or "/v1/chat/completions"
+
+
+def _is_playground_stream(
+    protocol: str | None,
+    request_body: Any,
+    request_path: str,
+) -> bool:
+    implementation = resolve_implementation_protocol(protocol)
+    if implementation == GEMINI_PROTOCOL:
+        return "streamGenerateContent" in request_path or "alt=sse" in request_path
+    return isinstance(request_body, dict) and bool(request_body.get("stream"))
+
+
+@router.post("/{log_id}/playground")
+async def execute_playground_request(
+    log_id: int,
+    data: PlaygroundExecuteRequest,
+    log_service: LogServiceDep,
+    proxy_service: ProxyServiceDep,
+):
+    """
+    Execute a debug request based on an existing log with editable request data.
+    """
+    try:
+        log = await log_service.get_by_id(log_id)
+
+        if not log.api_key_id:
+            raise ValidationError(
+                message="API key is missing for this log",
+                code="playground_api_key_missing",
+            )
+
+        protocol = (data.protocol or log.request_protocol or "openai").strip()
+        request_body = data.request_body
+        request_path = data.request_path or _build_playground_request_path(
+            protocol=protocol,
+            request_body=request_body,
+            fallback_path=log.request_path,
+        )
+        request_headers = _sanitize_playground_headers(
+            log.request_headers,
+            data.request_headers,
+        )
+        method = (log.request_method or "POST").upper()
+        is_stream = _is_playground_stream(protocol, request_body, request_path)
+
+        if is_stream:
+            async def event_stream():
+                initial_response, stream_gen, log_info = await proxy_service.process_request_stream(
+                    api_key_id=log.api_key_id,
+                    api_key_name=log.api_key_name,
+                    request_protocol=protocol,
+                    path=request_path,
+                    request_url=request_path,
+                    method=method,
+                    headers=request_headers,
+                    body=request_body,
+                )
+
+                yield _sse_event(
+                    "status",
+                    {
+                        "response_status": initial_response.status_code,
+                        "trace_id": log_info.get("trace_id") if log_info else None,
+                        "provider_name": log_info.get("provider_name") if log_info else None,
+                        "target_model": log_info.get("target_model") if log_info else None,
+                        "first_byte_delay_ms": initial_response.first_byte_delay_ms,
+                    },
+                )
+
+                if not initial_response.is_success:
+                    yield _sse_event(
+                        "done",
+                        {
+                            "response_status": initial_response.status_code,
+                            "response_body": initial_response.body,
+                            "trace_id": log_info.get("trace_id") if log_info else None,
+                            "provider_name": log_info.get("provider_name") if log_info else None,
+                            "target_model": log_info.get("target_model") if log_info else None,
+                            "first_byte_delay_ms": initial_response.first_byte_delay_ms,
+                            "total_time_ms": initial_response.total_time_ms,
+                        },
+                    )
+                    return
+
+                streamed_content = ""
+                async for chunk in stream_gen:
+                    if isinstance(chunk, bytes):
+                        text_chunk = chunk.decode("utf-8", errors="ignore")
+                    else:
+                        text_chunk = str(chunk)
+                    if not text_chunk:
+                        continue
+                    streamed_content += text_chunk
+                    yield _sse_event("chunk", {"content": text_chunk})
+
+                yield _sse_event(
+                    "done",
+                    {
+                        "response_status": initial_response.status_code,
+                        "response_body": streamed_content,
+                        "trace_id": log_info.get("trace_id") if log_info else None,
+                        "provider_name": log_info.get("provider_name") if log_info else None,
+                        "target_model": log_info.get("target_model") if log_info else None,
+                        "first_byte_delay_ms": initial_response.first_byte_delay_ms,
+                        "total_time_ms": initial_response.total_time_ms,
+                    },
+                )
+
+            return StreamingResponse(
+                event_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"},
+            )
+
+        response, log_info = await proxy_service.process_request(
+            api_key_id=log.api_key_id,
+            api_key_name=log.api_key_name,
+            request_protocol=protocol,
+            path=request_path,
+            request_url=request_path,
+            method=method,
+            headers=request_headers,
+            body=request_body,
+            force_parse_response=True,
+        )
+
+        return PlaygroundExecuteResponse(
+            response_status=response.status_code,
+            response_body=response.body,
+            trace_id=log_info.get("trace_id") if log_info else None,
+            provider_name=log_info.get("provider_name") if log_info else None,
+            target_model=log_info.get("target_model") if log_info else None,
+            first_byte_delay_ms=response.first_byte_delay_ms,
+            total_time_ms=response.total_time_ms,
+        )
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
 @router.get("/stats", response_model=LogCostStatsResponse)
