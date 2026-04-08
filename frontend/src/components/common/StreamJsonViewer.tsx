@@ -16,6 +16,10 @@ import { cn, copyToClipboard } from '@/lib/utils';
 interface StreamJsonViewerProps {
   /** Raw stream text */
   data: unknown;
+  /** Whether to use raw view by default */
+  defaultRawView?: boolean;
+  /** Whether to wrap lines by default */
+  defaultWrapLines?: boolean;
   /** Max height */
   maxHeight?: string;
   /** Custom class name */
@@ -217,11 +221,17 @@ const tokenClassName = (type: TokenType) => {
 /**
  * Stream JSON Viewer Component
  */
-export function StreamJsonViewer({ data, maxHeight = '400px', className }: StreamJsonViewerProps) {
+export function StreamJsonViewer({
+  data,
+  defaultRawView = false,
+  defaultWrapLines = false,
+  maxHeight = '400px',
+  className,
+}: StreamJsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const [wrapLines, setWrapLines] = useState(false);
-  const [useRawView, setUseRawView] = useState(false);
+  const [wrapLines, setWrapLines] = useState(defaultWrapLines);
+  const [useRawView, setUseRawView] = useState(defaultRawView);
   const [isDark, setIsDark] = useState(false);
   const [expandedLines, setExpandedLines] = useState<Record<number, boolean>>({});
 

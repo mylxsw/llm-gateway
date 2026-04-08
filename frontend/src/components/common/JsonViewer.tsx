@@ -23,8 +23,12 @@ import { copyToClipboard, cn } from "@/lib/utils";
 interface JsonViewerProps {
   /** JSON Data */
   data: unknown;
+  /** Whether to use raw view by default */
+  defaultRawView?: boolean;
   /** Whether expanded by default */
   defaultExpanded?: boolean;
+  /** Whether to wrap lines by default */
+  defaultWrapLines?: boolean;
   /** Max height */
   maxHeight?: string;
   /** Custom class name */
@@ -45,7 +49,9 @@ interface JsonViewerProps {
  */
 export function JsonViewer({
   data,
+  defaultRawView = false,
   defaultExpanded = true,
+  defaultWrapLines = false,
   maxHeight = "400px",
   className,
   extraActions,
@@ -55,8 +61,8 @@ export function JsonViewer({
 }: JsonViewerProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const [internalWrapLines, setInternalWrapLines] = useState(false);
-  const [useRawView, setUseRawView] = useState(false);
+  const [internalWrapLines, setInternalWrapLines] = useState(defaultWrapLines);
+  const [useRawView, setUseRawView] = useState(defaultRawView);
   const [isDark, setIsDark] = useState(false);
   const wrapLines = controlledWrapLines ?? internalWrapLines;
 

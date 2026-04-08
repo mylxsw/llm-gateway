@@ -63,6 +63,8 @@ const FALLBACK_PROTOCOLS = [
   { protocol: 'gemini', label: 'Google Gemini', implementation: 'gemini' },
 ];
 
+const DEFAULT_EXPANDED_JSON_DEPTH = 4;
+
 function cloneJsonValue<T>(value: T): T {
   if (value === undefined) {
     return value;
@@ -183,7 +185,7 @@ function JsonNode({
   depth: number;
   onEdit: (path: JsonPath, label: string, value: unknown) => void;
 }) {
-  const [open, setOpen] = useState(depth < 1);
+  const [open, setOpen] = useState(depth <= DEFAULT_EXPANDED_JSON_DEPTH);
   const isContainer = Array.isArray(value) || (!!value && typeof value === 'object');
   const entries = Array.isArray(value)
     ? value.map((item, index) => ({ key: `[${index}]`, pathKey: index, value: item }))

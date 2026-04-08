@@ -513,9 +513,23 @@ export function LogDetail({ log }: LogDetailProps) {
 
   const renderPayloadViewer = (payload: unknown, maxHeight: string) => {
     if (isStreamPayload(payload)) {
-      return <StreamJsonViewer data={payload} maxHeight={maxHeight} />;
+      return (
+        <StreamJsonViewer
+          data={payload}
+          defaultRawView
+          defaultWrapLines
+          maxHeight={maxHeight}
+        />
+      );
     }
-    return <JsonViewer data={payload} maxHeight={maxHeight} />;
+    return (
+      <JsonViewer
+        data={payload}
+        defaultRawView
+        defaultWrapLines
+        maxHeight={maxHeight}
+      />
+    );
   };
 
   if (!log) return null;
@@ -992,6 +1006,8 @@ export function LogDetail({ log }: LogDetailProps) {
                 </div>
                 <JsonViewer
                   data={log.request_body}
+                  defaultRawView
+                  defaultWrapLines
                   maxHeight={layout === "horizontal" ? "65vh" : "45vh"}
                   extraActions={
                     <>
@@ -1052,6 +1068,8 @@ export function LogDetail({ log }: LogDetailProps) {
                   </div>
                   <JsonViewer
                     data={log.converted_request_body}
+                    defaultRawView
+                    defaultWrapLines
                     maxHeight={layout === "horizontal" ? "65vh" : "45vh"}
                     extraActions={
                       <Button
@@ -1139,13 +1157,21 @@ export function LogDetail({ log }: LogDetailProps) {
                 <h3 className="text-sm font-medium">
                   {t("detail.requestHeaders")}
                 </h3>
-                <JsonViewer data={log.request_headers || {}} />
+                <JsonViewer
+                  data={log.request_headers || {}}
+                  defaultRawView
+                  defaultWrapLines
+                />
               </div>
               <div className="space-y-3">
                 <h3 className="text-sm font-medium">
                   {t("detail.responseHeaders")}
                 </h3>
-                <JsonViewer data={log.response_headers || {}} />
+                <JsonViewer
+                  data={log.response_headers || {}}
+                  defaultRawView
+                  defaultWrapLines
+                />
               </div>
             </div>
           )}
