@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
@@ -160,6 +160,7 @@ export function ModelProviderForm({
   const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
   const [providerModels, setProviderModels] = useState<string[]>([]);
   const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
+  const [providerModelSearch, setProviderModelSearch] = useState('');
   const [selectedProviderModel, setSelectedProviderModel] = useState('');
   const [historyLoading, setHistoryLoading] = useState(false);
   const [priceHistoryDialogOpen, setPriceHistoryDialogOpen] = useState(false);
@@ -168,6 +169,15 @@ export function ModelProviderForm({
   );
   const [selectedPriceHistoryId, setSelectedPriceHistoryId] = useState<number | null>(null);
   const providerModelQuery = useProviderModels(Number(providerId), { enabled: false });
+  const filteredProviderModels = useMemo(() => {
+    const keyword = providerModelSearch.trim().toLowerCase();
+    if (!keyword) {
+      return providerModels;
+    }
+    return providerModels.filter((modelName) => modelName.toLowerCase().includes(keyword));
+  }, [providerModelSearch, providerModels]);
+  const canUseSelectedProviderModel =
+    !!selectedProviderModel && filteredProviderModels.includes(selectedProviderModel);
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -292,12 +302,13 @@ export function ModelProviderForm({
     }
     const models = data.models || [];
     setProviderModels(models);
+    setProviderModelSearch('');
     setSelectedProviderModel(models[0] || '');
     setProviderModelDialogOpen(true);
   };
 
   const handleConfirmProviderModel = () => {
-    if (!selectedProviderModel) {
+    if (!canUseSelectedProviderModel) {
       return;
     }
     setValue('target_model_name', selectedProviderModel, {
@@ -732,14 +743,29 @@ export function ModelProviderForm({
             <DialogTitle>{t('providerForm.selectProviderModelTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="provider-model-search">
+                {t('providerForm.providerModelSearch')}
+              </Label>
+              <Input
+                id="provider-model-search"
+                placeholder={t('providerForm.providerModelSearchPlaceholder')}
+                value={providerModelSearch}
+                onChange={(event) => setProviderModelSearch(event.target.value)}
+              />
+            </div>
             <div className="rounded-md border p-2 max-h-64 overflow-y-auto">
               {providerModels.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {t('providerForm.noProviderModels')}
                 </p>
+              ) : filteredProviderModels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('providerForm.noProviderModelsMatched')}
+                </p>
               ) : (
                 <div className="space-y-1">
-                  {providerModels.map((modelName) => {
+                  {filteredProviderModels.map((modelName) => {
                     const isSelected = modelName === selectedProviderModel;
                     return (
                       <button
@@ -771,7 +797,7 @@ export function ModelProviderForm({
             <Button
               type="button"
               onClick={handleConfirmProviderModel}
-              disabled={!selectedProviderModel}
+              disabled={!canUseSelectedProviderModel}
             >
               {t('providerForm.useSelectedModel')}
             </Button>
