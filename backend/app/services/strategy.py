@@ -8,9 +8,10 @@ from abc import ABC, abstractmethod
 from typing import Optional
 import asyncio
 import logging
+from decimal import Decimal
 
 from app.rules.models import CandidateProvider
-from app.common.costs import resolve_billing, calculate_cost_from_billing
+from app.common.costs import resolve_billing, estimate_input_cost_from_billing
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +403,12 @@ class CostFirstStrategy(SelectionStrategy):
         """Initialize Strategy"""
         self._round_robin = RoundRobinStrategy()
 
-    def _calculate_input_cost(self, candidate: CandidateProvider, input_tokens: int, image_count: Optional[int] = None) -> float:
+    def _calculate_input_cost(
+        self,
+        candidate: CandidateProvider,
+        input_tokens: int,
+        image_count: Optional[int] = None,
+    ) -> Decimal:
         """
         Calculate input cost for a candidate provider
 
@@ -431,17 +437,11 @@ class CostFirstStrategy(SelectionStrategy):
             provider_output_price=candidate.output_price,
         )
 
-        # Calculate cost (only input cost, as we're selecting before making the request)
-        cost_breakdown = calculate_cost_from_billing(
+        return estimate_input_cost_from_billing(
             input_tokens=input_tokens,
-            output_tokens=0,  # We don't know output tokens yet
             billing=billing,
             image_count=image_count,
         )
-
-        # For per_request/per_image billing, use the full total_cost
-        # For token-based billing, use only the input_cost
-        return cost_breakdown.total_cost if billing.billing_mode in ("per_request", "per_image") else cost_breakdown.input_cost
 
     async def select(
         self,
@@ -487,7 +487,7 @@ class CostFirstStrategy(SelectionStrategy):
                 )
                 # Assign a high cost to providers with calculation errors
                 # so they're deprioritized but not excluded
-                candidates_with_cost.append((candidate, float('inf')))
+                candidates_with_cost.append((candidate, Decimal("Infinity")))
 
         # Sort by cost (lowest first), then by priority, then by provider_id
         candidates_with_cost.sort(
@@ -506,7 +506,7 @@ class CostFirstStrategy(SelectionStrategy):
         # Use a small epsilon for float comparison if needed, but costs are likely exact or distinctly different
         # Using exact match for now as price configuration is usually precise
         for c, cost in candidates_with_cost:
-            if abs(cost - min_cost) < 1e-9:
+            if cost == min_cost:
                 lowest_cost_candidates.append(c)
             else:
                 break
@@ -583,7 +583,7 @@ class CostFirstStrategy(SelectionStrategy):
                     f"CostFirstStrategy.get_next: Error calculating cost for provider "
                     f"{candidate.provider_name} (ID: {candidate.provider_id}): {e}"
                 )
-                candidates_with_cost.append((candidate, float('inf')))
+                candidates_with_cost.append((candidate, Decimal("Infinity")))
 
         # Sort by cost, then priority, then provider_id
         candidates_with_cost.sort(
