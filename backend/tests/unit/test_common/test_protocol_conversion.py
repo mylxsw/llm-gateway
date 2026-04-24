@@ -1126,9 +1126,14 @@ def test_convert_request_openai_to_gemini_strips_unsupported_tool_schema_keyword
                                 "command": {"type": "string"},
                                 "env": {
                                     "type": "object",
+                                    "propertyNames": {"type": "string"},
                                     "patternProperties": {
                                         "^(.*)$": {"type": "string"}
                                     },
+                                },
+                                "timeout": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
                                 },
                             },
                         },
@@ -1178,8 +1183,11 @@ def test_convert_request_openai_to_gemini_strips_unsupported_tool_schema_keyword
 
     assert "$schema" not in exec_params
     assert "patternProperties" not in json.dumps(exec_params)
+    assert "propertyNames" not in json.dumps(exec_params)
+    assert "exclusiveMinimum" not in json.dumps(exec_params)
     assert "additionalProperties" not in json.dumps(browser_params)
     assert exec_params["properties"]["env"] == {"type": "object"}
+    assert exec_params["properties"]["timeout"] == {"type": "integer"}
     assert browser_params["properties"]["fields"]["items"] == {"type": "object"}
     assert (
         browser_params["properties"]["request"]["properties"]["fields"]["items"]
@@ -1238,8 +1246,10 @@ def test_sanitize_gemini_request_body_is_public_helper():
                                     "env": {
                                         "type": "object",
                                         "additionalProperties": True,
+                                        "propertyNames": {"type": "string"},
                                     }
                                 },
+                                "example": {"env": {"PATH": "/tmp"}},
                             },
                         }
                     ]
@@ -1252,7 +1262,8 @@ def test_sanitize_gemini_request_body_is_public_helper():
                         "env": {
                             "type": "object",
                             "patternProperties": {"^(.*)$": {"type": "string"}},
-                        }
+                        },
+                        "timeout": {"type": "integer", "exclusiveMinimum": 0},
                     },
                 }
             },
@@ -1263,7 +1274,10 @@ def test_sanitize_gemini_request_body_is_public_helper():
     response_schema = out_body["generationConfig"]["responseSchema"]
     assert "$schema" not in params
     assert "additionalProperties" not in json.dumps(params)
+    assert "propertyNames" not in json.dumps(params)
     assert "patternProperties" not in json.dumps(response_schema)
+    assert "exclusiveMinimum" not in json.dumps(response_schema)
+    assert params["example"] == {"env": {"PATH": "/tmp"}}
 
 
 def test_convert_request_openai_completion_to_gemini():

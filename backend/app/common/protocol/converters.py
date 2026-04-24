@@ -471,11 +471,39 @@ def _clean_gemini_schema(schema: Any) -> Any:
     if not isinstance(schema, dict):
         return schema
 
+    unsupported_keys = {
+        "additionalProperties",
+        "allOf",
+        "const",
+        "contains",
+        "contentEncoding",
+        "contentMediaType",
+        "contentSchema",
+        "dependencies",
+        "dependentRequired",
+        "dependentSchemas",
+        "else",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "if",
+        "maxContains",
+        "multipleOf",
+        "not",
+        "patternProperties",
+        "prefixItems",
+        "propertyNames",
+        "then",
+        "unevaluatedItems",
+        "unevaluatedProperties",
+    }
     cleaned = {}
     for k, v in schema.items():
-        if k in ("patternProperties", "additionalProperties") or k.startswith("$"):
+        if k in unsupported_keys or k.startswith("$"):
             continue
-        cleaned_value = _clean_gemini_schema(v)
+        if k in ("default", "example"):
+            cleaned_value = copy.deepcopy(v)
+        else:
+            cleaned_value = _clean_gemini_schema(v)
         if k == "required" and cleaned_value == []:
             continue
         if cleaned_value in (None, {}, [], ()):

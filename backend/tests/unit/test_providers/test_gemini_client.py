@@ -78,7 +78,17 @@ async def test_gemini_forward_sanitizes_tool_schema_before_request():
                                 "name": "format_final_json_response",
                                 "parameters": {
                                     "type": "object",
-                                    "properties": {"content": {"type": "string"}},
+                                    "properties": {
+                                        "content": {"type": "string"},
+                                        "count": {
+                                            "type": "integer",
+                                            "exclusiveMinimum": 0,
+                                        },
+                                        "answers": {
+                                            "type": "object",
+                                            "propertyNames": {"type": "string"},
+                                        },
+                                    },
                                     "$schema": "http://json-schema.org/draft-07/schema#",
                                 },
                             }
@@ -92,6 +102,8 @@ async def test_gemini_forward_sanitizes_tool_schema_before_request():
         sent_body = mock_client.request.call_args.kwargs["json"]
         params = sent_body["tools"][0]["functionDeclarations"][0]["parameters"]
         assert "$schema" not in params
+        assert "exclusiveMinimum" not in str(params)
+        assert "propertyNames" not in str(params)
 
 
 @pytest.mark.asyncio
@@ -133,7 +145,17 @@ async def test_gemini_forward_stream_sanitizes_tool_schema_before_request():
                                 "name": "format_final_json_response",
                                 "parameters": {
                                     "type": "object",
-                                    "properties": {"content": {"type": "string"}},
+                                    "properties": {
+                                        "content": {"type": "string"},
+                                        "count": {
+                                            "type": "integer",
+                                            "exclusiveMinimum": 0,
+                                        },
+                                        "answers": {
+                                            "type": "object",
+                                            "propertyNames": {"type": "string"},
+                                        },
+                                    },
                                     "$schema": "http://json-schema.org/draft-07/schema#",
                                 },
                             }
@@ -148,6 +170,8 @@ async def test_gemini_forward_stream_sanitizes_tool_schema_before_request():
         sent_body = mock_client.stream.call_args.kwargs["json"]
         params = sent_body["tools"][0]["functionDeclarations"][0]["parameters"]
         assert "$schema" not in params
+        assert "exclusiveMinimum" not in str(params)
+        assert "propertyNames" not in str(params)
         assert chunks == []
 
 
