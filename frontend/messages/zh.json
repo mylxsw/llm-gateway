@@ -330,7 +330,8 @@
       "export": "导出",
       "modelTest": "模型测试",
       "matchTest": "匹配测试",
-      "addProvider": "添加供应商"
+      "addProvider": "添加供应商",
+      "prioritize": "优先使用"
     },
     "dialogs": {
       "deleteModelMappingTitle": "删除模型映射",
@@ -437,6 +438,8 @@
       "protocolTitle": "协议：{protocol}",
       "configured": "已配置",
       "providerDisabledTooltip": "当前模型的供应商已禁用",
+      "priorityPromoted": "已将该模型设为最高优先级并重新排序",
+      "priorityPromoteFailed": "更新优先级失败",
       "noProviders": "未配置供应商，点击上方按钮添加",
       "providerStats": "供应商统计（近7天）",
       "avgResponse": "平均响应",

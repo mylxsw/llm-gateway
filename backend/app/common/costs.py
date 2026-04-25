@@ -352,6 +352,30 @@ def calculate_cost_from_billing(
     )
 
 
+def estimate_input_cost_from_billing(
+    *,
+    input_tokens: int | None,
+    billing: ResolvedBilling,
+    image_count: int | None = None,
+) -> Decimal:
+    """
+    Estimate selection cost without accounting rounding.
+
+    This is used by routing strategies to compare candidates. It intentionally keeps
+    higher precision than persisted/request log cost accounting so very small requests
+    do not collapse into the same 4-decimal rounded value.
+    """
+    if billing.billing_mode == BILLING_MODE_PER_REQUEST:
+        return _to_decimal(billing.per_request_price)
+
+    if billing.billing_mode == BILLING_MODE_PER_IMAGE:
+        n = max(int(image_count or 1), 1)
+        return _to_decimal(billing.per_image_price) * Decimal(n)
+
+    in_tokens = int(input_tokens or 0)
+    return (Decimal(in_tokens) / _ONE_MILLION) * _to_decimal(billing.input_price)
+
+
 def calculate_cost(
     *,
     input_tokens: int | None,

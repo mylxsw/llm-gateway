@@ -330,7 +330,8 @@
       "export": "Export",
       "modelTest": "Model Test",
       "matchTest": "Match Test",
-      "addProvider": "Add Provider"
+      "addProvider": "Add Provider",
+      "prioritize": "Prioritize"
     },
     "dialogs": {
       "deleteModelMappingTitle": "Delete Model Mapping",
@@ -437,6 +438,8 @@
       "protocolTitle": "Protocol: {protocol}",
       "configured": "Configured",
       "providerDisabledTooltip": "The provider for this model is currently disabled",
+      "priorityPromoted": "Promoted this model to top priority and reordered priorities",
+      "priorityPromoteFailed": "Failed to update priorities",
       "noProviders": "No providers configured, click button above to add",
       "providerStats": "Provider Stats (Last 7 Days)",
       "avgResponse": "Avg Response",

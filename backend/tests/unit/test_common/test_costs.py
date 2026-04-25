@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from app.common.costs import (
     BILLING_MODE_PER_IMAGE,
     BILLING_MODE_PER_REQUEST,
@@ -6,6 +8,7 @@ from app.common.costs import (
     ResolvedBilling,
     calculate_cost,
     calculate_cost_from_billing,
+    estimate_input_cost_from_billing,
     resolve_billing,
     resolve_price,
 )
@@ -243,6 +246,28 @@ def test_per_image_billing_ignores_tokens():
     assert cost.total_cost == 0.1
     assert cost.input_cost == 0.0
     assert cost.output_cost == 0.0
+
+
+def test_estimate_input_cost_from_billing_keeps_sub_q4_precision():
+    billing = ResolvedBilling(
+        billing_mode=BILLING_MODE_TOKEN_FLAT,
+        price_source="SupplierOverride",
+        input_price=1.0,
+        output_price=0.0,
+    )
+
+    estimate = estimate_input_cost_from_billing(
+        input_tokens=1,
+        billing=billing,
+    )
+    rounded = calculate_cost_from_billing(
+        input_tokens=1,
+        output_tokens=0,
+        billing=billing,
+    )
+
+    assert estimate == Decimal("0.000001")
+    assert rounded.input_cost == 0.0001
 
 
 # ==================== Cached Token Billing Tests ====================

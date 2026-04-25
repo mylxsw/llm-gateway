@@ -400,6 +400,46 @@ class TestCostFirstStrategy:
         selected = await self.strategy.select(tie_candidates, "tie-test-model", input_tokens=1000)
         assert selected.provider_id == first_id
 
+    @pytest.mark.asyncio
+    async def test_select_prefers_true_lower_cost_when_rounded_costs_match(self):
+        """Selection should not treat distinct sub-q4 costs as a tie."""
+        tiny_request_candidates = [
+            CandidateProvider(
+                provider_id=1,
+                provider_name="CheaperProvider",
+                base_url="https://api1.com",
+                protocol="openai",
+                api_key="key1",
+                target_model="model1",
+                priority=1,
+                billing_mode="token_flat",
+                input_price=1.0,
+                output_price=3.0,
+            ),
+            CandidateProvider(
+                provider_id=2,
+                provider_name="PricierProvider",
+                base_url="https://api2.com",
+                protocol="openai",
+                api_key="key2",
+                target_model="model2",
+                priority=2,
+                billing_mode="token_flat",
+                input_price=2.0,
+                output_price=6.0,
+            ),
+        ]
+
+        first = await self.strategy.select(
+            tiny_request_candidates, "tiny-request-model", input_tokens=1
+        )
+        second = await self.strategy.select(
+            tiny_request_candidates, "tiny-request-model", input_tokens=1
+        )
+
+        assert first.provider_id == 1
+        assert second.provider_id == 1
+
 
 class TestPriorityStrategy:
     """Priority Strategy Tests"""
