@@ -293,10 +293,8 @@ class RequestLog(Base):
     requested_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Target Model Name (Actually forwarded model)
     target_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # Provider ID
-    provider_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("service_providers.id"), nullable=True
-    )
+    # Historical provider reference. Intentionally not a foreign key so logs survive provider deletion.
+    provider_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Provider Name (Redundant field)
     provider_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Retry Count

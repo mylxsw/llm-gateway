@@ -92,7 +92,7 @@ export function LogList({ logs, onView }: LogListProps) {
                     {log.trace_id?.slice(0, 8)}...
                   </div>
                 </TableCell>
-                <TableCell>{log.provider_name}</TableCell>
+                <TableCell>{log.provider_name || "-"}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 font-medium">

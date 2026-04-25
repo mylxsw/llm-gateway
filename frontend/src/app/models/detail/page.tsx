@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronsUp, Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
 import {
   BillingDisplay,
   ModelProviderForm,
@@ -500,16 +500,32 @@ function ModelDetailContent() {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {isPriorityStrategy ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePrioritizeMapping(mapping)}
-                              disabled={prioritizingMappingId !== null}
-                            >
-                              {prioritizingMappingId === mapping.id
-                                ? tCommon('saving')
-                                : t('actions.prioritize')}
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handlePrioritizeMapping(mapping)}
+                                    disabled={prioritizingMappingId !== null}
+                                  >
+                                    {prioritizingMappingId === mapping.id ? (
+                                      <Loader2
+                                        className="h-4 w-4 animate-spin"
+                                        suppressHydrationWarning
+                                      />
+                                    ) : (
+                                      <ChevronsUp className="h-4 w-4" suppressHydrationWarning />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {prioritizingMappingId === mapping.id
+                                    ? tCommon('saving')
+                                    : t('actions.prioritize')}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           ) : null}
                           <Button
                             variant="ghost"
