@@ -237,6 +237,88 @@ class TestAnthropicMessages:
 
         app.dependency_overrides = {}
 
+
+class TestAnthropicCountTokens:
+    """Test cases for /v1/messages/count_tokens endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_count_tokens_basic_message(self):
+        app.dependency_overrides[get_current_api_key] = _make_api_key
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/messages/count_tokens",
+                json={
+                    "model": "claude-sonnet-4-0",
+                    "messages": [{"role": "user", "content": "Hello, Claude"}],
+                },
+                headers={
+                    "x-api-key": "sk-ant-test",
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["input_tokens"], int)
+        assert data["input_tokens"] > 0
+
+        app.dependency_overrides = {}
+
+    @pytest.mark.asyncio
+    async def test_count_tokens_with_system_tools_and_document(self):
+        app.dependency_overrides[get_current_api_key] = _make_api_key
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/messages/count_tokens",
+                json={
+                    "model": "claude-sonnet-4-0",
+                    "system": "You are a precise assistant.",
+                    "tools": [
+                        {
+                            "name": "lookup",
+                            "description": "Look up a record",
+                            "input_schema": {
+                                "type": "object",
+                                "properties": {"id": {"type": "string"}},
+                                "required": ["id"],
+                            },
+                        }
+                    ],
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "Summarize this document"},
+                                {
+                                    "type": "document",
+                                    "title": "Release Notes",
+                                    "source": {
+                                        "type": "text",
+                                        "media_type": "text/plain",
+                                        "data": "Version 1 adds count tokens support.",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                },
+                headers={
+                    "x-api-key": "sk-ant-test",
+                    "anthropic-version": "2023-06-01",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["input_tokens"], int)
+        assert data["input_tokens"] > 10
+
+        app.dependency_overrides = {}
+
     @pytest.mark.asyncio
     async def test_message_with_image_content(self):
         """Test message with image content (vision)."""
