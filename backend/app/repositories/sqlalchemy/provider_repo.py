@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
-from app.db.models import ServiceProvider, ModelMappingProvider as ModelMappingProviderORM
+from app.db.models import ModelMappingProvider as ModelMappingProviderORM
+from app.db.models import ServiceProvider
 from app.domain.provider import Provider, ProviderCreate, ProviderUpdate
 from app.repositories.provider_repo import ProviderRepository
 
@@ -162,7 +163,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         
         if not entity:
             return False
-        
+
         await self.session.delete(entity)
         await self.session.commit()
         return True

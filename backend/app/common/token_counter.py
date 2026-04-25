@@ -318,6 +318,20 @@ class AnthropicTokenCounter(TokenCounter):
     Ideally, integrate Anthropic's official tokenizer.
     """
 
+    DEFAULT_ENCODING = "cl100k_base"
+
+    def __init__(self):
+        self._encodings: dict[str, Any] = {}
+
+    def _get_encoding(self, model: str) -> Any:
+        if not TIKTOKEN_AVAILABLE:
+            return None
+        if self.DEFAULT_ENCODING not in self._encodings:
+            self._encodings[self.DEFAULT_ENCODING] = tiktoken.get_encoding(
+                self.DEFAULT_ENCODING
+            )
+        return self._encodings[self.DEFAULT_ENCODING]
+
     def count_tokens(self, text: str, model: str = "") -> int:
         """
         Count tokens in text
@@ -335,8 +349,11 @@ class AnthropicTokenCounter(TokenCounter):
         if not text:
             return 0
 
-        # Estimation: average 4 chars per token
-        # TODO: Integrate Anthropic official tokenizer for precise counting
+        encoding = self._get_encoding(model)
+        if encoding:
+            return len(encoding.encode(text))
+
+        # Fallback estimation: average 4 chars per token
         return len(text) // 4
 
     def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
@@ -470,20 +487,175 @@ def _count_anthropic_content(content: Any, model: str, counter: TokenCounter) ->
     if isinstance(content, list):
         total = 0
         for item in content:
-            if not isinstance(item, dict):
-                continue
-            item_type = item.get("type")
-            if item_type == "text" and isinstance(item.get("text"), str):
-                total += counter.count_tokens(item["text"], model)
-            elif item_type == "tool_use":
-                total += counter.count_tokens(
-                    json.dumps(item, ensure_ascii=False), model
-                )
-            elif item_type == "image":
-                total += _estimate_image_tokens(item, protocol="anthropic")
+            total += _count_anthropic_block(item, model, counter)
         return total
-    if isinstance(content, dict) and isinstance(content.get("text"), str):
-        return counter.count_tokens(content["text"], model)
+    if isinstance(content, dict):
+        return _count_anthropic_block(content, model, counter)
+    return 0
+
+
+def _count_anthropic_block(item: Any, model: str, counter: TokenCounter) -> int:
+    if isinstance(item, str):
+        return counter.count_tokens(item, model)
+    if isinstance(item, list):
+        return sum(_count_anthropic_block(part, model, counter) for part in item)
+    if not isinstance(item, dict):
+        return 0
+
+    item_type = item.get("type")
+
+    if item_type == "text":
+        total = 0
+        text = item.get("text")
+        if isinstance(text, str):
+            total += counter.count_tokens(text, model)
+        citations = item.get("citations")
+        if isinstance(citations, list):
+            total += sum(
+                _count_anthropic_block(citation, model, counter)
+                for citation in citations
+            )
+        return total
+
+    if item_type == "image":
+        return _estimate_image_tokens(item, protocol="anthropic")
+
+    if item_type == "document":
+        return _count_anthropic_document(item, model, counter)
+
+    if item_type == "search_result":
+        total = 0
+        title = item.get("title")
+        if isinstance(title, str):
+            total += counter.count_tokens(title, model)
+        source = item.get("source")
+        if isinstance(source, str):
+            total += counter.count_tokens(source, model)
+        total += _count_anthropic_content(item.get("content"), model, counter)
+        return total
+
+    if item_type in (
+        "tool_use",
+        "server_tool_use",
+        "web_search_tool_result",
+        "web_fetch_tool_result",
+        "code_execution_tool_result",
+        "bash_code_execution_tool_result",
+        "text_editor_code_execution_tool_result",
+        "tool_search_tool_result",
+    ):
+        return _count_anthropic_tool_like_block(item, model, counter)
+
+    if item_type == "tool_result":
+        total = 0
+        tool_use_id = item.get("tool_use_id")
+        if isinstance(tool_use_id, str):
+            total += counter.count_tokens(tool_use_id, model)
+        content = item.get("content")
+        if content is not None:
+            total += _count_anthropic_content(content, model, counter)
+        return total
+
+    if item_type in ("thinking", "redacted_thinking"):
+        total = 0
+        for key in ("thinking", "signature", "data"):
+            value = item.get(key)
+            if isinstance(value, str):
+                total += counter.count_tokens(value, model)
+        return total
+
+    if item_type == "tool_reference":
+        tool_name = item.get("tool_name")
+        if isinstance(tool_name, str):
+            return counter.count_tokens(tool_name, model)
+        return 0
+
+    if item_type == "container_upload":
+        file_id = item.get("file_id")
+        if isinstance(file_id, str):
+            return counter.count_tokens(file_id, model)
+        return 0
+
+    if "text" in item and isinstance(item["text"], str):
+        return counter.count_tokens(item["text"], model)
+
+    return _count_anthropic_generic_value(item, model, counter)
+
+
+def _count_anthropic_tool_like_block(
+    item: dict[str, Any], model: str, counter: TokenCounter
+) -> int:
+    total = 0
+    for key in ("id", "name", "tool_use_id"):
+        value = item.get(key)
+        if isinstance(value, str):
+            total += counter.count_tokens(value, model)
+
+    input_value = item.get("input")
+    if input_value is not None:
+        total += counter.count_tokens(json.dumps(input_value, ensure_ascii=False), model)
+
+    content = item.get("content")
+    if content is not None:
+        total += _count_anthropic_content(content, model, counter)
+
+    return total
+
+
+def _count_anthropic_document(
+    item: dict[str, Any], model: str, counter: TokenCounter
+) -> int:
+    total = 0
+    for key in ("title", "context"):
+        value = item.get(key)
+        if isinstance(value, str):
+            total += counter.count_tokens(value, model)
+
+    source = item.get("source")
+    if isinstance(source, dict):
+        source_type = source.get("type")
+        if source_type == "text" and isinstance(source.get("data"), str):
+            total += counter.count_tokens(source["data"], model)
+        elif source_type == "content":
+            total += _count_anthropic_content(source.get("content"), model, counter)
+        elif source_type == "base64" and isinstance(source.get("data"), str):
+            raw = _decode_base64_data(source["data"])
+            if raw is not None:
+                total += max(1, math.ceil(len(raw) / 4000))
+        elif source_type == "url" and isinstance(source.get("url"), str):
+            total += counter.count_tokens(source["url"], model)
+
+    citations = item.get("citations")
+    if isinstance(citations, dict):
+        total += _count_anthropic_generic_value(citations, model, counter)
+    return total
+
+
+def _count_anthropic_generic_value(
+    value: Any, model: str, counter: TokenCounter
+) -> int:
+    if isinstance(value, str):
+        return counter.count_tokens(value, model)
+    if isinstance(value, list):
+        return sum(_count_anthropic_generic_value(item, model, counter) for item in value)
+    if isinstance(value, dict):
+        total = 0
+        for key, item in value.items():
+            if key in {
+                "type",
+                "role",
+                "media_type",
+                "cache_control",
+                "ttl",
+                "enabled",
+                "is_error",
+                "disable_parallel_tool_use",
+                "required",
+                "properties",
+            }:
+                continue
+            total += _count_anthropic_generic_value(item, model, counter)
+        return total
     return 0
 
 
