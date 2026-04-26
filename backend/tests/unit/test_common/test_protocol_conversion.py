@@ -123,6 +123,89 @@ def test_convert_request_openai_to_openai_responses_chat():
     assert out_body["max_output_tokens"] == 12
 
 
+def test_convert_request_openai_to_anthropic_maps_reasoning_effort():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "xhigh"},
+            "max_tokens": 16,
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "enabled"}
+    assert out_body["output_config"] == {"effort": "max"}
+
+
+def test_convert_request_openai_to_anthropic_maps_reasoning_none_to_disabled():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "none"},
+            "max_tokens": 16,
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "disabled"}
+    assert "output_config" not in out_body
+
+
+def test_convert_request_openai_completion_to_anthropic_maps_reasoning_effort():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/completions",
+        body={
+            "model": "any",
+            "prompt": "Hi",
+            "reasoning": {"effort": "high"},
+            "max_tokens": 16,
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["messages"][0]["content"] in (
+        "Hi",
+        [{"type": "text", "text": "Hi"}],
+    )
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "enabled"}
+    assert out_body["output_config"] == {"effort": "high"}
+
+
+def test_convert_request_openai_completion_to_responses_preserves_reasoning_effort():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai_responses",
+        path="/v1/completions",
+        body={
+            "model": "any",
+            "prompt": "Hi",
+            "reasoning": {"effort": "minimal"},
+            "max_tokens": 16,
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/responses"
+    assert out_body["input"] == "Hi"
+    assert out_body["reasoning"] == {"effort": "minimal"}
+
+
 @pytest.mark.asyncio
 async def test_convert_request_openai_to_anthropic_preserves_tools():
     path, out_body = convert_request_for_supplier(
@@ -506,6 +589,87 @@ def test_convert_request_anthropic_to_anthropic_maps_max_completion_tokens():
     assert path == "/v1/messages"
     assert out_body["model"] == "claude-3-5-sonnet"
     assert out_body["max_tokens"] == 33
+
+
+def test_convert_request_anthropic_to_openai_maps_thinking_effort():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "max"},
+            "max_tokens": 16,
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "thinking" not in out_body
+    assert "output_config" not in out_body
+    assert out_body["reasoning"] == {"effort": "xhigh"}
+
+
+def test_convert_request_anthropic_to_openai_maps_disabled_thinking_to_none():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "thinking": {"type": "disabled"},
+            "output_config": {"effort": "high"},
+            "max_tokens": 16,
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "thinking" not in out_body
+    assert "output_config" not in out_body
+    assert out_body["reasoning"] == {"effort": "none"}
+
+
+def test_convert_request_identity_openai_normalizes_anthropic_reasoning_fields():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "thinking": {"type": "enabled"},
+            "output_config": {"effort": "low"},
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "thinking" not in out_body
+    assert "output_config" not in out_body
+    assert out_body["reasoning"] == {"effort": "low"}
+
+
+def test_convert_request_identity_anthropic_normalizes_openai_reasoning_fields():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="anthropic",
+        supplier_protocol="anthropic",
+        path="/v1/messages",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "high"},
+        },
+        target_model="claude-3-5-sonnet",
+    )
+
+    assert path == "/v1/messages"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "enabled"}
+    assert out_body["output_config"] == {"effort": "high"}
 
 
 async def _agen(chunks):

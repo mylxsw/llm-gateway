@@ -13,6 +13,7 @@ import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
 
+from app.common.reasoning import normalize_reasoning_for_openai
 from app.common.stream_usage import SSEDecoder
 from app.common.token_counter import get_token_counter
 
@@ -122,6 +123,7 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
         "top_logprobs",
         "user",
         "metadata",
+        "reasoning",
     )
     for key in passthrough_keys:
         if key in body:
@@ -136,7 +138,7 @@ def chat_completions_request_to_responses(body: dict[str, Any]) -> dict[str, Any
     if max_output_tokens is not None:
         responses_body["max_output_tokens"] = max_output_tokens
 
-    return responses_body
+    return normalize_reasoning_for_openai(responses_body, source_body=body)
 
 
 def _new_id(prefix: str) -> str:
@@ -298,6 +300,7 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
         "top_logprobs",
         "user",
         "metadata",
+        "reasoning",
         "max_tokens",
         "max_completion_tokens",
     )
@@ -312,7 +315,7 @@ def responses_request_to_chat_completions(body: dict[str, Any]) -> dict[str, Any
     ):
         chat_body["max_completion_tokens"] = body.get("max_output_tokens")
 
-    return chat_body
+    return normalize_reasoning_for_openai(chat_body, source_body=body)
 
 
 def _extract_assistant_text_from_chat_completion(chat_body: dict[str, Any]) -> str:

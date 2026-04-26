@@ -63,6 +63,49 @@ def test_chat_completions_request_to_responses_system_and_user():
     assert responses["max_output_tokens"] == 42
 
 
+def test_chat_completions_request_to_responses_preserves_reasoning():
+    responses = chat_completions_request_to_responses(
+        {
+            "model": "gpt-5-mini",
+            "messages": [{"role": "user", "content": "hello"}],
+            "reasoning": {"effort": "minimal"},
+        }
+    )
+
+    assert responses["reasoning"] == {"effort": "minimal"}
+    assert "thinking" not in responses
+    assert "output_config" not in responses
+
+
+def test_responses_request_to_chat_completions_preserves_reasoning():
+    chat = responses_request_to_chat_completions(
+        {
+            "model": "gpt-5-mini",
+            "input": "hello",
+            "reasoning": {"effort": "xhigh"},
+        }
+    )
+
+    assert chat["reasoning"] == {"effort": "xhigh"}
+    assert "thinking" not in chat
+    assert "output_config" not in chat
+
+
+def test_responses_request_to_chat_completions_maps_anthropic_reasoning_fields():
+    chat = responses_request_to_chat_completions(
+        {
+            "model": "gpt-5-mini",
+            "input": "hello",
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "max"},
+        }
+    )
+
+    assert chat["reasoning"] == {"effort": "xhigh"}
+    assert "thinking" not in chat
+    assert "output_config" not in chat
+
+
 def test_chat_completion_to_responses_response_usage_mapping():
     resp = chat_completion_to_responses_response(
         {

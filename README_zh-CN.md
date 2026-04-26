@@ -70,6 +70,8 @@
 
 ### 全面可观测性
 
+- **日志分层存储**：摘要字段保存在 `request_logs`，大体积的请求/响应载荷保存在 `request_log_details`，降低存储压力并提升日志列表查询性能
+- **明细独立保留期**：请求/响应详情可以比摘要日志更早过期，在保留统计与审计能力的同时减少大字段长期占用
 - **全量日志记录**：完整记录请求体和响应体（包括流式响应），便于问题追溯、调试及 AI 系统效果优化
 - **Token 统计**：使用 [tiktoken](https://github.com/openai/tiktoken) 自动计算 Token 用量
 - **延迟指标**：首字节延迟和总响应时间
@@ -262,10 +264,18 @@ response = client.responses.create(
 | `ADMIN_PASSWORD` | - | 管理员登录密码（可选） |
 | `ADMIN_TOKEN_TTL_SECONDS` | 86400 | 管理员会话有效期（24 小时） |
 | `LOG_RETENTION_DAYS` | 7 | 日志保留天数 |
-| `LOG_CLEANUP_HOUR` | 4 | 日志清理时间（UTC 小时） |
+| `LOG_DETAIL_RETENTION_DAYS` | 7 | 请求/响应大字段明细的保留天数，必须小于或等于 `LOG_RETENTION_DAYS` |
+| `LOG_CLEANUP_INTERVAL_HOURS` | 24 | 定时日志清理的执行间隔（小时） |
 | `LLM_GATEWAY_PORT` | 8000 | Docker Compose 主机端口 |
 | `KV_STORE_TYPE` | database | KV 存储后端：`database` 或 `redis` |
 | `REDIS_URL` | - | Redis 连接 URL（使用 Redis KV 存储时） |
+
+### 日志保留行为
+
+- `LOG_RETENTION_DAYS` 控制摘要日志保留多久。
+- `LOG_DETAIL_RETENTION_DAYS` 控制请求/响应大字段明细保留多久。
+- 明细过期后，日志列表和统计仍然可用，但请求体、请求头、上游载荷，以及基于这些数据的重试与 Playground 调试能力将不可用。
+- 定时清理按照 `LOG_CLEANUP_INTERVAL_HOURS` 周期执行。
 
 生成加密密钥：
 ```bash

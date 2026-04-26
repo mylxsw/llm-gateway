@@ -10,6 +10,11 @@ from __future__ import annotations
 import logging
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple, Type
 
+from app.common.reasoning import (
+    normalize_reasoning_for_anthropic,
+    normalize_reasoning_for_openai,
+)
+
 from .base import (
     ConversionResult,
     IProtocolAdapter,
@@ -348,6 +353,11 @@ class ProtocolConverterManager:
         # Normalize OpenAI legacy functions to tools
         if protocol == Protocol.OPENAI:
             new_body = self._normalize_openai_tooling_fields(new_body)
+
+        if protocol in (Protocol.OPENAI, Protocol.OPENAI_RESPONSES):
+            new_body = normalize_reasoning_for_openai(new_body)
+        elif protocol == Protocol.ANTHROPIC:
+            new_body = normalize_reasoning_for_anthropic(new_body)
 
         # Remove stream_options and include_usage for OpenAI streaming requests
         # Some OpenAI-compatible providers do not support these parameters

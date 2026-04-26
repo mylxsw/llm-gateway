@@ -110,6 +110,19 @@ class LogRepository(ABC):
         pass
 
     @abstractmethod
+    async def cleanup_old_log_details(self, days_to_keep: int) -> int:
+        """
+        Clean up old log detail rows while keeping summary logs.
+
+        Args:
+            days_to_keep: Number of days to keep detailed payload data
+
+        Returns:
+            int: Number of deleted detail rows
+        """
+        pass
+
+    @abstractmethod
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
         """Get aggregated cost stats for logs"""
         pass

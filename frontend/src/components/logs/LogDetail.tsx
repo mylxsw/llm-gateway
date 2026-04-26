@@ -534,12 +534,23 @@ export function LogDetail({ log }: LogDetailProps) {
 
   if (!log) return null;
 
+  const detailExpired = log.detail_available === false;
   const retryUnsupported =
+    detailExpired ||
     !log.request_path ||
     !log.api_key_id ||
+    log.request_body === null ||
+    log.request_body === undefined ||
     (typeof log.request_body === "object" &&
       log.request_body !== null &&
       "_files" in log.request_body);
+  const retryUnsupportedReason = detailExpired
+    ? t("detail.detailExpiredRetryUnsupported")
+    : t("detail.retryUnsupported");
+  const playgroundDisabled =
+    detailExpired || log.request_body === null || log.request_body === undefined;
+  const curlDisabled =
+    detailExpired || log.request_body === null || log.request_body === undefined;
 
   return (
     <div className="space-y-6">
@@ -830,6 +841,18 @@ export function LogDetail({ log }: LogDetailProps) {
         </CardContent>
       </Card>
 
+      {detailExpired && (
+        <Card className="border-amber-200 bg-amber-50/70">
+          <CardContent className="flex items-start gap-3 p-4 text-sm text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" suppressHydrationWarning />
+            <div className="space-y-1">
+              <div className="font-medium">{t("detail.detailExpiredTitle")}</div>
+              <div>{t("detail.detailExpiredDescription")}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {log.error_info && (
         <Card className="border-red-200 bg-red-50/50">
           <CardHeader className="pb-3">
@@ -862,7 +885,7 @@ export function LogDetail({ log }: LogDetailProps) {
               className="gap-2"
               onClick={() => setRetryConfirmOpen(true)}
               disabled={retryLoading || retryUnsupported}
-              title={retryUnsupported ? t("detail.retryUnsupported") : undefined}
+              title={retryUnsupported ? retryUnsupportedReason : undefined}
             >
               {retryLoading ? (
                 <Loader2
@@ -1016,6 +1039,12 @@ export function LogDetail({ log }: LogDetailProps) {
                         size="sm"
                         className="h-7 gap-1 px-2"
                         onClick={handleOpenPlayground}
+                        disabled={playgroundDisabled}
+                        title={
+                          playgroundDisabled
+                            ? t("detail.detailExpiredPlaygroundUnsupported")
+                            : undefined
+                        }
                       >
                         <FlaskConical
                           className="h-3.5 w-3.5"
@@ -1028,6 +1057,12 @@ export function LogDetail({ log }: LogDetailProps) {
                         size="sm"
                         className="h-7 gap-1 px-2"
                         onClick={handleCopyOriginalAsCurl}
+                        disabled={curlDisabled}
+                        title={
+                          curlDisabled
+                            ? t("detail.detailExpiredCurlUnsupported")
+                            : undefined
+                        }
                       >
                         {originalCurlCopied ? (
                           <>

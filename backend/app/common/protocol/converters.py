@@ -14,6 +14,11 @@ import time
 import uuid
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
+from app.common.reasoning import (
+    normalize_reasoning_for_anthropic,
+    normalize_reasoning_for_openai,
+)
+
 from .base import (
     ConversionResult,
     IRequestConverter,
@@ -265,6 +270,7 @@ def _openai_completions_to_chat_request(body: Dict[str, Any]) -> Dict[str, Any]:
         "frequency_penalty",
         "logprobs",
         "user",
+        "reasoning",
     )
     for key in passthrough:
         if key in body:
@@ -1289,6 +1295,8 @@ class SDKRequestConverter(IRequestConverter):
         options = options or {}
 
         try:
+            original_body = copy.deepcopy(body)
+
             if self._source == Protocol.GEMINI:
                 openai_result = _gemini_request_to_openai_chat(path, body, target_model)
                 if self._target == Protocol.OPENAI:
@@ -1353,7 +1361,10 @@ class SDKRequestConverter(IRequestConverter):
 
             # Normalize OpenAI request
             if self._source == Protocol.OPENAI:
-                body = _normalize_openai_tooling_fields(body)
+                if path == _OPENAI_COMPLETIONS_PATH:
+                    body = _openai_completions_to_chat_request(body)
+                else:
+                    body = _normalize_openai_tooling_fields(body)
             elif self._source == Protocol.OPENAI_RESPONSES:
                 body = _normalize_openai_responses_tooling_fields(body)
 
@@ -1383,6 +1394,17 @@ class SDKRequestConverter(IRequestConverter):
 
             # Set target model
             converted["model"] = target_model
+
+            if self._target in (Protocol.OPENAI, Protocol.OPENAI_RESPONSES):
+                converted = normalize_reasoning_for_openai(
+                    converted,
+                    source_body=original_body,
+                )
+            elif self._target == Protocol.ANTHROPIC:
+                converted = normalize_reasoning_for_anthropic(
+                    converted,
+                    source_body=original_body,
+                )
 
             # Get target path
             target_path = self.get_target_path(path)

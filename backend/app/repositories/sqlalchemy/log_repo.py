@@ -81,6 +81,19 @@ class SQLAlchemyLogRepository(LogRepository):
         """Convert ORM entity to domain model (with detail data from relationship or fallback)"""
         request_time = ensure_utc(entity.request_time)
         detail = entity.detail
+        detail_available = detail is not None or any(
+            value is not None
+            for value in (
+                entity.request_headers,
+                entity.response_headers,
+                entity.request_body,
+                entity.response_body,
+                entity.usage_details,
+                entity.error_info,
+                entity.converted_request_body,
+                entity.upstream_response_body,
+            )
+        )
         return RequestLogModel(
             id=entity.id,
             request_time=request_time,
@@ -124,6 +137,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_url=entity.request_url,
             request_method=entity.request_method,
             upstream_url=entity.upstream_url,
+            detail_available=detail_available,
         )
 
     def _row_to_summary(self, row) -> RequestLogSummary:
@@ -249,7 +263,28 @@ class SQLAlchemyLogRepository(LogRepository):
             request_url=entity.request_url,
             request_method=entity.request_method,
             upstream_url=entity.upstream_url,
+            detail_available=True,
         )
+
+    async def cleanup_old_log_details(self, days_to_keep: int) -> int:
+        """
+        Delete detail rows older than specified days while keeping summary logs.
+
+        Args:
+            days_to_keep: Number of days to keep detail rows
+
+        Returns:
+            int: Number of deleted detail rows
+        """
+        cutoff_time = to_utc_naive(utc_now() - timedelta(days=days_to_keep))
+        if cutoff_time is None:
+            return 0
+
+        subquery = select(RequestLogORM.id).where(RequestLogORM.request_time < cutoff_time)
+        stmt = delete(RequestLogDetailORM).where(RequestLogDetailORM.log_id.in_(subquery))
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.rowcount or 0
 
     async def get_by_id(self, id: int) -> Optional[RequestLogModel]:
         """Get log by ID with full detail"""
