@@ -28,6 +28,7 @@ export interface RequestLog {
 
 /** Request Log Detail Entity (Includes full request/response) */
 export interface RequestLogDetail extends RequestLog {
+  detail_available?: boolean;
   request_headers?: Record<string, string>;  // Sanitized
   response_headers?: Record<string, string>; // Sanitized
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

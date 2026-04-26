@@ -178,6 +178,39 @@ async def test_cleanup_deletes_both_tables(db_session):
 
 
 @pytest.mark.asyncio
+async def test_cleanup_detail_only_keeps_summary_log(db_session):
+    """Verify detail-only cleanup removes request_log_details but keeps request_logs."""
+    from datetime import timedelta
+
+    repo = SQLAlchemyLogRepository(db_session)
+
+    old_time = datetime.now(timezone.utc) - timedelta(days=10)
+    created = await repo.create(_make_log_data(
+        request_time=old_time,
+        trace_id="detail-only-old-trace",
+    ))
+
+    deleted_count = await repo.cleanup_old_log_details(7)
+    assert deleted_count == 1
+
+    log_result = await db_session.execute(
+        select(RequestLogORM).where(RequestLogORM.id == created.id)
+    )
+    assert log_result.scalar_one_or_none() is not None
+
+    detail_result = await db_session.execute(
+        select(RequestLogDetailORM).where(RequestLogDetailORM.log_id == created.id)
+    )
+    assert detail_result.scalar_one_or_none() is None
+
+    fetched = await repo.get_by_id(created.id)
+    assert fetched is not None
+    assert fetched.detail_available is False
+    assert fetched.request_body is None
+    assert fetched.response_body is None
+
+
+@pytest.mark.asyncio
 async def test_get_by_id_fallback_for_unmigrated_records(db_session):
     """Verify get_by_id works for records with data in main table but no detail row."""
     repo = SQLAlchemyLogRepository(db_session)

@@ -172,6 +172,28 @@ class LogService:
             logger.error(f"Failed to cleanup old logs: {str(e)}", exc_info=True)
             raise
 
+    async def cleanup_old_log_details(self, retention_days: int) -> int:
+        """
+        Clean up old log detail rows while keeping summary logs.
+
+        Args:
+            retention_days: Number of days to keep request detail data
+
+        Returns:
+            int: Number of deleted detail rows
+        """
+        try:
+            deleted_count = await self.repo.cleanup_old_log_details(retention_days)
+            logger.info(
+                "Log detail cleanup completed: %s detail rows older than %s days deleted",
+                deleted_count,
+                retention_days,
+            )
+            return deleted_count
+        except Exception as e:
+            logger.error(f"Failed to cleanup old log details: {str(e)}", exc_info=True)
+            raise
+
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
         return await self.repo.get_cost_stats(query)
 

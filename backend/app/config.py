@@ -8,6 +8,7 @@ Supports SQLite (default) and PostgreSQL databases.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,6 +63,8 @@ class Settings(BaseSettings):
     # Log Cleanup Config
     # Log retention days (default 90 days)
     LOG_RETENTION_DAYS: int = 90
+    # Log detail retention days (default 7 days, must not exceed LOG_RETENTION_DAYS)
+    LOG_DETAIL_RETENTION_DAYS: int = 7
     # Log cleanup interval in hours (default 24 hours)
     LOG_CLEANUP_INTERVAL_HOURS: int = 24
 
@@ -94,6 +97,18 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=True,
     )
+
+    @model_validator(mode="after")
+    def validate_log_retention(self) -> "Settings":
+        if self.LOG_RETENTION_DAYS < 1:
+            raise ValueError("LOG_RETENTION_DAYS must be >= 1")
+        if self.LOG_DETAIL_RETENTION_DAYS < 1:
+            raise ValueError("LOG_DETAIL_RETENTION_DAYS must be >= 1")
+        if self.LOG_DETAIL_RETENTION_DAYS > self.LOG_RETENTION_DAYS:
+            raise ValueError(
+                "LOG_DETAIL_RETENTION_DAYS must be less than or equal to LOG_RETENTION_DAYS"
+            )
+        return self
 
 
 @lru_cache()

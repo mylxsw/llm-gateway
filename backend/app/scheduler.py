@@ -31,7 +31,9 @@ async def cleanup_logs_task():
     """
     settings = get_settings()
     logger.info(
-        f"Starting scheduled log cleanup task (retention: {settings.LOG_RETENTION_DAYS} days)"
+        "Starting scheduled log cleanup task (log retention: %s days, detail retention: %s days)",
+        settings.LOG_RETENTION_DAYS,
+        settings.LOG_DETAIL_RETENTION_DAYS,
     )
 
     try:
@@ -41,11 +43,18 @@ async def cleanup_logs_task():
             log_repo = SQLAlchemyLogRepository(db)
             log_service = LogService(log_repo)
 
-            # Execute cleanup
+            # Execute cleanup in two phases: prune heavy detail rows first, then old logs.
+            detail_deleted_count = await log_service.cleanup_old_log_details(
+                settings.LOG_DETAIL_RETENTION_DAYS
+            )
             deleted_count = await log_service.cleanup_old_logs(
                 settings.LOG_RETENTION_DAYS
             )
-            logger.info(f"Log cleanup task completed: {deleted_count} logs deleted")
+            logger.info(
+                "Log cleanup task completed: %s detail rows deleted, %s logs deleted",
+                detail_deleted_count,
+                deleted_count,
+            )
             break  # Only one iteration needed
 
     except Exception as e:

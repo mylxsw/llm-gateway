@@ -105,6 +105,9 @@ class RequestLogModel(RequestLogCreate):
     """Request Log Complete Model"""
     
     id: int = Field(..., description="Log ID")
+    detail_available: bool = Field(
+        True, description="Whether request detail data is still available"
+    )
     
     model_config = ConfigDict(from_attributes=True)
 

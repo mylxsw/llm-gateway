@@ -61,6 +61,8 @@ class PaginatedLogResponse(BaseModel):
 class CleanupResponse(BaseModel):
     """Log Cleanup Response"""
     deleted_count: int
+    deleted_detail_count: int = 0
+    deleted_log_count: int = 0
     message: str
 
 
@@ -584,6 +586,11 @@ async def retry_log(
                 message="API key is missing for this log",
                 code="retry_api_key_missing",
             )
+        if not log.detail_available or log.request_body is None:
+            raise ValidationError(
+                message="Request detail has expired for this log",
+                code="retry_log_detail_expired",
+            )
         if isinstance(log.request_body, dict) and log.request_body.get("_files"):
             raise ValidationError(
                 message="Multipart requests cannot be retried from logs",
@@ -691,10 +698,19 @@ async def cleanup_logs(
         settings = get_settings()
         retention_days = days if days is not None else settings.LOG_RETENTION_DAYS
 
-        deleted_count = await service.cleanup_old_logs(retention_days)
+        deleted_detail_count = await service.cleanup_old_log_details(
+            settings.LOG_DETAIL_RETENTION_DAYS
+        )
+        deleted_log_count = await service.cleanup_old_logs(retention_days)
+        deleted_count = deleted_detail_count + deleted_log_count
         return CleanupResponse(
             deleted_count=deleted_count,
-            message=f"Successfully deleted {deleted_count} logs older than {retention_days} days",
+            deleted_detail_count=deleted_detail_count,
+            deleted_log_count=deleted_log_count,
+            message=(
+                f"Successfully deleted {deleted_detail_count} expired log detail rows "
+                f"and {deleted_log_count} logs older than {retention_days} days"
+            ),
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
