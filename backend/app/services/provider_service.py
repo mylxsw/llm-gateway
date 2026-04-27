@@ -11,7 +11,13 @@ from app.common.errors import ConflictError, NotFoundError
 from app.common.proxy import build_proxy_config
 from app.common.provider_protocols import resolve_implementation_protocol
 from app.common.sanitizer import sanitize_api_key_display, sanitize_proxy_url
-from app.domain.provider import Provider, ProviderCreate, ProviderUpdate, ProviderResponse
+from app.domain.provider import (
+    Provider,
+    ProviderCreate,
+    ProviderNameResponse,
+    ProviderUpdate,
+    ProviderResponse,
+)
 from app.providers import get_provider_client
 from app.repositories.provider_repo import ProviderRepository
 
@@ -106,6 +112,27 @@ class ProviderService:
             protocol=protocol
         )
         return [self._to_response(p) for p in providers], total
+
+    async def get_name_list(
+        self,
+        is_active: Optional[bool] = None,
+    ) -> list[ProviderNameResponse]:
+        """
+        Get Provider name list without pagination.
+
+        This is intended for selectors and relationship forms, not the
+        provider management table.
+        """
+        providers = await self.repo.get_name_list(is_active=is_active)
+        return [
+            ProviderNameResponse(
+                id=p.id,
+                name=p.name,
+                protocol=p.protocol,
+                is_active=p.is_active,
+            )
+            for p in providers
+        ]
     
     async def update(self, id: int, data: ProviderUpdate) -> ProviderResponse:
         """

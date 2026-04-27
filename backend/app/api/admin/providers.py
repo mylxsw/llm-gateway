@@ -12,7 +12,13 @@ from pydantic import BaseModel
 
 from app.api.deps import ProviderServiceDep, require_admin_auth
 from app.common.errors import AppError
-from app.domain.provider import ProviderCreate, ProviderUpdate, ProviderResponse, ProviderExport
+from app.domain.provider import (
+    ProviderCreate,
+    ProviderUpdate,
+    ProviderResponse,
+    ProviderExport,
+    ProviderNameResponse,
+)
 from app.common.provider_protocols import list_frontend_protocol_configs
 
 router = APIRouter(
@@ -124,6 +130,23 @@ async def list_provider_protocols():
         )
         for config in list_frontend_protocol_configs()
     ]
+
+
+@router.get("/names", response_model=list[ProviderNameResponse])
+async def list_provider_names(
+    service: ProviderServiceDep,
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+):
+    """
+    Get Provider name list.
+
+    This endpoint is intentionally not paginated because it is used by selector
+    controls when creating model-provider relationships.
+    """
+    try:
+        return await service.get_name_list(is_active=is_active)
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)

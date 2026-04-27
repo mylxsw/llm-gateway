@@ -29,6 +29,14 @@ export interface Provider {
   updated_at: string;
 }
 
+/** Provider name list item */
+export interface ProviderName {
+  id: number;
+  name: string;
+  protocol: ProtocolType;
+  is_active: boolean;
+}
+
 /** Create Provider Request */
 export interface ProviderCreate {
   name: string;

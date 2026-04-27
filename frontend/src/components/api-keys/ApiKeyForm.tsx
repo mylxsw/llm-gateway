@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -68,7 +68,7 @@ export function ApiKeyForm({
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     defaultValues: {
@@ -77,7 +77,7 @@ export function ApiKeyForm({
     },
   });
 
-  const isActive = watch('is_active');
+  const isActive = useWatch({ control, name: 'is_active' });
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -92,6 +92,7 @@ export function ApiKeyForm({
         is_active: true,
       });
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCopied(false);
   }, [apiKey, reset, open]);
 

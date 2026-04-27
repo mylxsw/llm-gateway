@@ -472,6 +472,7 @@
       "noProviders": "没有可用供应商，请先<link>创建供应商</link>。",
       "createProvider": "创建供应商",
       "selectProvider": "选择供应商",
+      "providerDisabled": "已禁用",
       "selectProviderError": "请选择供应商",
       "targetModel": "目标模型名称",
       "targetModelPlaceholder": "该供应商使用的实际模型名称，例如 gpt-4-0613",

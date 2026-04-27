@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   getProviders,
+  getProviderNames,
   getProvider,
   createProvider,
   updateProvider,
@@ -19,6 +20,7 @@ import {
   Provider,
   ProviderCreate,
   ProviderUpdate,
+  ProviderName,
   ProviderListParams,
   ProviderModelListResponse,
   ProviderProtocolConfig,
@@ -28,6 +30,7 @@ import {
 const QUERY_KEYS = {
   all: ['providers'] as const,
   list: (params?: ProviderListParams) => [...QUERY_KEYS.all, 'list', params] as const,
+  names: (params?: { is_active?: boolean }) => [...QUERY_KEYS.all, 'names', params] as const,
   detail: (id: number) => [...QUERY_KEYS.all, 'detail', id] as const,
   models: (id: number) => [...QUERY_KEYS.all, 'models', id] as const,
   protocols: () => [...QUERY_KEYS.all, 'protocols'] as const,
@@ -41,6 +44,17 @@ export function useProviders(params?: ProviderListParams) {
   return useQuery({
     queryKey: QUERY_KEYS.list(params),
     queryFn: () => getProviders(params),
+  });
+}
+
+/**
+ * Get Provider Name List Hook
+ * @param params - Optional status filter
+ */
+export function useProviderNames(params?: { is_active?: boolean }) {
+  return useQuery<ProviderName[]>({
+    queryKey: QUERY_KEYS.names(params),
+    queryFn: () => getProviderNames(params),
   });
 }
 
