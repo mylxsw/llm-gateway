@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -139,7 +139,7 @@ export function LogFilters({
     ]
   );
 
-  const { register, handleSubmit, reset, setValue, watch } = useForm<
+  const { register, handleSubmit, reset, setValue, control } = useForm<
     Partial<LogQueryParams>
   >({
     defaultValues,
@@ -186,19 +186,24 @@ export function LogFilters({
     onFilterChange(normalized);
   };
 
+  const watchedProviderId = useWatch({ control, name: 'provider_id' });
+  const watchedRequestedModel = useWatch({ control, name: 'requested_model' });
+  const watchedApiKeyId = useWatch({ control, name: 'api_key_id' });
+  const watchedHasError = useWatch({ control, name: 'has_error' });
+
   const providerValue =
-    watch('provider_id') === undefined ? 'all' : String(watch('provider_id'));
+    watchedProviderId === undefined ? 'all' : String(watchedProviderId);
 
   const modelValue =
-    watch('requested_model') === undefined ? 'all' : String(watch('requested_model'));
+    watchedRequestedModel === undefined ? 'all' : String(watchedRequestedModel);
 
   const apiKeyValue =
-    watch('api_key_id') === undefined ? 'all' : String(watch('api_key_id'));
+    watchedApiKeyId === undefined ? 'all' : String(watchedApiKeyId);
 
   const errorValue =
-    watch('has_error') === undefined
+    watchedHasError === undefined
       ? 'all'
-      : watch('has_error')
+      : watchedHasError
         ? 'true'
         : 'false';
 

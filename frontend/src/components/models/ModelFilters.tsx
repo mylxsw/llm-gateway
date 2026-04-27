@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
     [filters]
   );
 
-  const { register, handleSubmit, reset, setValue, watch } = useForm<ModelFiltersState>({
+  const { register, handleSubmit, reset, setValue, control } = useForm<ModelFiltersState>({
     defaultValues,
   });
 
@@ -67,6 +67,10 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
   const onSubmit = (data: ModelFiltersState) => {
     onFilterChange(data);
   };
+
+  const modelType = useWatch({ control, name: 'model_type' });
+  const strategy = useWatch({ control, name: 'strategy' });
+  const isActive = useWatch({ control, name: 'is_active' });
 
   return (
     <form
@@ -94,7 +98,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
           <div className="space-y-2">
             <Label>{t('filters.type')}</Label>
             <Select
-              value={watch('model_type')}
+              value={modelType}
               onValueChange={(value) => setValue('model_type', value as ModelType | 'all')}
             >
               <SelectTrigger>
@@ -114,7 +118,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
           <div className="space-y-2">
             <Label>{t('filters.strategy')}</Label>
             <Select
-              value={watch('strategy')}
+              value={strategy}
               onValueChange={(value) => setValue('strategy', value as SelectionStrategy | 'all')}
             >
               <SelectTrigger>
@@ -132,7 +136,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
           <div className="space-y-2">
             <Label>{t('filters.status')}</Label>
             <Select
-              value={watch('is_active')}
+              value={isActive}
               onValueChange={(value) => setValue('is_active', value)}
             >
               <SelectTrigger>

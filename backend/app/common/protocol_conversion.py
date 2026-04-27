@@ -20,6 +20,7 @@ import logging
 from typing import Any, AsyncGenerator, Optional
 
 from app.common.errors import ServiceError
+from app.common.reasoning import normalize_reasoning_for_deepseek
 
 # Import from new modular architecture
 from app.common.protocol import (
@@ -42,9 +43,11 @@ from app.common.protocol import (
 )
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
+    DEEPSEEK_PROTOCOL,
     IMPLEMENTATION_PROTOCOLS,
     OPENAI_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
+    normalize_frontend_protocol,
     resolve_implementation_protocol,
 )
 
@@ -122,6 +125,8 @@ def convert_request_for_supplier(
         ServiceError: If conversion fails or is not supported
     """
     try:
+        supplier_frontend_protocol = normalize_frontend_protocol(supplier_protocol)
+
         # Normalize protocols
         request_protocol = normalize_protocol(request_protocol)
         supplier_protocol = normalize_protocol(supplier_protocol)
@@ -136,9 +141,16 @@ def convert_request_for_supplier(
             options=options,
         )
 
-        _apply_image_defaults(result.path, result.body)
+        converted_body = result.body
+        if supplier_frontend_protocol == DEEPSEEK_PROTOCOL:
+            converted_body = normalize_reasoning_for_deepseek(
+                converted_body,
+                source_body=body,
+            )
 
-        return result.path, result.body
+        _apply_image_defaults(result.path, converted_body)
+
+        return result.path, converted_body
 
     except UnsupportedConversionError as e:
         raise ServiceError(

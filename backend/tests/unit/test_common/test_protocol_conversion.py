@@ -163,6 +163,63 @@ def test_convert_request_openai_to_anthropic_maps_reasoning_none_to_disabled():
     assert "output_config" not in out_body
 
 
+def test_convert_request_openai_to_deepseek_maps_reasoning_none_to_thinking_disabled():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="deepseek",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "none"},
+        },
+        target_model="deepseek-chat",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert out_body["model"] == "deepseek-chat"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "disabled"}
+
+
+def test_convert_request_openai_to_deepseek_maps_reasoning_effort_to_thinking_enabled():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="deepseek",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "high"},
+        },
+        target_model="deepseek-reasoner",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "enabled"}
+    assert "output_config" not in out_body
+
+
+def test_convert_request_openai_to_deepseek_preserves_explicit_thinking_type():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="deepseek",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "reasoning": {"effort": "high"},
+            "thinking": {"type": "disabled"},
+        },
+        target_model="deepseek-chat",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "reasoning" not in out_body
+    assert out_body["thinking"] == {"type": "disabled"}
+
+
 def test_convert_request_openai_completion_to_anthropic_maps_reasoning_effort():
     path, out_body = convert_request_for_supplier(
         request_protocol="openai",

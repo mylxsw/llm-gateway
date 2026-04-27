@@ -35,15 +35,9 @@ interface IntlProviderProps {
 }
 
 export function IntlProvider({ children }: IntlProviderProps) {
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  const [mounted, setMounted] = useState(false);
+  const [locale, setLocale] = useState<Locale>(() => getStoredLocale());
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLocale(getStoredLocale());
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-
     // Listen for locale changes
     const handleLocaleChange = () => {
       setLocale(getStoredLocale());
@@ -55,10 +49,8 @@ export function IntlProvider({ children }: IntlProviderProps) {
 
   // Update html lang attribute
   useEffect(() => {
-    if (mounted) {
-      document.documentElement.lang = locale;
-    }
-  }, [locale, mounted]);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const messages = messagesMap[locale];
 

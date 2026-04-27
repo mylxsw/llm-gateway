@@ -472,6 +472,7 @@
       "noProviders": "No available providers, please <link>create a provider</link> first.",
       "createProvider": "create a provider",
       "selectProvider": "Select Provider",
+      "providerDisabled": "Disabled",
       "selectProviderError": "Please select a provider",
       "targetModel": "Target Model Name",
       "targetModelPlaceholder": "Actual model name used by this provider, e.g. gpt-4-0613",

@@ -6,7 +6,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useForm, Controller, useFieldArray, useWatch } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
 import {
   Dialog,
@@ -90,7 +90,6 @@ export function ModelForm({
     handleSubmit,
     reset,
     setValue,
-    watch,
     control,
     formState: { errors },
   } = useForm<FormData>({
@@ -116,11 +115,11 @@ export function ModelForm({
     name: 'tiers',
   });
 
-  const isActive = watch('is_active');
-  const modelType = watch('model_type');
-  const strategy = watch('strategy');
-  const billingMode = watch('billing_mode');
-  const cacheBillingEnabled = watch('cache_billing_enabled');
+  const isActive = useWatch({ control, name: 'is_active' });
+  const modelType = useWatch({ control, name: 'model_type' });
+  const strategy = useWatch({ control, name: 'strategy' });
+  const billingMode = useWatch({ control, name: 'billing_mode' });
+  const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
   const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
 
   useEffect(() => {

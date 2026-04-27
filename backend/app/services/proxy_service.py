@@ -561,7 +561,7 @@ class ProxyService:
                         hooked_body = hooked_image_body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
-                    supplier_protocol=supplier_protocol,
+                    supplier_protocol=candidate.protocol,
                     path=path,
                     body=hooked_body,
                     target_model=candidate.target_model,
@@ -1001,7 +1001,7 @@ class ProxyService:
                         hooked_body = hooked_image_body
                 supplier_path, supplier_body = convert_request_for_supplier(
                     request_protocol=request_protocol,
-                    supplier_protocol=supplier_protocol,
+                    supplier_protocol=candidate.protocol,
                     path=path,
                     body=hooked_body,
                     target_model=candidate.target_model,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +40,7 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
     [filters]
   );
 
-  const { register, handleSubmit, reset, setValue, watch } = useForm<ProviderFiltersState>({
+  const { register, handleSubmit, reset, setValue, control } = useForm<ProviderFiltersState>({
     defaultValues,
   });
 
@@ -62,6 +62,9 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
     onFilterChange(data);
   };
 
+  const protocol = useWatch({ control, name: 'protocol' });
+  const isActive = useWatch({ control, name: 'is_active' });
+
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
@@ -80,7 +83,7 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
           <div className="space-y-2">
             <Label>{t('filters.protocol.label')}</Label>
             <Select
-              value={watch('protocol')}
+              value={protocol}
               onValueChange={(value) => setValue('protocol', value as ProtocolType | 'all')}
             >
               <SelectTrigger>
@@ -100,7 +103,7 @@ export function ProviderFilters({ filters, onFilterChange }: ProviderFiltersProp
           <div className="space-y-2">
             <Label>{t('filters.status.label')}</Label>
             <Select
-              value={watch('is_active')}
+              value={isActive}
               onValueChange={(value) => setValue('is_active', value)}
             >
               <SelectTrigger>

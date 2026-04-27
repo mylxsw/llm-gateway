@@ -8,7 +8,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useForm, Controller, useFieldArray, useWatch } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -50,7 +51,7 @@ import {
   ModelMappingProviderUpdate,
   ModelProviderPricingHistoryItem,
   ModelType,
-  Provider,
+  ProviderName,
   RuleSet,
 } from '@/types';
 
@@ -62,7 +63,7 @@ interface ModelProviderFormProps {
   /** Current requested model name */
   requestedModel: string;
   /** Available provider list */
-  providers: Provider[];
+  providers: ProviderName[];
   /** Default prices from model fallback (for create mode prefill) */
   defaultPrices?: { input_price?: number | null; output_price?: number | null };
   /** Mapping data for edit mode */
@@ -125,7 +126,6 @@ export function ModelProviderForm({
     handleSubmit,
     reset,
     setValue,
-    watch,
     control,
     formState: { errors },
   } = useForm<FormData>({
@@ -153,11 +153,11 @@ export function ModelProviderForm({
     name: 'tiers',
   });
 
-  const providerId = watch('provider_id');
-  const isActive = watch('is_active');
-  const billingMode = watch('billing_mode');
-  const cacheBillingEnabled = watch('cache_billing_enabled');
-  const targetModelName = watch('target_model_name');
+  const providerId = useWatch({ control, name: 'provider_id' });
+  const isActive = useWatch({ control, name: 'is_active' });
+  const billingMode = useWatch({ control, name: 'billing_mode' });
+  const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
+  const targetModelName = useWatch({ control, name: 'target_model_name' });
   const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
   const [providerModels, setProviderModels] = useState<string[]>([]);
   const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
@@ -585,7 +585,16 @@ export function ModelProviderForm({
                 <SelectContent>
                   {providers.map((provider) => (
                     <SelectItem key={provider.id} value={String(provider.id)}>
-                      {provider.name} ({getProviderProtocolLabel(provider.protocol, protocolConfigs)})
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">
+                          {provider.name} ({getProviderProtocolLabel(provider.protocol, protocolConfigs)})
+                        </span>
+                        {!provider.is_active && (
+                          <Badge variant="warning" className="shrink-0 px-1.5 py-0 text-[10px]">
+                            {t('providerForm.providerDisabled')}
+                          </Badge>
+                        )}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
