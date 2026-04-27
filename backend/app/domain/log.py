@@ -21,6 +21,8 @@ class RequestLogBase(BaseModel):
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     # API Key Name
     api_key_name: Optional[str] = Field(None, description="API Key Name")
+    # User identifier from X-User-ID request header
+    user_id: Optional[str] = Field(None, description="User ID")
     # Requested Model Name
     requested_model: Optional[str] = Field(None, description="Requested Model Name")
     # Target Model Name
@@ -119,6 +121,7 @@ class RequestLogSummary(BaseModel):
     request_time: datetime = Field(..., description="Request Time")
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name")
+    user_id: Optional[str] = Field(None, description="User ID")
     requested_model: Optional[str] = Field(None, description="Requested Model Name")
     target_model: Optional[str] = Field(None, description="Target Model Name")
     provider_id: Optional[int] = Field(None, description="Provider ID")
@@ -199,6 +202,8 @@ class RequestLogQuery(BaseModel):
     # API Key Filter
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name")
+    # User ID Filter
+    user_id: Optional[str] = Field(None, description="User ID (Fuzzy Match)")
     # Retry Count Filter
     retry_count_min: Optional[int] = Field(None, description="Min Retry Count")
     retry_count_max: Optional[int] = Field(None, description="Max Retry Count")
@@ -238,6 +243,7 @@ class LogCostStatsQuery(BaseModel):
     provider_id: Optional[int] = Field(None, description="Provider ID")
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
+    user_id: Optional[str] = Field(None, description="User ID (Fuzzy Match)")
     # Bucket granularity: minute/hour/day
     bucket: str = Field("day", pattern="^(minute|hour|day)$", description="Trend bucket")
     # Minute bucket size (only used when bucket="minute")

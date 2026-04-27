@@ -102,6 +102,7 @@ function LogsContent() {
       has_error: parseBooleanParam(searchParams.get('has_error')),
       api_key_id: parseNumberParam(searchParams.get('api_key_id'), { min: 1 }),
       api_key_name: parseStringParam(searchParams.get('api_key_name')),
+      user_id: parseStringParam(searchParams.get('user_id')),
       retry_count_min: parseNumberParam(searchParams.get('retry_count_min')),
       retry_count_max: parseNumberParam(searchParams.get('retry_count_max')),
       input_tokens_min: parseNumberParam(searchParams.get('input_tokens_min')),
@@ -176,6 +177,7 @@ function LogsContent() {
       provider_id: resolvedFilters.provider_id,
       api_key_id: resolvedFilters.api_key_id,
       api_key_name: resolvedFilters.api_key_name,
+      user_id: resolvedFilters.user_id,
       tz_offset_minutes: tzOffsetMinutes,
       bucket: timelineBucket,
       bucket_minutes: bucketMinutes,
@@ -184,6 +186,7 @@ function LogsContent() {
     [
       resolvedFilters.api_key_id,
       resolvedFilters.api_key_name,
+      resolvedFilters.user_id,
       resolvedFilters.end_time,
       resolvedFilters.provider_id,
       resolvedFilters.requested_model,
@@ -236,6 +239,7 @@ function LogsContent() {
       'has_error',
       'api_key_id',
       'api_key_name',
+      'user_id',
       'retry_count_min',
       'retry_count_max',
       'input_tokens_min',
@@ -286,6 +290,7 @@ function LogsContent() {
     setParam(params, 'has_error', filters.has_error);
     setParam(params, 'api_key_id', filters.api_key_id);
     setParam(params, 'api_key_name', filters.api_key_name);
+    setParam(params, 'user_id', filters.user_id);
     setParam(params, 'retry_count_min', filters.retry_count_min);
     setParam(params, 'retry_count_max', filters.retry_count_max);
     setParam(params, 'input_tokens_min', filters.input_tokens_min);

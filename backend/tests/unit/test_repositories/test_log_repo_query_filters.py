@@ -67,3 +67,44 @@ async def test_query_has_error_filter_includes_non_200_status(db_session):
     assert ok_log.id in no_error_ids
     assert non_200_log.id not in no_error_ids
     assert error_info_log.id not in no_error_ids
+
+
+@pytest.mark.asyncio
+async def test_query_user_id_filter(db_session):
+    repo = SQLAlchemyLogRepository(db_session)
+    now = datetime.now(timezone.utc)
+
+    matching_log = await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="model-a",
+            target_model="target-a",
+            response_status=200,
+            api_key_id=1,
+            provider_id=1,
+            user_id="tenant-user-123",
+            is_stream=False,
+        )
+    )
+    other_log = await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="model-b",
+            target_model="target-b",
+            response_status=200,
+            api_key_id=1,
+            provider_id=1,
+            user_id="another-user",
+            is_stream=False,
+        )
+    )
+
+    items, total = await repo.query(
+        RequestLogQuery(user_id="user-123", page=1, page_size=20)
+    )
+    ids = {item.id for item in items}
+
+    assert total == 1
+    assert matching_log.id in ids
+    assert other_log.id not in ids
+    assert items[0].user_id == "tenant-user-123"

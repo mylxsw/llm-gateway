@@ -121,6 +121,11 @@ export function LogList({ logs, onView }: LogListProps) {
                     <div className="text-xs text-muted-foreground">
                       {log.api_key_name}
                     </div>
+                    {log.user_id && (
+                      <div className="text-xs text-muted-foreground">
+                        {t('list.userId', { userId: log.user_id })}
+                      </div>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>

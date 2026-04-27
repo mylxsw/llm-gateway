@@ -180,6 +180,7 @@ def _run_migrations(sync_conn) -> None:
             "upstream_url": "upstream_url VARCHAR(500)",
             "cached_input_cost": "cached_input_cost NUMERIC(12,4)",
             "cached_output_cost": "cached_output_cost NUMERIC(12,4)",
+            "user_id": "user_id VARCHAR(255)",
         },
     )
     ensure_columns(

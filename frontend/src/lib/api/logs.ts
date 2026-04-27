@@ -80,6 +80,7 @@ export async function getLogCostStats(
         provider_id: params.provider_id,
         api_key_id: params.api_key_id,
         api_key_name: params.api_key_name,
+        user_id: params.user_id,
         tz_offset_minutes: params.tz_offset_minutes,
         bucket: params.bucket,
         bucket_minutes: params.bucket_minutes,

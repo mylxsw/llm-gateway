@@ -9,6 +9,7 @@ export interface RequestLog {
   request_time: string;
   api_key_id?: number;
   api_key_name?: string;
+  user_id?: string;
   requested_model?: string;
   target_model?: string;
   provider_id?: number;
@@ -110,6 +111,7 @@ export interface LogQueryParams {
   // API Key filter
   api_key_id?: number;
   api_key_name?: string;
+  user_id?: string;
   
   // Retry count filter
   retry_count_min?: number;

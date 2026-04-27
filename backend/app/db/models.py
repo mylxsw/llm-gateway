@@ -289,6 +289,8 @@ class RequestLog(Base):
     )
     # API Key Name (Redundant field for easy querying)
     api_key_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # User ID from X-User-ID request header
+    user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Requested Model Name
     requested_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Target Model Name (Actually forwarded model)
@@ -361,8 +363,10 @@ class RequestLog(Base):
         Index("idx_request_logs_time_provider", "request_time", "provider_id"),
         Index("idx_request_logs_time_status", "request_time", "response_status"),
         Index("idx_request_logs_time_apikey", "request_time", "api_key_id"),
+        Index("idx_request_logs_time_user_id", "request_time", "user_id"),
         Index("idx_request_logs_model", "requested_model"),
         Index("idx_request_logs_api_key", "api_key_id"),
+        Index("idx_request_logs_user_id", "user_id"),
     )
 
     # Relationships

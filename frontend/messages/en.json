@@ -664,6 +664,7 @@
       "costTooltip": "Input: {input}\nOutput: {output}",
       "inTokens": "In: {count}",
       "outTokens": "Out: {count}",
+      "userId": "User: {userId}",
       "retry": "Retry: {count}",
       "ttfb": "TTFB",
       "totalDuration": "Total"
@@ -686,6 +687,7 @@
       "statusCodeRange": "Status Code Range",
       "retryCountRange": "Retry Count Range",
       "apiKeyName": "API Key Name",
+      "userId": "User ID",
       "inputTokensRange": "Input Tokens Range",
       "targetModel": "Target Model",
       "totalDurationRange": "Total Duration Range (ms)",
@@ -705,6 +707,7 @@
       "requestTime": "Request Time",
       "provider": "Provider",
       "apiKey": "API Key",
+      "userId": "User ID",
       "modelMapping": "Model Mapping",
       "model": "Model",
       "status": "Status",

@@ -664,6 +664,7 @@
       "costTooltip": "输入：{input}\n输出：{output}",
       "inTokens": "输入：{count}",
       "outTokens": "输出：{count}",
+      "userId": "用户：{userId}",
       "retry": "重试：{count}",
       "ttfb": "首字节",
       "totalDuration": "总耗时"
@@ -686,6 +687,7 @@
       "statusCodeRange": "状态码范围",
       "retryCountRange": "重试次数范围",
       "apiKeyName": "API Key 名称",
+      "userId": "用户 ID",
       "inputTokensRange": "输入 tokens 范围",
       "targetModel": "目标模型",
       "totalDurationRange": "总耗时范围（ms）",
@@ -705,6 +707,7 @@
       "requestTime": "请求时间",
       "provider": "供应商",
       "apiKey": "API Key",
+      "userId": "用户 ID",
       "modelMapping": "模型映射",
       "model": "模型",
       "status": "状态",

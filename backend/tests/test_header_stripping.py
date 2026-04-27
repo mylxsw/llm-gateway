@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from app.providers.openai_client import OpenAIClient
 from app.providers.anthropic_client import AnthropicClient
+from app.providers.gemini_client import GeminiClient
 
 # Mock settings
 with patch("app.providers.openai_client.get_settings") as mock_settings:
@@ -14,16 +15,22 @@ with patch("app.providers.openai_client.get_settings") as mock_settings:
         headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer old-key",
+            "X-User-ID": "user-123",
             "Accept-Encoding": "gzip, deflate, br",
             "User-Agent": "test-agent"
         }
         
-        prepared = client._prepare_headers(headers, "new-key")
+        prepared = client._prepare_headers(
+            headers,
+            "new-key",
+            extra_headers={"X-User-ID": "provider-extra-user"},
+        )
         
         # Check removed headers
         # assert "authorization" not in [k.lower() for k in prepared.keys()] # Authorization is added back
         assert "content-type" not in [k.lower() for k in prepared.keys()]
         assert "accept-encoding" not in [k.lower() for k in prepared.keys()]
+        assert "x-user-id" not in [k.lower() for k in prepared.keys()]
         
         # Check preserved headers
         assert prepared["User-Agent"] == "test-agent"
@@ -38,11 +45,16 @@ with patch("app.providers.openai_client.get_settings") as mock_settings:
             headers = {
                 "Content-Type": "application/json",
                 "x-api-key": "old-key",
+                "X-User-ID": "user-123",
                 "Accept-Encoding": "gzip, deflate, br",
                 "User-Agent": "test-agent"
             }
             
-            prepared = client._prepare_headers(headers, "new-key")
+            prepared = client._prepare_headers(
+                headers,
+                "new-key",
+                extra_headers={"X-User-ID": "provider-extra-user"},
+            )
             
             # Check removed headers
             assert "x-api-key" not in [k.lower() for k in prepared.keys() if k.lower() != "x-api-key"] 
@@ -53,6 +65,28 @@ with patch("app.providers.openai_client.get_settings") as mock_settings:
             assert prepared["x-api-key"] == "new-key"
             assert "content-type" not in [k.lower() for k in prepared.keys()]
             assert "accept-encoding" not in [k.lower() for k in prepared.keys()]
+            assert "x-user-id" not in [k.lower() for k in prepared.keys()]
             
             # Check preserved headers
+            assert prepared["User-Agent"] == "test-agent"
+
+    def test_gemini_header_stripping():
+        with patch("app.providers.gemini_client.get_settings") as mock_settings_gemini:
+            mock_settings_gemini.return_value.HTTP_TIMEOUT = 10
+            client = GeminiClient()
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": "old-key",
+                "X-User-ID": "user-123",
+                "User-Agent": "test-agent",
+            }
+
+            prepared = client._prepare_headers(
+                headers,
+                "new-key",
+                extra_headers={"X-User-ID": "provider-extra-user"},
+            )
+
+            assert prepared["x-goog-api-key"] == "new-key"
+            assert "x-user-id" not in [k.lower() for k in prepared.keys()]
             assert prepared["User-Agent"] == "test-agent"

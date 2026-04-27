@@ -37,6 +37,7 @@ _SUMMARY_COLUMNS = [
     RequestLogORM.request_time,
     RequestLogORM.api_key_id,
     RequestLogORM.api_key_name,
+    RequestLogORM.user_id,
     RequestLogORM.requested_model,
     RequestLogORM.target_model,
     RequestLogORM.provider_id,
@@ -99,6 +100,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_time=request_time,
             api_key_id=entity.api_key_id,
             api_key_name=entity.api_key_name,
+            user_id=entity.user_id,
             requested_model=entity.requested_model,
             target_model=entity.target_model,
             provider_id=entity.provider_id,
@@ -147,6 +149,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_time=ensure_utc(row["request_time"]),
             api_key_id=row["api_key_id"],
             api_key_name=row["api_key_name"],
+            user_id=row["user_id"],
             requested_model=row["requested_model"],
             target_model=row["target_model"],
             provider_id=row["provider_id"],
@@ -172,6 +175,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_time=to_utc_naive(data.request_time),
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
+            user_id=data.user_id,
             requested_model=data.requested_model,
             target_model=data.target_model,
             provider_id=data.provider_id,
@@ -232,6 +236,7 @@ class SQLAlchemyLogRepository(LogRepository):
             request_time=request_time,
             api_key_id=entity.api_key_id,
             api_key_name=entity.api_key_name,
+            user_id=entity.user_id,
             requested_model=entity.requested_model,
             target_model=entity.target_model,
             provider_id=entity.provider_id,
@@ -410,6 +415,8 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
+        if query.user_id:
+            conditions.append(RequestLogORM.user_id.ilike(f"%{query.user_id}%"))
 
         # Retry count filter
         if query.retry_count_min is not None:
@@ -514,6 +521,8 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
+        if query.user_id:
+            conditions.append(RequestLogORM.user_id.ilike(f"%{query.user_id}%"))
         if query.requested_model:
             conditions.append(
                 RequestLogORM.requested_model.ilike(f"%{query.requested_model}%")

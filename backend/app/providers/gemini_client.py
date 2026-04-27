@@ -38,6 +38,7 @@ class GeminiClient(ProviderClient):
             "x-api-key",
             "api-key",
             "x-goog-api-key",
+            "x-user-id",
             "content-length",
             "host",
             "content-type",
@@ -52,6 +53,10 @@ class GeminiClient(ProviderClient):
 
         if extra_headers:
             new_headers.update(extra_headers)
+
+        for key in list(new_headers.keys()):
+            if key.lower() == "x-user-id":
+                del new_headers[key]
 
         return new_headers
 

@@ -31,6 +31,7 @@ import {
   Server,
   Shield,
   Terminal,
+  User,
   FlaskConical,
   WrapText,
   Waves,
@@ -347,6 +348,7 @@ export function LogDetail({ log }: LogDetailProps) {
           status: log.response_status ?? null,
           retry_count: log.retry_count ?? 0,
           trace_id: log.trace_id || null,
+          user_id: log.user_id || null,
           provider: log.provider_name || null,
           requested_model: log.requested_model || null,
           target_model: log.target_model || null,
@@ -615,7 +617,7 @@ export function LogDetail({ log }: LogDetailProps) {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
             <div className="flex items-start gap-2">
               <Clock
                 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
@@ -681,6 +683,20 @@ export function LogDetail({ log }: LogDetailProps) {
                 </div>
                 <div className="truncate font-medium" title={modelMapping}>
                   {modelMapping}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <User
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                suppressHydrationWarning
+              />
+              <div className="min-w-0">
+                <div className="text-muted-foreground">
+                  {t("detail.userId")}
+                </div>
+                <div className="truncate font-medium" title={log.user_id}>
+                  {log.user_id || "-"}
                 </div>
               </div>
             </div>
@@ -782,6 +798,18 @@ export function LogDetail({ log }: LogDetailProps) {
                 </span>
                 <span className="ml-2 font-medium">
                   {log.api_key_name || "-"}
+                </span>
+              </div>
+              <ArrowRight
+                className="h-4 w-4 text-muted-foreground"
+                suppressHydrationWarning
+              />
+              <div className="inline-flex items-center rounded-md border bg-background px-2 py-1">
+                <span className="text-muted-foreground">
+                  {t("detail.userId")}
+                </span>
+                <span className="ml-2 font-medium">
+                  {log.user_id || "-"}
                 </span>
               </div>
               <ArrowRight

@@ -103,7 +103,16 @@ class AnthropicClient(ProviderClient):
         new_headers = dict(headers)
         
         # Remove original authentication headers and auto-generated headers
-        keys_to_remove = ["authorization", "x-api-key", "api-key", "content-length", "host", "content-type", "accept-encoding"]
+        keys_to_remove = [
+            "authorization",
+            "x-api-key",
+            "api-key",
+            "x-user-id",
+            "content-length",
+            "host",
+            "content-type",
+            "accept-encoding",
+        ]
         for key in list(new_headers.keys()):
             if key.lower() in keys_to_remove:
                 del new_headers[key]
@@ -119,6 +128,10 @@ class AnthropicClient(ProviderClient):
         # Merge extra headers (overwrite existing)
         if extra_headers:
             new_headers.update(extra_headers)
+
+        for key in list(new_headers.keys()):
+            if key.lower() == "x-user-id":
+                del new_headers[key]
         
         return new_headers
     

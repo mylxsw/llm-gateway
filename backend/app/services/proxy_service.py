@@ -48,6 +48,7 @@ from app.services.strategy import (
 logger = logging.getLogger(__name__)
 
 MAX_LOG_TEXT_LENGTH = 10000
+MAX_USER_ID_LENGTH = 255
 CandidateKey = tuple[str, int] | tuple[str, int, str]
 
 
@@ -79,6 +80,16 @@ def _smart_truncate(data: Any, max_list: int = 20, max_str: int = 1000) -> Any:
         return data[:max_str] + "...[truncated]"
 
     return data
+
+
+def _extract_user_id(headers: dict[str, str]) -> str | None:
+    for key, value in headers.items():
+        if key.lower() == "x-user-id":
+            user_id = str(value).strip()
+            if not user_id:
+                return None
+            return user_id[:MAX_USER_ID_LENGTH]
+    return None
 
 
 class ProxyService:
@@ -375,6 +386,7 @@ class ProxyService:
         trace_id = generate_trace_id()
         request_time = utc_now()
         sanitized_body = self._sanitize_request_body_for_log(body)
+        user_id = _extract_user_id(headers)
 
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -482,6 +494,7 @@ class ProxyService:
                 request_time=attempt.request_time,
                 api_key_id=api_key_id,
                 api_key_name=api_key_name,
+                user_id=user_id,
                 requested_model=requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
@@ -819,6 +832,7 @@ class ProxyService:
             request_time=request_time,
             api_key_id=api_key_id,
             api_key_name=api_key_name,
+            user_id=user_id,
             requested_model=requested_model,
             target_model=result.final_provider.target_model
             if result.final_provider
@@ -915,6 +929,7 @@ class ProxyService:
         request_time = utc_now()
         start_monotonic = time.monotonic()
         sanitized_body = self._sanitize_request_body_for_log(body)
+        user_id = _extract_user_id(headers)
 
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
@@ -1240,6 +1255,7 @@ class ProxyService:
                 request_time=attempt.request_time,
                 api_key_id=api_key_id,
                 api_key_name=api_key_name,
+                user_id=user_id,
                 requested_model=requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
@@ -1447,6 +1463,7 @@ class ProxyService:
                     request_time=request_time,
                     api_key_id=api_key_id,
                     api_key_name=api_key_name,
+                    user_id=user_id,
                     requested_model=requested_model,
                     target_model=final_provider.target_model
                     if final_provider
