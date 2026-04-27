@@ -221,7 +221,6 @@ function LogsContent() {
         Math.abs((preset.minutes ?? 0) - durationMinutes) <= 1 &&
         diffToNow <= 2 * 60 * 1000
     );
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimelinePreset(matched?.value ?? 'custom');
   }, [filters.end_time, filters.start_time]);
 

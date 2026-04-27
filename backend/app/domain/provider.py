@@ -110,6 +110,17 @@ class ProviderResponse(ProviderBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProviderNameResponse(BaseModel):
+    """Provider name list item for selector APIs."""
+
+    id: int = Field(..., description="Provider ID")
+    name: str = Field(..., description="Provider Name")
+    protocol: str = Field(..., description="Protocol Type")
+    is_active: bool = Field(True, description="Is Active")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProviderExport(ProviderCreate):
     """Provider Export Model (Includes API Key)"""
     pass

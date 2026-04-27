@@ -39,6 +39,14 @@ class ProviderRepository(ABC):
     ) -> Tuple[List[Provider], int]:
         """Get Provider List (Pagination)"""
         pass
+
+    @abstractmethod
+    async def get_name_list(
+        self,
+        is_active: Optional[bool] = None,
+    ) -> List[Provider]:
+        """Get Provider name list without pagination"""
+        pass
     
     @abstractmethod
     async def update(self, id: int, data: ProviderUpdate) -> Optional[Provider]:

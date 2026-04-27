@@ -40,7 +40,7 @@ import {
   useModel,
   useModelStats,
   useModelProviderStats,
-  useProviders,
+  useProviderNames,
   useCreateModelProvider,
   useUpdateModelProvider,
   useDeleteModelProvider,
@@ -101,12 +101,12 @@ function ModelDetailContent() {
   const { data: model, isLoading, isError, refetch } = useModel(requestedModel);
   const { data: modelStatsData } = useModelStats({ requested_model: requestedModel });
   const { data: providerStatsData } = useModelProviderStats({ requested_model: requestedModel });
-  const { data: providersData } = useProviders();
+  const { data: providerNames = [] } = useProviderNames();
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const providersById = useMemo(() => {
-    const entries = providersData?.items?.map((p) => [p.id, p] as const) ?? [];
+    const entries = providerNames.map((p) => [p.id, p] as const);
     return new Map(entries);
-  }, [providersData?.items]);
+  }, [providerNames]);
 
   const createMutation = useCreateModelProvider();
   const updateMutation = useUpdateModelProvider();
@@ -613,7 +613,7 @@ function ModelDetailContent() {
         open={formOpen}
         onOpenChange={setFormOpen}
         requestedModel={requestedModel}
-        providers={providersData?.items || []}
+        providers={providerNames}
         defaultPrices={{ input_price: model.input_price ?? null, output_price: model.output_price ?? null }}
         mapping={editingMapping}
         modelType={modelType}

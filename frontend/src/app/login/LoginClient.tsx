@@ -23,7 +23,6 @@ function normalizeReturnTo(raw: string | null): string {
 
 export function LoginClient() {
   const t = useTranslations('common.auth');
-  const tSidebar = useTranslations('sidebar');
   const router = useRouter();
   const searchParams = useSearchParams();
 

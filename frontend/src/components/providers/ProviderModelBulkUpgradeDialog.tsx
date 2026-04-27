@@ -6,7 +6,7 @@
 
 import React, { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import {
   Dialog,
   DialogContent,
@@ -172,7 +172,6 @@ export function ProviderModelBulkUpgradeDialog({
   const {
     register,
     handleSubmit,
-    watch,
     setValue,
     reset,
     control,
@@ -196,7 +195,8 @@ export function ProviderModelBulkUpgradeDialog({
     name: 'tiers',
   });
 
-  const billingMode = watch('billing_mode');
+  const billingMode = useWatch({ control, name: 'billing_mode' });
+  const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
 
   useEffect(() => {
     if (!open) {
@@ -328,7 +328,7 @@ export function ProviderModelBulkUpgradeDialog({
               appendTier={appendTier}
               removeTier={removeTier}
               showInheritOption
-              cacheBillingEnabled={watch('cache_billing_enabled')}
+              cacheBillingEnabled={cacheBillingEnabled}
               setCacheBillingEnabled={(value) => setValue('cache_billing_enabled', value)}
             />
 

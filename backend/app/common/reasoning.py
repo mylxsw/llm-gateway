@@ -132,3 +132,37 @@ def normalize_reasoning_for_anthropic(
         out["output_config"] = output_config
 
     return out
+
+
+def normalize_reasoning_for_deepseek(
+    body: dict[str, Any],
+    *,
+    source_body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a DeepSeek OpenAI-compatible body using `thinking.type` only."""
+    out = copy.deepcopy(body)
+    source = source_body if isinstance(source_body, dict) else body
+
+    thinking_type = _anthropic_thinking_type_from_body(source)
+    if thinking_type == "adaptive":
+        thinking_type = "enabled"
+
+    openai_effort = _openai_effort_from_body(source)
+    if thinking_type is None and openai_effort is not None:
+        thinking_type = "disabled" if openai_effort == "none" else "enabled"
+
+    if thinking_type is None:
+        body_effort = _openai_effort_from_body(body)
+        if body_effort is not None:
+            thinking_type = "disabled" if body_effort == "none" else "enabled"
+
+    out.pop("reasoning", None)
+    out.pop("output_config", None)
+    if thinking_type in ("enabled", "disabled"):
+        thinking = out.get("thinking")
+        if not isinstance(thinking, dict):
+            thinking = {}
+        thinking["type"] = thinking_type
+        out["thinking"] = thinking
+
+    return out

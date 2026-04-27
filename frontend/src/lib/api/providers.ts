@@ -8,6 +8,7 @@ import {
   Provider,
   ProviderCreate,
   ProviderUpdate,
+  ProviderName,
   ProviderListParams,
   ProviderExport,
   ProviderModelListResponse,
@@ -25,6 +26,16 @@ export async function getProviders(
   params?: ProviderListParams
 ): Promise<PaginatedResponse<Provider>> {
   return get<PaginatedResponse<Provider>>(BASE_URL, params as Record<string, unknown>);
+}
+
+/**
+ * Get Provider Name List
+ * @param params - Optional status filter. This endpoint is not paginated.
+ */
+export async function getProviderNames(params?: {
+  is_active?: boolean;
+}): Promise<ProviderName[]> {
+  return get<ProviderName[]>(`${BASE_URL}/names`, params as Record<string, unknown>);
 }
 
 /**
