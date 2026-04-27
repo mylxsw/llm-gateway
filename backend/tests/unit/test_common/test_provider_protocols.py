@@ -1,4 +1,5 @@
 from app.common.provider_protocols import (
+    DEEPSEEK_PROTOCOL,
     GEMINI_PROTOCOL,
     get_frontend_protocol_config,
     normalize_frontend_protocol,
@@ -19,3 +20,18 @@ def test_resolve_implementation_protocol_gemini():
 
 def test_normalize_frontend_protocol_gemini():
     assert normalize_frontend_protocol("GeMiNi") == "gemini"
+
+
+def test_deepseek_frontend_protocol_config_exists():
+    config = get_frontend_protocol_config("deepseek")
+    assert config.frontend == "deepseek"
+    assert config.implementation == "openai"
+    assert config.base_url == "https://api.deepseek.com"
+
+
+def test_resolve_implementation_protocol_deepseek():
+    assert resolve_implementation_protocol("deepseek") == "openai"
+
+
+def test_normalize_frontend_protocol_deepseek():
+    assert normalize_frontend_protocol("DeepSeek") == DEEPSEEK_PROTOCOL

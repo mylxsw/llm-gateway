@@ -12,6 +12,7 @@ OPENAI_PROTOCOL = "openai"
 OPENAI_RESPONSES_PROTOCOL = "openai_responses"
 ANTHROPIC_PROTOCOL = "anthropic"
 GEMINI_PROTOCOL = "gemini"
+DEEPSEEK_PROTOCOL = "deepseek"
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,12 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
         implementation=GEMINI_PROTOCOL,
         base_url="https://generativelanguage.googleapis.com",
         label="Google Gemini",
+    ),
+    "deepseek": ProtocolConfig(
+        frontend="deepseek",
+        implementation=OPENAI_PROTOCOL,
+        base_url="https://api.deepseek.com",
+        label="DeepSeek (OpenAI)",
     ),
     "zhipu": ProtocolConfig(
         frontend="zhipu",
