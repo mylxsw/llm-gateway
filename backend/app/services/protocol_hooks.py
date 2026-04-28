@@ -174,8 +174,12 @@ class ProtocolConversionHooks:
                         except Exception as e:
                             logger.debug(f"Error caching reasoning_content: {e}")
 
-                    # Process tool_calls
-                    for tool_call in delta.get("tool_calls", []):
+                    # Process tool_calls. Some OpenAI-compatible providers return
+                    # explicit null when there are no tool calls.
+                    tool_calls = delta.get("tool_calls")
+                    if not isinstance(tool_calls, list):
+                        tool_calls = []
+                    for tool_call in tool_calls:
                         tool_call_id = tool_call.get("id", "")
                         
                         # Link tool_call_id to chat_id for reasoning_content recovery
@@ -219,7 +223,11 @@ class ProtocolConversionHooks:
             message = choice.get("message", {})
             reasoning_content = message.get("reasoning_content")
 
-            for tool_call in message.get("tool_calls", []):
+            tool_calls = message.get("tool_calls")
+            if not isinstance(tool_calls, list):
+                tool_calls = []
+
+            for tool_call in tool_calls:
                 tool_call_id = tool_call.get("id", "")
                 if not tool_call_id:
                     continue
@@ -266,7 +274,9 @@ class ProtocolConversionHooks:
             if message.get("role") != "assistant":
                 continue
 
-            tool_calls = message.get("tool_calls", [])
+            tool_calls = message.get("tool_calls")
+            if not isinstance(tool_calls, list):
+                tool_calls = []
             
             # Inject reasoning_content if missing
             if tool_calls and not message.get("reasoning_content"):

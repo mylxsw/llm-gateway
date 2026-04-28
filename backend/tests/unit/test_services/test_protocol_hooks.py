@@ -855,6 +855,44 @@ async def test_cache_tool_call_extra_content_from_non_stream_response():
 
 
 @pytest.mark.asyncio
+async def test_cache_non_stream_response_handles_null_tool_calls():
+    """OpenAI-compatible providers may return tool_calls: null."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    supplier_body = {
+        "choices": [
+            {
+                "finish_reason": "stop",
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello",
+                    "reasoning_content": "Thinking",
+                    "tool_calls": None,
+                },
+            }
+        ],
+        "usage": {
+            "completion_tokens": 202,
+            "prompt_tokens": 252,
+            "total_tokens": 454,
+            "completion_tokens_details": {"reasoning_tokens": 151},
+            "prompt_tokens_details": {"cached_tokens": 192},
+        },
+    }
+
+    result = await hooks.before_response_conversion(
+        supplier_body=supplier_body,
+        request_protocol="openai",
+        supplier_protocol="openai",
+    )
+
+    mock_kv_repo.set.assert_not_called()
+    assert result == supplier_body
+
+
+@pytest.mark.asyncio
 async def test_cache_tool_call_extra_content_from_non_stream_response_multiple_tool_calls():
     """Test that extra_content is cached for multiple tool_calls with extra_content."""
     mock_kv_repo = AsyncMock()
@@ -951,6 +989,33 @@ async def test_cache_non_stream_response_skipped_for_non_dict_body():
 
     mock_kv_repo.set.assert_not_called()
     assert result == supplier_body
+
+
+@pytest.mark.asyncio
+async def test_inject_cached_content_handles_null_tool_calls():
+    """Requests with tool_calls: null should pass through cache injection."""
+    mock_kv_repo = AsyncMock()
+    hooks = ProtocolConversionHooks(kv_repo=mock_kv_repo)
+
+    body = {
+        "model": "mimo-v2.5-pro",
+        "messages": [
+            {
+                "role": "assistant",
+                "content": "Hello",
+                "tool_calls": None,
+            }
+        ],
+    }
+
+    result = await hooks.before_request_conversion(
+        body=body,
+        request_protocol="openai",
+        supplier_protocol="openai",
+    )
+
+    mock_kv_repo.get.assert_not_called()
+    assert result == body
 
 
 @pytest.mark.asyncio

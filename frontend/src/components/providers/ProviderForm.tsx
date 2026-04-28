@@ -308,6 +308,7 @@ export function ProviderForm({
       }
     });
 
+    const shouldIncludeHeaders = isEdit || Object.keys(headers).length > 0;
     const shouldIncludeOptions =
       data.no_suffix || !!provider?.provider_options?.no_suffix || Object.keys(params).length > 0;
 
@@ -318,7 +319,7 @@ export function ProviderForm({
       base_url: data.base_url,
       protocol: data.protocol,
       is_active: data.is_active,
-      extra_headers: Object.keys(headers).length > 0 ? headers : undefined,
+      extra_headers: shouldIncludeHeaders ? headers : undefined,
       provider_options: shouldIncludeOptions
         ? {
             default_parameters: Object.keys(params).length > 0 ? params : undefined,
