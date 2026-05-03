@@ -36,6 +36,36 @@ def test_count_input_empty():
     assert counter.count_input([]) == 0
 
 
+def test_count_tokens_treats_reserved_special_token_text_as_plain_text():
+    text = "literal marker <|endoftext|> should not fail"
+
+    assert OpenAITokenCounter().count_tokens(text, "gpt-4") > 0
+    assert AnthropicTokenCounter().count_tokens(text, "claude-sonnet-4-0") > 0
+
+
+def test_anthropic_count_request_allows_reserved_special_token_text():
+    counter = AnthropicTokenCounter()
+    body = {
+        "model": "claude-sonnet-4-0",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_123",
+                        "content": [
+                            {"type": "text", "text": "literal <|endoftext|> value"}
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    assert counter.count_request(body) > 0
+
+
 def test_count_messages_with_image_detail_low_adds_tokens():
     counter = OpenAITokenCounter()
     image_payload = {
