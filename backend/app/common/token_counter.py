@@ -18,6 +18,10 @@ except ImportError:
     TIKTOKEN_AVAILABLE = False
 
 
+def _encode_plain_text(encoding: Any, text: str) -> list[int]:
+    return encoding.encode(text, disallowed_special=())
+
+
 class TokenCounter(ABC):
     """
     Token Counter Abstract Base Class
@@ -244,7 +248,7 @@ class OpenAITokenCounter(TokenCounter):
 
         encoding = self._get_encoding(model)
         if encoding:
-            return len(encoding.encode(text))
+            return len(_encode_plain_text(encoding, text))
 
         # Fallback estimation: average 4 chars per token
         return len(text) // 4
@@ -351,7 +355,7 @@ class AnthropicTokenCounter(TokenCounter):
 
         encoding = self._get_encoding(model)
         if encoding:
-            return len(encoding.encode(text))
+            return len(_encode_plain_text(encoding, text))
 
         # Fallback estimation: average 4 chars per token
         return len(text) // 4
