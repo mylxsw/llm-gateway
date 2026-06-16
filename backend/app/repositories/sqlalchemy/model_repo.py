@@ -62,6 +62,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             cache_billing_enabled=entity.cache_billing_enabled,
             cached_input_price=float(entity.cached_input_price) if entity.cached_input_price is not None else None,
             cached_output_price=float(entity.cached_output_price) if entity.cached_output_price is not None else None,
+            cache_creation_input_price=float(entity.cache_creation_input_price) if entity.cache_creation_input_price is not None else None,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
         )
@@ -96,6 +97,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             cache_billing_enabled=entity.cache_billing_enabled,
             cached_input_price=float(entity.cached_input_price) if entity.cached_input_price is not None else None,
             cached_output_price=float(entity.cached_output_price) if entity.cached_output_price is not None else None,
+            cache_creation_input_price=float(entity.cache_creation_input_price) if entity.cache_creation_input_price is not None else None,
             priority=entity.priority,
             weight=entity.weight,
             is_active=entity.is_active,
@@ -127,6 +129,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             cache_billing_enabled=data.cache_billing_enabled or False,
             cached_input_price=data.cached_input_price,
             cached_output_price=data.cached_output_price,
+            cache_creation_input_price=data.cache_creation_input_price,
         )
         self.session.add(entity)
         await self.session.commit()
@@ -278,6 +281,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             ),
             cached_input_price=data.cached_input_price,
             cached_output_price=data.cached_output_price,
+            cache_creation_input_price=data.cache_creation_input_price,
             priority=data.priority,
             weight=data.weight,
             is_active=data.is_active,

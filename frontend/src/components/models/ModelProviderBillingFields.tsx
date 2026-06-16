@@ -27,6 +27,7 @@ interface TierInputValue {
   input_price: string;
   output_price: string;
   cached_input_price: string;
+  cache_creation_input_price: string;
   cached_output_price: string;
 }
 
@@ -38,6 +39,7 @@ type BillingFormValues = FieldValues & {
   tiers: TierInputValue[];
   cache_billing_enabled: boolean;
   cached_input_price: string;
+  cache_creation_input_price: string;
   cached_output_price: string;
 };
 
@@ -225,7 +227,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
                 </div>
                 {/* Row 2: Cached prices, aligned under input/output columns */}
                 {cacheBillingEnabled && (
-                  <div className="grid grid-cols-7 gap-2 items-end">
+                  <div className="grid grid-cols-8 gap-2 items-end">
                     <div className="col-span-2" />
                     <div className="col-span-2 space-y-1">
                       <Label className="text-muted-foreground">{t('providerForm.tierCachedInputPrice')}</Label>
@@ -238,6 +240,16 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
                       />
                     </div>
                     <div className="col-span-2 space-y-1">
+                      <Label className="text-muted-foreground">{t('providerForm.tierCacheCreationInputPrice')}</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.0001"
+                        placeholder={t('providerForm.cachedPricePlaceholder')}
+                        {...register(`tiers.${idx}.cache_creation_input_price` as Path<TFormValues>)}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
                       <Label className="text-muted-foreground">{t('providerForm.tierCachedOutputPrice')}</Label>
                       <Input
                         type="number"
@@ -247,7 +259,6 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
                         {...register(`tiers.${idx}.cached_output_price` as Path<TFormValues>)}
                       />
                     </div>
-                    <div className="col-span-1" />
                   </div>
                 )}
               </div>
@@ -256,7 +267,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
               type="button"
               variant="outline"
               onClick={() =>
-                appendTier({ max_input_tokens: '', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' })
+                appendTier({ max_input_tokens: '', input_price: '', output_price: '', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' })
               }
             >
               {t('providerForm.addTier')}
@@ -288,7 +299,7 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
             </div>
           </div>
           {cacheBillingEnabled && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cached_input_price">{t('providerForm.cachedInputPrice')}</Label>
                 <Input
@@ -298,6 +309,17 @@ export function ModelProviderBillingFields<TFormValues extends BillingFormValues
                   step="0.0001"
                   placeholder={t('providerForm.cachedPricePlaceholder')}
                   {...register('cached_input_price' as Path<TFormValues>)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cache_creation_input_price">{t('providerForm.cacheCreationInputPrice')}</Label>
+                <Input
+                  id="cache_creation_input_price"
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder={t('providerForm.cachedPricePlaceholder')}
+                  {...register('cache_creation_input_price' as Path<TFormValues>)}
                 />
               </div>
               <div className="space-y-2">

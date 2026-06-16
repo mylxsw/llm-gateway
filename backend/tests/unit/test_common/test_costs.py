@@ -751,3 +751,289 @@ class TestCalculateCostFromBillingWithCache:
         # cached: 400k/1M * 1.5 = 0.6
         assert cost.input_cost == 2.4
         assert cost.cached_input_cost == 0.6
+
+
+# ==================== Cache Creation (Cache WRITE) Pricing Tests ====================
+
+
+class TestCacheCreationBilling:
+    """cache_creation_input_tokens billed at cache_creation_input_price."""
+
+    def test_write_tokens_billed_at_write_price(self):
+        """300k cache-write @ $6/1M + 200k regular @ $5/1M = $1.80 + $1.00 = $2.80"""
+        cost = calculate_cost(
+            input_tokens=500_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=0,
+            cache_creation_input_tokens=300_000,
+            cache_creation_input_price=6.0,
+        )
+        # write: 300k/1M * 6 = 1.8
+        # regular: 200k/1M * 5 = 1.0
+        assert cost.input_cost == 2.8
+        assert cost.cached_input_cost == 1.8  # write cost folded into cached_input_cost
+        assert cost.total_cost == 2.8
+
+    def test_read_and_write_independent(self):
+        """read @ read price, write @ write price — both billed correctly."""
+        cost = calculate_cost(
+            input_tokens=1_000_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=400_000,
+            cached_input_price=1.0,
+            cache_creation_input_tokens=200_000,
+            cache_creation_input_price=6.0,
+        )
+        # read: 400k/1M * 1.0 = 0.4
+        # write: 200k/1M * 6.0 = 1.2
+        # regular: 400k/1M * 5.0 = 2.0
+        # total input_cost = 3.6
+        # cached_input_cost (read+write) = 1.6
+        assert cost.input_cost == 3.6
+        assert cost.cached_input_cost == 1.6
+        assert cost.total_cost == 3.6
+
+    def test_write_falls_back_to_read_price(self):
+        """When cache_creation_input_price is None, write tokens use cached_input_price."""
+        cost = calculate_cost(
+            input_tokens=1_000_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=0,
+            cache_creation_input_tokens=500_000,
+            cached_input_price=2.0,
+            # cache_creation_input_price omitted → falls back to cached_input_price
+        )
+        # write: 500k/1M * 2.0 = 1.0
+        # regular: 500k/1M * 5.0 = 2.5
+        assert cost.input_cost == 3.5
+        assert cost.cached_input_cost == 1.0
+
+    def test_write_falls_back_to_input_price(self):
+        """When neither write nor read price set, write uses input_price."""
+        cost = calculate_cost(
+            input_tokens=1_000_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=0,
+            cache_creation_input_tokens=400_000,
+            # both cached_input_price and cache_creation_input_price None
+        )
+        # write: 400k/1M * 5.0 = 2.0
+        # regular: 600k/1M * 5.0 = 3.0
+        assert cost.input_cost == 5.0
+        assert cost.cached_input_cost == 2.0
+
+    def test_write_capped_at_input_tokens(self):
+        """Write tokens capped at input_tokens."""
+        cost = calculate_cost(
+            input_tokens=100_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=0,
+            cache_creation_input_tokens=200_000,  # > input_tokens
+            cache_creation_input_price=6.0,
+        )
+        # capped: 100k write, 0 regular
+        assert cost.cached_input_cost == 0.6  # 100k/1M * 6.0
+        assert cost.input_cost == 0.6
+
+    def test_write_disabled_when_cache_billing_disabled(self):
+        """cache_billing_enabled=False ignores write tokens entirely."""
+        cost = calculate_cost(
+            input_tokens=1_000_000,
+            output_tokens=0,
+            input_price=5.0,
+            output_price=0.0,
+            cache_billing_enabled=False,
+            cache_creation_input_tokens=500_000,
+            cache_creation_input_price=6.0,
+        )
+        # All input billed at input_price: 1M/1M * 5 = 5.0
+        assert cost.input_cost == 5.0
+        assert cost.cached_input_cost == 0.0
+        assert cost.total_cost == 5.0
+
+
+# ==================== Anthropic separate (additive) cache tokens ====================
+
+
+class TestSeparateCacheTokens:
+    """cache_tokens_separate=True bills cache read/write in full alongside input.
+
+    Anthropic reports cache_read_input_tokens and cache_creation_input_tokens
+    separately from (and in addition to) input_tokens, so they must not be
+    capped against the small input_tokens value.
+    """
+
+    def test_anthropic_cache_billed_in_full(self):
+        # Real-world case: input=1, cache_creation=2186 @ $10, cache_read=87041
+        # @ $0.5, output=616 @ $25. The buggy OpenAI-cap path collapsed cache
+        # cost to ~0 and produced ~$0.0155.
+        cost = calculate_cost(
+            input_tokens=1,
+            output_tokens=616,
+            input_price=5.0,
+            output_price=25.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=87041,
+            cached_input_price=0.5,
+            cache_creation_input_tokens=2186,
+            cache_creation_input_price=10.0,
+            cache_tokens_separate=True,
+        )
+        # read:   87041/1M * 0.5  = 0.0435205 -> ceil 0.0436
+        # write:  2186/1M  * 10.0 = 0.02186   -> ceil 0.0219
+        # input:  1/1M     * 5.0  ~ 0          -> ceil 0.0001
+        # output: 616/1M   * 25.0 = 0.0154
+        assert cost.input_cost == 0.0656
+        assert cost.output_cost == 0.0154
+        assert cost.total_cost == 0.081
+        assert cost.cached_input_cost == 0.0655  # read 0.0436 + write 0.0219
+
+    def test_default_caps_like_openai(self):
+        """Without the flag, cache tokens are capped at input_tokens (legacy)."""
+        cost = calculate_cost(
+            input_tokens=1,
+            output_tokens=616,
+            input_price=5.0,
+            output_price=25.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=87041,
+            cached_input_price=0.5,
+            cache_creation_input_tokens=2186,
+            cache_creation_input_price=10.0,
+        )
+        # Cache tokens collapse against input_tokens=1; only output is billed.
+        assert cost.total_cost == 0.0155
+
+
+class TestResolveBillingCacheCreation:
+    """resolve_billing correctly resolves cache_creation_input_price."""
+
+    def test_provider_cache_creation_wins(self):
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            provider_billing_mode="token_flat",
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=5.0,
+            provider_output_price=15.0,
+            provider_cache_billing_enabled=True,
+            provider_cached_input_price=1.0,
+            provider_cache_creation_input_price=6.0,
+        )
+        assert billing.cache_creation_input_price == 6.0
+        assert billing.cached_input_price == 1.0
+
+    def test_model_fallback_for_cache_creation(self):
+        """No provider override → model cache_creation_input_price used."""
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            model_billing_mode="token_flat",
+            model_cache_billing_enabled=True,
+            model_cached_input_price=1.0,
+            model_cache_creation_input_price=6.0,
+            provider_billing_mode=None,
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+        )
+        assert billing.cache_creation_input_price == 6.0
+        assert billing.cached_input_price == 1.0
+
+    def test_tiered_with_cache_creation(self):
+        """Tiered pricing resolves cache_creation_input_price from tier."""
+        billing = resolve_billing(
+            input_tokens=500_000,
+            model_input_price=None,
+            model_output_price=None,
+            model_billing_mode="token_tiered",
+            model_tiered_pricing=[
+                {
+                    "max_input_tokens": 1_000_000,
+                    "input_price": 3.0,
+                    "output_price": 4.0,
+                    "cached_input_price": 1.0,
+                    "cache_creation_input_price": 6.0,
+                }
+            ],
+            provider_billing_mode=None,
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+        )
+        assert billing.cached_input_price == 1.0
+        assert billing.cache_creation_input_price == 6.0
+
+    def test_inherit_model_default_clears_provider_cache_creation(self):
+        """inherit_model_default zeroes out provider cache_creation_input_price."""
+        billing = resolve_billing(
+            input_tokens=1000,
+            model_input_price=5.0,
+            model_output_price=15.0,
+            model_billing_mode="token_flat",
+            model_cache_billing_enabled=True,
+            model_cached_input_price=1.0,
+            model_cache_creation_input_price=6.0,
+            provider_billing_mode="inherit_model_default",
+            provider_per_request_price=None,
+            provider_tiered_pricing=None,
+            provider_input_price=None,
+            provider_output_price=None,
+            provider_cache_billing_enabled=True,
+            provider_cached_input_price=99.0,
+            provider_cache_creation_input_price=99.0,
+        )
+        # Provider override cleared; model values used
+        assert billing.cached_input_price == 1.0
+        assert billing.cache_creation_input_price == 6.0
+
+
+class TestCalculateCostFromBillingWithCacheCreation:
+    """calculate_cost_from_billing threads cache_creation_input_tokens/price."""
+
+    def test_calculate_cost_from_billing_write(self):
+        billing = ResolvedBilling(
+            billing_mode=BILLING_MODE_TOKEN_FLAT,
+            price_source="SupplierOverride",
+            input_price=5.0,
+            output_price=15.0,
+            cache_billing_enabled=True,
+            cached_input_price=1.0,
+            cache_creation_input_price=6.0,
+        )
+        cost = calculate_cost_from_billing(
+            input_tokens=1_000_000,
+            output_tokens=0,
+            billing=billing,
+            cached_input_tokens=300_000,
+            cache_creation_input_tokens=200_000,
+        )
+        # read: 300k/1M * 1 = 0.3
+        # write: 200k/1M * 6 = 1.2
+        # regular: 500k/1M * 5 = 2.5
+        # total: 4.0
+        # cached_input_cost (read+write) = 1.5
+        assert cost.input_cost == 4.0
+        assert cost.cached_input_cost == 1.5
+        assert cost.total_cost == 4.0
+

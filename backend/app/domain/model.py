@@ -26,8 +26,11 @@ class TokenTierPrice(BaseModel):
     )
     input_price: float = Field(..., ge=0, description="Input price ($/1M tokens)")
     output_price: float = Field(..., ge=0, description="Output price ($/1M tokens)")
-    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
+    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input (cache READ) price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
+    cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Cache creation (cache WRITE) price ($/1M tokens)"
+    )
 
 
 class ModelMappingBase(BaseModel):
@@ -65,8 +68,11 @@ class ModelMappingCreate(ModelMappingBase):
         None, description="Tiered pricing (based on input tokens)"
     )
     cache_billing_enabled: Optional[bool] = Field(None, description="Enable cache billing")
-    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
+    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input (cache READ) price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
+    cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Cache creation (cache WRITE) price ($/1M tokens)"
+    )
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelMappingCreate":
@@ -105,6 +111,7 @@ class ModelMappingUpdate(BaseModel):
     cache_billing_enabled: Optional[bool] = None
     cached_input_price: Optional[float] = Field(None, ge=0)
     cached_output_price: Optional[float] = Field(None, ge=0)
+    cache_creation_input_price: Optional[float] = Field(None, ge=0)
 
 
 class ModelMapping(ModelMappingBase):
@@ -121,6 +128,7 @@ class ModelMapping(ModelMappingBase):
     cache_billing_enabled: Optional[bool] = None
     cached_input_price: Optional[float] = None
     cached_output_price: Optional[float] = None
+    cache_creation_input_price: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -166,8 +174,11 @@ class ModelMatchProviderResponse(BaseModel):
         None, description="Tiered pricing (based on input tokens)"
     )
     cache_billing_enabled: Optional[bool] = Field(None, description="Cache billing enabled")
-    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
+    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input (cache READ) price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
+    cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Cache creation (cache WRITE) price ($/1M tokens)"
+    )
     model_input_price: Optional[float] = Field(
         None, description="Model fallback input price ($/1M tokens)"
     )
@@ -220,8 +231,11 @@ class ModelMappingProviderCreate(ModelMappingProviderBase):
     cache_billing_enabled: Optional[bool] = Field(
         None, description="Enable cache billing"
     )
-    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
+    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input (cache READ) price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
+    cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Cache creation (cache WRITE) price ($/1M tokens)"
+    )
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelMappingProviderCreate":
@@ -256,6 +270,7 @@ class ModelMappingProviderUpdate(BaseModel):
     cache_billing_enabled: Optional[bool] = None
     cached_input_price: Optional[float] = Field(None, ge=0)
     cached_output_price: Optional[float] = Field(None, ge=0)
+    cache_creation_input_price: Optional[float] = Field(None, ge=0)
 
 
 class ModelProviderBulkUpgradeRequest(BaseModel):
@@ -279,8 +294,11 @@ class ModelProviderBulkUpgradeRequest(BaseModel):
     cache_billing_enabled: Optional[bool] = Field(
         None, description="Enable cache billing"
     )
-    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input price ($/1M tokens)")
+    cached_input_price: Optional[float] = Field(None, ge=0, description="Cached input (cache READ) price ($/1M tokens)")
     cached_output_price: Optional[float] = Field(None, ge=0, description="Cached output price ($/1M tokens)")
+    cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Cache creation (cache WRITE) price ($/1M tokens)"
+    )
 
     @model_validator(mode="after")
     def _validate_billing(self) -> "ModelProviderBulkUpgradeRequest":
@@ -312,6 +330,7 @@ class ModelMappingProvider(ModelMappingProviderBase):
     cache_billing_enabled: Optional[bool] = None
     cached_input_price: Optional[float] = None
     cached_output_price: Optional[float] = None
+    cache_creation_input_price: Optional[float] = None
     priority: int = 0
     weight: int = 1
     is_active: bool = True
@@ -353,10 +372,13 @@ class ModelMappingProviderResponse(ModelMappingProvider):
         None, description="Resolved cache billing enabled"
     )
     resolved_cached_input_price: Optional[float] = Field(
-        None, ge=0, description="Resolved cached input price ($/1M tokens)"
+        None, ge=0, description="Resolved cached input (cache READ) price ($/1M tokens)"
     )
     resolved_cached_output_price: Optional[float] = Field(
         None, ge=0, description="Resolved cached output price ($/1M tokens)"
+    )
+    resolved_cache_creation_input_price: Optional[float] = Field(
+        None, ge=0, description="Resolved cache creation (cache WRITE) price ($/1M tokens)"
     )
     
     model_config = ConfigDict(from_attributes=True)
@@ -376,6 +398,7 @@ class ModelProviderExport(BaseModel):
     cache_billing_enabled: Optional[bool] = None
     cached_input_price: Optional[float] = None
     cached_output_price: Optional[float] = None
+    cache_creation_input_price: Optional[float] = None
     priority: int = 0
     weight: int = 1
     is_active: bool = True

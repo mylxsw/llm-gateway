@@ -460,7 +460,7 @@
         "tieredPreview": "Tiered: {preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}",
-        "cacheSuffix": "Cached: {cachedInput}/{cachedOutput}",
+        "cacheSuffix": "Cache: read {cachedInput}/write {cacheCreationInput}/{cachedOutput}",
         "inheritModel": "Inherit model default"
       }
     },
@@ -525,11 +525,13 @@
       "noProviderModelsMatched": "No matching models found.",
       "useSelectedModel": "Use selected model",
       "cacheBilling": "Cache Billing",
-      "cachedInputPrice": "Cache Write Price (USD / 1M tokens)",
-      "cachedOutputPrice": "Cache Read Price (USD / 1M tokens)",
+      "cachedInputPrice": "Cache Read Price (USD / 1M tokens)",
+      "cachedOutputPrice": "Cache Output Price (USD / 1M tokens)",
+      "cacheCreationInputPrice": "Cache Write Price (USD / 1M tokens)",
       "cachedPricePlaceholder": "Empty = same as standard price",
-      "tierCachedInputPrice": "Cache Write (USD / 1M)",
-      "tierCachedOutputPrice": "Cache Read (USD / 1M)"
+      "tierCachedInputPrice": "Cache Read (USD / 1M)",
+      "tierCachedOutputPrice": "Cache Output (USD / 1M)",
+      "tierCacheCreationInputPrice": "Cache Write (USD / 1M)"
     },
     "ruleBuilder": {
       "title": "🎯 Matching Rules",

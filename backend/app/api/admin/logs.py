@@ -75,6 +75,15 @@ class RetryLogResponse(BaseModel):
     trace_id: str | None = None
 
 
+class ConvertedRequestResponse(BaseModel):
+    """Full (non-truncated) upstream request body, reconstructed on demand."""
+
+    converted_request_body: dict[str, Any] | None = None
+    upstream_url: str | None = None
+    request_method: str | None = None
+    supplier_protocol: str | None = None
+
+
 class PlaygroundExecuteRequest(BaseModel):
     """Editable playground request payload"""
 
@@ -562,6 +571,30 @@ async def get_log(
             if log.response_body
             else None,
         )
+    except AppError as e:
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get(
+    "/{log_id}/converted-request",
+    response_model=ConvertedRequestResponse,
+)
+async def get_converted_request(
+    log_id: int,
+    log_service: LogServiceDep,
+    proxy_service: ProxyServiceDep,
+):
+    """
+    Reconstruct the full (non-truncated) upstream request body.
+
+    The ``converted_request_body`` stored in logs is truncated for storage.
+    This re-runs the original protocol conversion logic against the full
+    request body so callers (e.g. "Copy as cURL") get the complete payload.
+    """
+    try:
+        log = await log_service.get_by_id(log_id)
+        result = await proxy_service.rebuild_converted_request(log)
+        return ConvertedRequestResponse(**result)
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
 

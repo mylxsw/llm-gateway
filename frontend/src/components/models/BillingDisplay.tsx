@@ -16,6 +16,7 @@ interface BillingTier {
   input_price: number;
   output_price: number;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
 }
 
@@ -30,6 +31,7 @@ interface BillingDisplayProps {
   fallbackOutputPrice?: number | null;
   cacheBillingEnabled?: boolean | null;
   cachedInputPrice?: number | null;
+  cacheCreationInputPrice?: number | null;
   cachedOutputPrice?: number | null;
   className?: string;
 }
@@ -70,6 +72,7 @@ export function BillingDisplay({
   fallbackOutputPrice,
   cacheBillingEnabled,
   cachedInputPrice,
+  cacheCreationInputPrice,
   cachedOutputPrice,
   className,
 }: BillingDisplayProps) {
@@ -119,11 +122,24 @@ export function BillingDisplay({
             tier.max_input_tokens === null || tier.max_input_tokens === undefined
               ? '∞'
               : String(tier.max_input_tokens);
-          return t('detail.billingDisplay.tieredEntry', {
+          let entry = t('detail.billingDisplay.tieredEntry', {
             max,
             input: formatUsdOrFree(tier.input_price),
             output: formatUsdOrFree(tier.output_price),
           });
+          if (
+            cacheBillingEnabled &&
+            (tier.cached_input_price != null ||
+              tier.cache_creation_input_price != null ||
+              tier.cached_output_price != null)
+          ) {
+            entry += ` ${t('detail.billingDisplay.cacheSuffix', {
+              cachedInput: formatUsdCeil4(tier.cached_input_price),
+              cacheCreationInput: formatUsdCeil4(tier.cache_creation_input_price),
+              cachedOutput: formatUsdCeil4(tier.cached_output_price),
+            })}`;
+          }
+          return entry;
         })
         .join(', ');
       const more =
@@ -143,9 +159,10 @@ export function BillingDisplay({
         output: formatUsdOrFree(effectiveOutput),
       });
     }
-    if (cacheBillingEnabled && (cachedInputPrice != null || cachedOutputPrice != null)) {
+    if (cacheBillingEnabled && (cachedInputPrice != null || cacheCreationInputPrice != null || cachedOutputPrice != null)) {
       text += ` ${t('detail.billingDisplay.cacheSuffix', {
         cachedInput: formatUsdCeil4(cachedInputPrice),
+        cacheCreationInput: formatUsdCeil4(cacheCreationInputPrice),
         cachedOutput: formatUsdCeil4(cachedOutputPrice),
       })}`;
     }

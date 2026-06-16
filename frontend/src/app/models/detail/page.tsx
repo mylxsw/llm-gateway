@@ -315,6 +315,7 @@ function ModelDetailContent() {
                     tieredPricing={model.tiered_pricing}
                     cacheBillingEnabled={model.cache_billing_enabled}
                     cachedInputPrice={model.cached_input_price}
+                    cacheCreationInputPrice={model.cache_creation_input_price}
                     cachedOutputPrice={model.cached_output_price}
                   />
                 </div>
@@ -462,6 +463,7 @@ function ModelDetailContent() {
                             fallbackOutputPrice={model.output_price}
                             cacheBillingEnabled={mapping.cache_billing_enabled}
                             cachedInputPrice={mapping.cached_input_price}
+                            cacheCreationInputPrice={mapping.cache_creation_input_price}
                             cachedOutputPrice={mapping.cached_output_price}
                           />
                         </TableCell>

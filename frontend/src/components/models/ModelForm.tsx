@@ -62,9 +62,10 @@ interface FormData {
   output_price: string;
   per_request_price: string;
   per_image_price: string;
-  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string; cached_input_price: string; cached_output_price: string }>;
+  tiers: Array<{ max_input_tokens: string; input_price: string; output_price: string; cached_input_price: string; cache_creation_input_price: string; cached_output_price: string }>;
   cache_billing_enabled: boolean;
   cached_input_price: string;
+  cache_creation_input_price: string;
   cached_output_price: string;
 }
 
@@ -103,9 +104,10 @@ export function ModelForm({
       output_price: '',
       per_request_price: '',
       per_image_price: '',
-      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
+      tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       cache_billing_enabled: false,
       cached_input_price: '',
+      cache_creation_input_price: '',
       cached_output_price: '',
     },
   });
@@ -156,6 +158,7 @@ export function ModelForm({
             : String(model.per_image_price),
         cache_billing_enabled: !!model.cache_billing_enabled,
         cached_input_price: model.cached_input_price === null || model.cached_input_price === undefined ? '' : String(model.cached_input_price),
+        cache_creation_input_price: model.cache_creation_input_price === null || model.cache_creation_input_price === undefined ? '' : String(model.cache_creation_input_price),
         cached_output_price: model.cached_output_price === null || model.cached_output_price === undefined ? '' : String(model.cached_output_price),
         tiers:
           model.tiered_pricing && model.tiered_pricing.length > 0
@@ -167,9 +170,10 @@ export function ModelForm({
                 input_price: String(t.input_price),
                 output_price: String(t.output_price),
                 cached_input_price: t.cached_input_price === null || t.cached_input_price === undefined ? '' : String(t.cached_input_price),
+                cache_creation_input_price: t.cache_creation_input_price === null || t.cache_creation_input_price === undefined ? '' : String(t.cache_creation_input_price),
                 cached_output_price: t.cached_output_price === null || t.cached_output_price === undefined ? '' : String(t.cached_output_price),
               }))
-            : [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
+            : [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       });
     } else {
       reset({
@@ -182,9 +186,10 @@ export function ModelForm({
         output_price: '',
         per_request_price: '',
         per_image_price: '',
-        tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cached_output_price: '' }],
+        tiers: [{ max_input_tokens: '32768', input_price: '', output_price: '', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
         cache_billing_enabled: false,
         cached_input_price: '',
+        cache_creation_input_price: '',
         cached_output_price: '',
       });
     }
@@ -225,6 +230,7 @@ export function ModelForm({
         submitData.tiered_pricing = null;
         submitData.cache_billing_enabled = null;
         submitData.cached_input_price = null;
+        submitData.cache_creation_input_price = null;
         submitData.cached_output_price = null;
       } else if (billingMode === 'per_image') {
         const perImg = data.per_image_price.trim();
@@ -235,6 +241,7 @@ export function ModelForm({
         submitData.tiered_pricing = null;
         submitData.cache_billing_enabled = null;
         submitData.cached_input_price = null;
+        submitData.cache_creation_input_price = null;
         submitData.cached_output_price = null;
       } else if (billingMode === 'token_tiered') {
         submitData.tiered_pricing = (data.tiers || []).map((t) => {
@@ -244,6 +251,7 @@ export function ModelForm({
             input_price: Number(t.input_price || '0'),
             output_price: Number(t.output_price || '0'),
             cached_input_price: data.cache_billing_enabled && t.cached_input_price.trim() ? Number(t.cached_input_price) : undefined,
+            cache_creation_input_price: data.cache_billing_enabled && t.cache_creation_input_price.trim() ? Number(t.cache_creation_input_price) : undefined,
             cached_output_price: data.cache_billing_enabled && t.cached_output_price.trim() ? Number(t.cached_output_price) : undefined,
           };
         });
@@ -253,6 +261,7 @@ export function ModelForm({
         submitData.output_price = null;
         submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
         submitData.cached_input_price = null;
+        submitData.cache_creation_input_price = null;
         submitData.cached_output_price = null;
       } else {
         // token_flat
@@ -265,6 +274,7 @@ export function ModelForm({
         submitData.tiered_pricing = null;
         submitData.cache_billing_enabled = data.cache_billing_enabled ?? false;
         submitData.cached_input_price = data.cache_billing_enabled && data.cached_input_price.trim() ? Number(data.cached_input_price) : null;
+        submitData.cache_creation_input_price = data.cache_billing_enabled && data.cache_creation_input_price.trim() ? Number(data.cache_creation_input_price) : null;
         submitData.cached_output_price = data.cache_billing_enabled && data.cached_output_price.trim() ? Number(data.cached_output_price) : null;
       }
     } else {
@@ -276,6 +286,7 @@ export function ModelForm({
       submitData.tiered_pricing = null;
       submitData.cache_billing_enabled = null;
       submitData.cached_input_price = null;
+      submitData.cache_creation_input_price = null;
       submitData.cached_output_price = null;
     }
 

@@ -19,6 +19,7 @@ describe('getPriceHistoryFormValues', () => {
       resolved_cache_billing_enabled: true,
       resolved_cached_input_price: 0.05,
       resolved_cached_output_price: 0.2,
+      resolved_cache_creation_input_price: 0.075,
       priority: 0,
       weight: 1,
       is_active: true,
@@ -32,9 +33,10 @@ describe('getPriceHistoryFormValues', () => {
       output_price: '0.6',
       per_request_price: '0',
       per_image_price: '0',
-      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       cache_billing_enabled: true,
       cached_input_price: '0.05',
+      cache_creation_input_price: '0.075',
       cached_output_price: '0.2',
     });
   });
@@ -54,6 +56,7 @@ describe('getPriceHistoryFormValues', () => {
           input_price: 1,
           output_price: 2,
           cached_input_price: 0.5,
+          cache_creation_input_price: 0.75,
           cached_output_price: 1,
         },
       ],
@@ -77,11 +80,13 @@ describe('getPriceHistoryFormValues', () => {
           input_price: '1',
           output_price: '2',
           cached_input_price: '0.5',
+          cache_creation_input_price: '0.75',
           cached_output_price: '1',
         },
       ],
       cache_billing_enabled: true,
       cached_input_price: '',
+      cache_creation_input_price: '',
       cached_output_price: '',
     });
   });
