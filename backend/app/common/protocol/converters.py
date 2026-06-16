@@ -18,6 +18,7 @@ from app.common.reasoning import (
     normalize_reasoning_for_anthropic,
     normalize_reasoning_for_openai,
 )
+from app.common.usage_extractor import extract_usage_details
 
 from .base import (
     ConversionResult,
@@ -1962,6 +1963,11 @@ class SDKStreamConverter(IStreamConverter):
         current_block_type: Optional[str] = None
         # Track current tool call by id (more reliable than index which may be missing)
         current_tool_call_id: Optional[str] = None
+        # Usage + stop_reason are emitted in the trailing flush, because OpenAI
+        # streams deliver the real usage in a final chunk with empty `choices`
+        # (often AFTER the finish_reason chunk). Capture them as we go.
+        last_usage = None
+        pending_stop_reason: Optional[str] = None
 
         async for chunk in upstream:
             for payload in decoder.feed(chunk):
@@ -1993,6 +1999,13 @@ class SDKStreamConverter(IStreamConverter):
                     data = json.loads(payload)
                 except Exception:
                     continue
+
+                # Capture usage from every chunk BEFORE the empty-choices guard:
+                # the final usage chunk has `choices: []`, so reading it after the
+                # guard would drop it entirely.
+                chunk_usage = extract_usage_details(data)
+                if chunk_usage is not None:
+                    last_usage = chunk_usage
 
                 choices = data.get("choices", [])
                 if not choices:
@@ -2102,7 +2115,10 @@ class SDKStreamConverter(IStreamConverter):
 
                 # Handle Finish Reason
                 if finish_reason:
-                    # Close any open block
+                    # Close any open block now, but defer the terminal
+                    # message_delta/message_stop to the trailing flush so the
+                    # final usage chunk (which arrives after finish_reason with
+                    # empty choices) is included in the usage we emit.
                     if current_block_type is not None:
                         yield _encode_sse_json(
                             {
@@ -2111,24 +2127,57 @@ class SDKStreamConverter(IStreamConverter):
                             },
                             event="content_block_stop",
                         )
+                        current_block_type = None
 
-                    stop_reason = _map_openai_to_anthropic_finish_reason(finish_reason)
-                    yield _encode_sse_json(
-                        {
-                            "type": "message_delta",
-                            "delta": {"stop_reason": stop_reason},
-                            "usage": {"output_tokens": 0},
-                        },
-                        event="message_delta",
+                    pending_stop_reason = _map_openai_to_anthropic_finish_reason(
+                        finish_reason
                     )
 
-                    if not sent_message_stop:
-                        sent_message_stop = True
-                        yield _encode_sse_json(
-                            {"type": "message_stop"}, event="message_stop"
+        # Trailing flush: emit the terminal message_delta (carrying real usage)
+        # and message_stop once the upstream stream is fully drained.
+        if not sent_message_stop:
+            if current_block_type is not None:
+                yield _encode_sse_json(
+                    {
+                        "type": "content_block_stop",
+                        "index": current_block_index,
+                    },
+                    event="content_block_stop",
+                )
+                current_block_type = None
+
+            # Emit the terminal message_delta only when we have something real to
+            # report — a finish_reason or upstream usage — and a message was started.
+            # This avoids a spurious zero-usage message_delta for malformed/empty
+            # upstreams (matching the prior behavior) while still carrying usage when
+            # the supplier reports it without a finish_reason.
+            if sent_message_start and (
+                pending_stop_reason is not None or last_usage is not None
+            ):
+                usage_payload: Dict[str, Any] = {"output_tokens": 0}
+                if last_usage is not None:
+                    usage_payload = {
+                        "input_tokens": last_usage.input_tokens or 0,
+                        "output_tokens": last_usage.output_tokens or 0,
+                    }
+                    if last_usage.cached_tokens:
+                        usage_payload["cache_read_input_tokens"] = (
+                            last_usage.cached_tokens
+                        )
+                    if last_usage.cache_creation_input_tokens:
+                        usage_payload["cache_creation_input_tokens"] = (
+                            last_usage.cache_creation_input_tokens
                         )
 
-        if not sent_message_stop:
+                yield _encode_sse_json(
+                    {
+                        "type": "message_delta",
+                        "delta": {"stop_reason": pending_stop_reason},
+                        "usage": usage_payload,
+                    },
+                    event="message_delta",
+                )
+
             sent_message_stop = True
             yield _encode_sse_json({"type": "message_stop"}, event="message_stop")
 
