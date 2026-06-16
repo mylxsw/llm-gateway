@@ -11,6 +11,10 @@
   - `usage.input_tokens`、`usage.output_tokens`、`usage.total_tokens`
   - 细分字段（可能存在）：`usage.input_tokens_details` / `usage.output_tokens_details`
     - 常见：`cached_tokens`、`audio_tokens`、`image_tokens`、`reasoning_tokens`、`tool_tokens`
+- 缓存计费：
+  - `prompt_tokens/input_tokens` 表示全部输入。
+  - `cached_tokens` 表示缓存读取 token。
+  - 未缓存输入需自行计算：`input_tokens - cached_tokens`。
 - 多模态：
   - 文本：由模型 tokenizer 计数（tiktoken）。
   - 图片：低清细节通常为固定 Token，高细节按 512px tile 计数。
@@ -21,6 +25,10 @@
 - Messages API:
   - `usage.input_tokens`、`usage.output_tokens`
   - 缓存相关：`cache_creation_input_tokens`、`cache_read_input_tokens`
+- 缓存计费：
+  - 原始 `usage.input_tokens` 表示未缓存输入，不是全部输入。
+  - 全部输入需统一计算：`input_tokens + cache_creation_input_tokens + cache_read_input_tokens`。
+  - `cache_creation_input_tokens` 使用缓存写入价，`cache_read_input_tokens` 使用缓存读取价。
 - 多模态：
   - 图片信息计入 input/output tokens；usage 可能仅反映总量与缓存差异。
 
@@ -29,6 +37,11 @@
   - `promptTokenCount`、`candidatesTokenCount`、`totalTokenCount`
   - `cachedContentTokenCount`
 - 多模态 token 已统一计入 prompt/candidates 的统计。
+- 缓存计费：
+  - `promptTokenCount` 表示全部输入。
+  - `cachedContentTokenCount` 表示缓存读取 token。
+  - 未缓存输入需自行计算：`promptTokenCount - cachedContentTokenCount`。
+  - Explicit Cache 的存储费用是独立资源费用，当前日志 usage 仅记录推理响应中的 token 用量。
 
 ### 1.4 OpenRouter（兼容 OpenAI）
 - 一般复用 OpenAI usage 字段：
@@ -66,6 +79,9 @@
 - `source=upstream`：响应包含 usage，且使用该数值。
 - `source=estimated`：响应缺少 usage，使用本地估算。
 - `source=mixed`：部分字段缺失，混合使用响应与本地估算。
+- `input_tokens`：统一表示全部 Prompt/Input token；Anthropic 会由三段输入相加得到。
+- `cache_read_input_tokens`：缓存读取 token；OpenAI/Gemini 从各自缓存命中字段映射而来。
+- `cache_creation_input_tokens`：缓存写入 token；主要来自 Anthropic，Gemini 显式缓存创建接口不一定出现在推理响应 usage 中。
 - `raw_usage`：原始 usage 字段（尽可能完整保留）。
 - `extra_usage`：非标准字段保留，避免丢失。
 
@@ -103,7 +119,32 @@
    - 若不包含 usage：用本地估算填充 output tokens，并保留 input tokens。
 3. **日志记录**：始终记录 `usage_details`，保留 raw usage 字段以便后续分析。
 
-## 5. 风险与改进方向
+## 5. 统一计费公式
+
+响应 usage 会先归一化为：
+
+```text
+promptTokens = input_tokens
+completionTokens = output_tokens
+cacheReadTokens = cache_read_input_tokens
+cacheWriteTokens = cache_creation_input_tokens
+regularInputTokens = max(input_tokens - cacheReadTokens - cacheWriteTokens, 0)
+```
+
+统一成本公式：
+
+```text
+Cost =
+  cacheWriteTokens * CacheWritePrice
+  + cacheReadTokens * CacheReadPrice
+  + regularInputTokens * InputPrice
+  + completionTokens * OutputPrice
+```
+
+`cached_input_cost` 当前记录缓存读取与缓存写入的合计成本，以保持日志表结构兼容。
+
+## 6. 风险与改进方向
 
 - 多模态 token 估算依赖厂商规则，现阶段用于“近似”与“路由参考”。
 - 后续可接入官方 tokenizer（如 Anthropic tokenizer）或更精确的多模态成本模型。
+- Gemini Explicit Cache 的 Cache Storage Fee 尚未并入请求级 token 计费，后续需要独立资源账单模型。

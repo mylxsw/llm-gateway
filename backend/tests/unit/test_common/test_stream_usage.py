@@ -42,6 +42,11 @@ def test_openai_stream_prefers_upstream_reported_usage():
 def test_anthropic_stream_accumulates_text_and_uses_output_tokens():
     acc = StreamUsageAccumulator(protocol="anthropic", model="claude-3")
     chunks = [
+        (
+            b"data: {\"type\":\"message_start\",\"message\":{\"usage\":"
+            b"{\"input_tokens\":3,\"cache_creation_input_tokens\":2,"
+            b"\"cache_read_input_tokens\":5}}}\r\n\r\n"
+        ),
         b"data: {\"type\":\"content_block_delta\",\"delta\":{\"text\":\"Hi\"}}\r\n\r\n",
         b"data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":9}}\r\n\r\n",
     ]
@@ -51,6 +56,11 @@ def test_anthropic_stream_accumulates_text_and_uses_output_tokens():
     result = acc.finalize()
     assert result.output_text == "Hi"
     assert result.output_tokens == 9
+    assert result.input_tokens == 10
+    assert result.usage_details is not None
+    assert result.usage_details["cache_read_input_tokens"] == 5
+    assert result.usage_details["cache_creation_input_tokens"] == 2
+    assert result.usage_details["total_tokens"] == 19
 
 
 def test_anthropic_stream_counts_thinking_delta_when_usage_missing():

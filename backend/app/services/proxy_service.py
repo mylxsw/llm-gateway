@@ -884,6 +884,7 @@ class ProxyService:
             model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
             model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
             model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
+            model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
             provider_billing_mode=provider_mapping.billing_mode
             if provider_mapping
             else None,
@@ -918,21 +919,13 @@ class ProxyService:
         # Extract cached tokens from usage details
         cached_input_tokens = None
         cache_creation_input_tokens = None
-        cache_tokens_separate = False
         if usage_details:
             cached_input_tokens = (
-                usage_details.get("cached_tokens")
-                or usage_details.get("cache_read_input_tokens")
+                usage_details.get("cache_read_input_tokens")
+                if usage_details.get("cache_read_input_tokens") is not None
+                else usage_details.get("cached_tokens")
             )
             cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
-            # Anthropic reports cache_read/creation tokens separately from (and in
-            # addition to) input_tokens, unlike OpenAI where cached_tokens are a
-            # subset of prompt_tokens. Detect the Anthropic-style keys so billing
-            # does not cap the cache tokens against the much smaller input_tokens.
-            cache_tokens_separate = (
-                usage_details.get("cache_read_input_tokens") is not None
-                or usage_details.get("cache_creation_input_tokens") is not None
-            )
         cost = calculate_cost_from_billing(
             billing=billing,
             input_tokens=input_tokens,
@@ -940,7 +933,6 @@ class ProxyService:
             image_count=image_count,
             cached_input_tokens=cached_input_tokens,
             cache_creation_input_tokens=cache_creation_input_tokens,
-            cache_tokens_separate=cache_tokens_separate,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -1519,6 +1511,7 @@ class ProxyService:
                     model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
                     model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
                     model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
+                    model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
                     provider_billing_mode=provider_mapping.billing_mode
                     if provider_mapping
                     else None,
@@ -1553,19 +1546,13 @@ class ProxyService:
                 # Extract cached tokens from stream usage details
                 stream_cached_input_tokens = None
                 stream_cache_creation_input_tokens = None
-                stream_cache_tokens_separate = False
                 if usage_details:
                     stream_cached_input_tokens = (
-                        usage_details.get("cached_tokens")
-                        or usage_details.get("cache_read_input_tokens")
+                        usage_details.get("cache_read_input_tokens")
+                        if usage_details.get("cache_read_input_tokens") is not None
+                        else usage_details.get("cached_tokens")
                     )
                     stream_cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
-                    # See non-stream path: Anthropic reports cache tokens as
-                    # additive/separate from input_tokens.
-                    stream_cache_tokens_separate = (
-                        usage_details.get("cache_read_input_tokens") is not None
-                        or usage_details.get("cache_creation_input_tokens") is not None
-                    )
                 cost = calculate_cost_from_billing(
                     billing=billing,
                     input_tokens=input_tokens,
@@ -1573,7 +1560,6 @@ class ProxyService:
                     image_count=image_count,
                     cached_input_tokens=stream_cached_input_tokens,
                     cache_creation_input_tokens=stream_cache_creation_input_tokens,
-                    cache_tokens_separate=stream_cache_tokens_separate,
                 )
                 raw_stream_text = (
                     b"".join(raw_stream_chunks).decode("utf-8", errors="replace")

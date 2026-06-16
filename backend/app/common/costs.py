@@ -434,19 +434,8 @@ def calculate_cost(
         cached_input_tokens or cached_output_tokens or cache_creation_input_tokens
     ):
         # Split input tokens: read-cached + write-creation + non-cached.
-        #
-        # Two upstream conventions exist:
-        #
-        # - OpenAI (cache_tokens_separate=False): cached_tokens ⊆ prompt_tokens.
-        #   The reported input_tokens already includes cached/write tokens, so
-        #   each is capped at in_tokens (and their combined sum capped too) and
-        #   subtracted out to derive the non-cached remainder.
-        #
-        # - Anthropic (cache_tokens_separate=True): cache_read_input_tokens and
-        #   cache_creation_input_tokens are reported separately from and in
-        #   addition to input_tokens. They must be billed in full alongside the
-        #   full input_tokens (no cap, no subtraction), otherwise the much
-        #   larger cache token counts collapse to ~0 against a tiny input_tokens.
+        # cache_tokens_separate remains for older Anthropic-style callers where
+        # input_tokens is the uncached count instead of the total prompt count.
         if cache_tokens_separate:
             c_in = int(cached_input_tokens or 0)
             c_create = int(cache_creation_input_tokens or 0)

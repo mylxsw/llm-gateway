@@ -63,9 +63,12 @@ def _extract_usage_dict(obj: Any) -> tuple[dict[str, Any], str] | None:
 
 @dataclass(frozen=True)
 class UsageDetails:
+    # Normalized total prompt/input tokens. For Anthropic this is computed as
+    # input_tokens + cache_creation_input_tokens + cache_read_input_tokens.
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
+    # Legacy/common cache-read alias. Prefer cache_read_input_tokens in new code.
     cached_tokens: Optional[int] = None
     cache_creation_input_tokens: Optional[int] = None
     cache_read_input_tokens: Optional[int] = None
@@ -94,6 +97,14 @@ def _safe_int(value: Any) -> Optional[int]:
     return None
 
 
+def _first_int(*values: Any) -> Optional[int]:
+    for value in values:
+        parsed = _safe_int(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
     input_tokens = None
     output_tokens = None
@@ -116,6 +127,7 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
         output_tokens = _safe_int(usage.get("candidatesTokenCount"))
         total_tokens = _safe_int(usage.get("totalTokenCount"))
         cached_tokens = _safe_int(usage.get("cachedContentTokenCount"))
+        cache_read_input_tokens = cached_tokens
 
         # Parse Gemini modality details: promptTokensDetails
         prompt_details = usage.get("promptTokensDetails")
@@ -148,13 +160,19 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
         # Map thoughtsTokenCount to reasoning_tokens
         reasoning_tokens = _safe_int(usage.get("thoughtsTokenCount"))
     else:
-        input_tokens = _safe_int(usage.get("prompt_tokens") or usage.get("input_tokens"))
-        output_tokens = _safe_int(usage.get("completion_tokens") or usage.get("output_tokens"))
+        raw_prompt_tokens = _first_int(
+            usage.get("prompt_tokens"),
+            usage.get("input_tokens"),
+        )
+        output_tokens = _first_int(usage.get("completion_tokens"), usage.get("output_tokens"))
         total_tokens = _safe_int(usage.get("total_tokens"))
 
         cached_tokens = _safe_int(usage.get("cached_tokens"))
         cache_creation_input_tokens = _safe_int(usage.get("cache_creation_input_tokens"))
         cache_read_input_tokens = _safe_int(usage.get("cache_read_input_tokens"))
+        has_explicit_anthropic_cache_fields = (
+            "cache_creation_input_tokens" in usage or "cache_read_input_tokens" in usage
+        )
 
         input_details = (
             usage.get("input_tokens_details")
@@ -167,7 +185,11 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
             or usage.get("output_token_details")
         )
         if isinstance(input_details, dict):
-            cached_tokens = cached_tokens or _safe_int(input_details.get("cached_tokens"))
+            cached_tokens = (
+                cached_tokens
+                if cached_tokens is not None
+                else _safe_int(input_details.get("cached_tokens"))
+            )
             input_audio_tokens = _safe_int(input_details.get("audio_tokens"))
             input_image_tokens = _safe_int(input_details.get("image_tokens"))
             input_video_tokens = _safe_int(input_details.get("video_tokens"))
@@ -179,6 +201,24 @@ def _normalize_usage(usage: dict[str, Any], usage_kind: str) -> UsageDetails:
             output_video_tokens = _safe_int(output_details.get("video_tokens"))
             reasoning_tokens = reasoning_tokens or _safe_int(output_details.get("reasoning_tokens"))
             tool_tokens = tool_tokens or _safe_int(output_details.get("tool_tokens"))
+
+        if cache_read_input_tokens is None:
+            cache_read_input_tokens = cached_tokens
+        if cached_tokens is None:
+            cached_tokens = cache_read_input_tokens
+
+        # Anthropic reports top-level input_tokens as regular input plus
+        # top-level cache read/write fields as additive input. OpenAI Responses
+        # uses nested input_tokens_details.cached_tokens, so it does not enter
+        # this branch.
+        if has_explicit_anthropic_cache_fields and "prompt_tokens" not in usage:
+            input_tokens = (
+                (raw_prompt_tokens or 0)
+                + (cache_creation_input_tokens or 0)
+                + (cache_read_input_tokens or 0)
+            )
+        else:
+            input_tokens = raw_prompt_tokens
 
     if total_tokens is None and input_tokens is not None and output_tokens is not None:
         total_tokens = input_tokens + output_tokens

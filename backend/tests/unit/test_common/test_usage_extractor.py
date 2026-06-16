@@ -24,6 +24,7 @@ def test_extract_usage_details_openai_details_fields():
     assert details.input_tokens == 10
     assert details.output_tokens == 4
     assert details.cached_tokens == 2
+    assert details.cache_read_input_tokens == 2
     assert details.input_audio_tokens == 3
     assert details.output_image_tokens == 5
     assert details.reasoning_tokens == 1
@@ -40,8 +41,11 @@ def test_extract_usage_details_anthropic_cache_fields():
     }
     details = extract_usage_details(body)
     assert details is not None
+    assert details.input_tokens == 25
+    assert details.total_tokens == 30
     assert details.cache_creation_input_tokens == 3
     assert details.cache_read_input_tokens == 2
+    assert details.cached_tokens == 2
 
 
 def test_extract_usage_details_gemini_metadata():
@@ -59,6 +63,55 @@ def test_extract_usage_details_gemini_metadata():
     assert details.output_tokens == 6
     assert details.total_tokens == 14
     assert details.cached_tokens == 4
+    assert details.cache_read_input_tokens == 4
+
+
+def test_extract_usage_details_vendor_cache_examples():
+    openai = extract_usage_details(
+        {
+            "usage": {
+                "prompt_tokens": 1429,
+                "completion_tokens": 8,
+                "total_tokens": 1437,
+                "prompt_tokens_details": {"cached_tokens": 768},
+            }
+        }
+    )
+    assert openai is not None
+    assert openai.input_tokens == 1429
+    assert openai.cache_read_input_tokens == 768
+    assert openai.cache_creation_input_tokens is None
+
+    anthropic = extract_usage_details(
+        {
+            "usage": {
+                "input_tokens": 661,
+                "output_tokens": 8,
+                "cache_creation_input_tokens": 768,
+                "cache_read_input_tokens": 0,
+            }
+        }
+    )
+    assert anthropic is not None
+    assert anthropic.input_tokens == 1429
+    assert anthropic.cache_creation_input_tokens == 768
+    assert anthropic.cache_read_input_tokens == 0
+    assert anthropic.total_tokens == 1437
+
+    gemini = extract_usage_details(
+        {
+            "usageMetadata": {
+                "promptTokenCount": 1429,
+                "cachedContentTokenCount": 768,
+                "candidatesTokenCount": 8,
+                "totalTokenCount": 1437,
+            }
+        }
+    )
+    assert gemini is not None
+    assert gemini.input_tokens == 1429
+    assert gemini.cache_read_input_tokens == 768
+    assert gemini.cache_creation_input_tokens is None
 
 
 def test_extract_usage_details_gemini_modality_details():

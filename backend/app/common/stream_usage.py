@@ -7,7 +7,7 @@ Used when upstream returns SSE (text/event-stream) to extract incremental text f
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any, Optional
 
 from app.common.token_counter import get_token_counter
@@ -72,6 +72,39 @@ class StreamUsageResult:
     input_tokens: Optional[int]
     upstream_reported_output_tokens: Optional[int]
     usage_details: Optional[dict[str, Any]]
+
+
+def _merge_usage_details(
+    previous: Optional[UsageDetails],
+    current: UsageDetails,
+) -> UsageDetails:
+    if previous is None:
+        return current
+
+    values: dict[str, Any] = {}
+    for field in fields(UsageDetails):
+        name = field.name
+        old_value = getattr(previous, name)
+        new_value = getattr(current, name)
+        values[name] = new_value if new_value is not None else old_value
+
+    old_raw = previous.raw_usage
+    new_raw = current.raw_usage
+    if isinstance(old_raw, dict) and isinstance(new_raw, dict):
+        values["raw_usage"] = {**old_raw, **new_raw}
+
+    old_extra = previous.extra_usage
+    new_extra = current.extra_usage
+    if isinstance(old_extra, dict) and isinstance(new_extra, dict):
+        values["extra_usage"] = {**old_extra, **new_extra}
+
+    if current.total_tokens is None:
+        input_tokens = values.get("input_tokens")
+        output_tokens = values.get("output_tokens")
+        if input_tokens is not None and output_tokens is not None:
+            values["total_tokens"] = input_tokens + output_tokens
+
+    return UsageDetails(**values)
 
 
 class StreamUsageAccumulator:
@@ -309,7 +342,7 @@ class StreamUsageAccumulator:
         details = extract_usage_details(data)
         if not details:
             return
-        self._usage_details = details
+        self._usage_details = _merge_usage_details(self._usage_details, details)
         if details.output_tokens is not None:
             self._upstream_output_tokens = details.output_tokens
         if details.input_tokens is not None:

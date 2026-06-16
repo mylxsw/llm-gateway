@@ -580,7 +580,12 @@ def test_convert_response_openai_to_anthropic():
                     "finish_reason": "stop",
                 }
             ],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3},
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 2,
+                "total_tokens": 7,
+                "prompt_tokens_details": {"cached_tokens": 4},
+            },
         },
     )
 
@@ -588,6 +593,8 @@ def test_convert_response_openai_to_anthropic():
     assert converted["role"] == "assistant"
     assert isinstance(converted["content"], list)
     assert converted["content"][0]["type"] == "text"
+    assert converted["usage"]["input_tokens"] == 1
+    assert converted["usage"]["cache_read_input_tokens"] == 4
 
 
 def test_convert_response_anthropic_to_openai():
@@ -603,14 +610,21 @@ def test_convert_response_anthropic_to_openai():
             "content": [{"type": "text", "text": "Hello"}],
             "stop_reason": "end_turn",
             "stop_sequence": None,
-            "usage": {"input_tokens": 1, "output_tokens": 2},
+            "usage": {
+                "input_tokens": 1,
+                "cache_creation_input_tokens": 3,
+                "cache_read_input_tokens": 4,
+                "output_tokens": 2,
+            },
         },
     )
 
     assert converted["object"] == "chat.completion"
     assert converted["choices"][0]["message"]["content"] == "Hello"
-    assert converted["usage"]["prompt_tokens"] == 1
+    assert converted["usage"]["prompt_tokens"] == 8
     assert converted["usage"]["completion_tokens"] == 2
+    assert converted["usage"]["total_tokens"] == 10
+    assert converted["usage"]["prompt_tokens_details"] == {"cached_tokens": 4}
 
 
 def test_convert_request_openai_responses_to_anthropic_with_max_output_tokens():
@@ -1987,6 +2001,7 @@ def test_convert_response_gemini_to_anthropic():
     assert converted["role"] == "assistant"
     assert isinstance(converted["content"], list)
     assert converted["content"][0]["type"] == "text"
+    assert converted["usage"]["input_tokens"] == 3
     assert "Hello from Gemini" in converted["content"][0]["text"]
 
 

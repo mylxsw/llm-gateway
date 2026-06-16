@@ -919,6 +919,40 @@ class TestSeparateCacheTokens:
         # Cache tokens collapse against input_tokens=1; only output is billed.
         assert cost.total_cost == 0.0155
 
+    def test_unified_usage_bills_anthropic_without_separate_flag(self):
+        """Normalized Anthropic usage derives regular input from total minus cache."""
+        cost = calculate_cost(
+            input_tokens=89_228,
+            output_tokens=616,
+            input_price=5.0,
+            output_price=25.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=87_041,
+            cached_input_price=0.5,
+            cache_creation_input_tokens=2_186,
+            cache_creation_input_price=10.0,
+        )
+        assert cost.input_cost == 0.0656
+        assert cost.output_cost == 0.0154
+        assert cost.total_cost == 0.081
+
+    def test_unified_openai_example(self):
+        """1429 prompt = 768 cache read + 661 regular input."""
+        cost = calculate_cost(
+            input_tokens=1429,
+            output_tokens=8,
+            input_price=5.0,
+            output_price=15.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=768,
+            cached_input_price=1.0,
+        )
+        # input: ceil(768/1M*1) + ceil(661/1M*5) = 0.0008 + 0.0034
+        # output: ceil(8/1M*15) = 0.0002
+        assert cost.input_cost == 0.0042
+        assert cost.output_cost == 0.0002
+        assert cost.total_cost == 0.0044
+
 
 class TestResolveBillingCacheCreation:
     """resolve_billing correctly resolves cache_creation_input_price."""
@@ -1036,4 +1070,3 @@ class TestCalculateCostFromBillingWithCacheCreation:
         assert cost.input_cost == 4.0
         assert cost.cached_input_cost == 1.5
         assert cost.total_cost == 4.0
-
