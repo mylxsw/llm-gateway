@@ -357,6 +357,7 @@ def calculate_cost_from_billing(
     cached_input_tokens: int | None = None,
     cached_output_tokens: int | None = None,
     cache_creation_input_tokens: int | None = None,
+    cache_tokens_separate: bool = False,
 ) -> CostBreakdown:
     if billing.billing_mode == BILLING_MODE_PER_REQUEST:
         total = _q4(_to_decimal(billing.per_request_price))
@@ -379,6 +380,7 @@ def calculate_cost_from_billing(
         cached_output_price=billing.cached_output_price,
         cache_creation_input_tokens=cache_creation_input_tokens,
         cache_creation_input_price=billing.cache_creation_input_price,
+        cache_tokens_separate=cache_tokens_separate,
     )
 
 
@@ -419,6 +421,7 @@ def calculate_cost(
     cached_output_price: float | None = None,
     cache_creation_input_tokens: int | None = None,
     cache_creation_input_price: float | None = None,
+    cache_tokens_separate: bool = False,
 ) -> CostBreakdown:
     in_tokens = int(input_tokens or 0)
     out_tokens = int(output_tokens or 0)
@@ -431,24 +434,36 @@ def calculate_cost(
         cached_input_tokens or cached_output_tokens or cache_creation_input_tokens
     ):
         # Split input tokens: read-cached + write-creation + non-cached.
-        # OpenAI semantics: cached_tokens ⊆ prompt_tokens. Anthropic semantics:
-        # cache_read_input_tokens and cache_creation_input_tokens are reported
-        # separately from input_tokens. We cap each individually at in_tokens
-        # (mirrors the existing cached_input_tokens cap), and additionally cap
-        # their combined sum at in_tokens so we never bill more cached/write
-        # tokens than the request actually used as input.
-        c_in = min(int(cached_input_tokens or 0), in_tokens)
-        c_create = min(int(cache_creation_input_tokens or 0), in_tokens)
-        # If both read and write are present, scale down proportionally so the
-        # combined cached/write tokens do not exceed in_tokens. This keeps the
-        # test_cached_exceeds_input behavior intact (single-side cap) and only
-        # kicks in when both sides are non-trivial.
-        total_cached = c_in + c_create
-        if total_cached > in_tokens:
-            scale = Decimal(in_tokens) / Decimal(total_cached)
-            c_in = int(Decimal(c_in) * scale)
-            c_create = int(Decimal(c_create) * scale)
-        non_cached_in = max(in_tokens - c_in - c_create, 0)
+        #
+        # Two upstream conventions exist:
+        #
+        # - OpenAI (cache_tokens_separate=False): cached_tokens ⊆ prompt_tokens.
+        #   The reported input_tokens already includes cached/write tokens, so
+        #   each is capped at in_tokens (and their combined sum capped too) and
+        #   subtracted out to derive the non-cached remainder.
+        #
+        # - Anthropic (cache_tokens_separate=True): cache_read_input_tokens and
+        #   cache_creation_input_tokens are reported separately from and in
+        #   addition to input_tokens. They must be billed in full alongside the
+        #   full input_tokens (no cap, no subtraction), otherwise the much
+        #   larger cache token counts collapse to ~0 against a tiny input_tokens.
+        if cache_tokens_separate:
+            c_in = int(cached_input_tokens or 0)
+            c_create = int(cache_creation_input_tokens or 0)
+            non_cached_in = max(in_tokens, 0)
+        else:
+            c_in = min(int(cached_input_tokens or 0), in_tokens)
+            c_create = min(int(cache_creation_input_tokens or 0), in_tokens)
+            # If both read and write are present, scale down proportionally so the
+            # combined cached/write tokens do not exceed in_tokens. This keeps the
+            # test_cached_exceeds_input behavior intact (single-side cap) and only
+            # kicks in when both sides are non-trivial.
+            total_cached = c_in + c_create
+            if total_cached > in_tokens:
+                scale = Decimal(in_tokens) / Decimal(total_cached)
+                c_in = int(Decimal(c_in) * scale)
+                c_create = int(Decimal(c_create) * scale)
+            non_cached_in = max(in_tokens - c_in - c_create, 0)
         # Effective cached input price: fall back to input_price if not set
         eff_cached_in_price = cached_input_price if cached_input_price is not None else input_price
         cached_in_cost = _q4(

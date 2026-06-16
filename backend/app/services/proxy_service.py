@@ -3,6 +3,7 @@
 Implements core business logic for request proxying."""
 
 import asyncio
+import copy
 import json
 import logging
 import time
@@ -28,7 +29,7 @@ from app.common.upstream_url import build_upstream_url
 from app.common.token_counter import get_token_counter
 from app.common.usage_extractor import extract_usage_details
 from app.common.utils import generate_trace_id
-from app.domain.log import RequestLogCreate
+from app.domain.log import RequestLogCreate, RequestLogModel
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
 from app.providers import ProviderResponse, get_provider_client
@@ -248,6 +249,99 @@ class ProxyService:
         if not isinstance(provider_options, dict):
             return False
         return bool(provider_options.get("no_suffix"))
+
+    async def rebuild_converted_request(
+        self, log: RequestLogModel
+    ) -> dict[str, Any]:
+        """
+        Re-run the request protocol conversion for a stored log.
+
+        The ``converted_request_body`` persisted in logs is truncated for
+        storage (see ``_smart_truncate``), so this reconstructs the full,
+        non-truncated upstream request body on demand using the same
+        conversion pipeline (hooks + ``convert_request_for_supplier``) the
+        proxy used when the request was originally forwarded.
+
+        Returns a dict with ``converted_request_body``, ``upstream_url``,
+        ``request_method`` and ``supplier_protocol``.
+        """
+        if not log.detail_available or log.request_body is None:
+            raise ServiceError(
+                message="Request detail has expired for this log",
+                code="converted_request_detail_expired",
+            )
+        if isinstance(log.request_body, dict) and log.request_body.get("_files"):
+            raise ServiceError(
+                message="Multipart requests cannot be reconstructed",
+                code="converted_request_multipart_unsupported",
+            )
+        if not log.provider_id:
+            raise ServiceError(
+                message="Provider info is missing for this log",
+                code="converted_request_provider_missing",
+            )
+
+        provider = await self.provider_repo.get_by_id(log.provider_id)
+        if not provider:
+            raise NotFoundError(
+                message="Provider for this log no longer exists",
+                code="converted_request_provider_not_found",
+            )
+
+        request_protocol = (log.request_protocol or "openai").lower()
+        path = log.request_path or ""
+        target_model = log.target_model or log.requested_model or ""
+        # Work on a copy so conversion hooks cannot mutate the fetched log.
+        body = copy.deepcopy(log.request_body)
+        is_image_path = path in OPENAI_IMAGE_PATHS
+        supplier_protocol = resolve_implementation_protocol(provider.protocol)
+        conversion_options = self._build_conversion_options(provider.provider_options)
+
+        hooked_body = await self._protocol_hooks.before_request_conversion(
+            body, request_protocol, supplier_protocol
+        )
+        if hooked_body is None:
+            hooked_body = body
+        if is_image_path:
+            hooked_image_body = (
+                await self._protocol_hooks.before_image_request_conversion(
+                    hooked_body, request_protocol, supplier_protocol, path
+                )
+            )
+            if hooked_image_body is not None:
+                hooked_body = hooked_image_body
+
+        supplier_path, supplier_body = convert_request_for_supplier(
+            request_protocol=request_protocol,
+            supplier_protocol=provider.protocol,
+            path=path,
+            body=hooked_body,
+            target_model=target_model,
+            options=conversion_options,
+        )
+        if self._use_no_suffix(provider.provider_options):
+            supplier_path = ""
+
+        hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
+            supplier_body, request_protocol, supplier_protocol
+        )
+        if hooked_supplier_body is not None:
+            supplier_body = hooked_supplier_body
+        if is_image_path:
+            hooked_image_supplier_body = (
+                await self._protocol_hooks.after_image_request_conversion(
+                    supplier_body, request_protocol, supplier_protocol, path
+                )
+            )
+            if hooked_image_supplier_body is not None:
+                supplier_body = hooked_image_supplier_body
+
+        return {
+            "converted_request_body": supplier_body,
+            "upstream_url": build_upstream_url(provider.base_url, supplier_path),
+            "request_method": (log.request_method or "POST").upper(),
+            "supplier_protocol": supplier_protocol,
+        }
 
     async def _resolve_candidates(
         self,
@@ -824,12 +918,21 @@ class ProxyService:
         # Extract cached tokens from usage details
         cached_input_tokens = None
         cache_creation_input_tokens = None
+        cache_tokens_separate = False
         if usage_details:
             cached_input_tokens = (
                 usage_details.get("cached_tokens")
                 or usage_details.get("cache_read_input_tokens")
             )
             cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
+            # Anthropic reports cache_read/creation tokens separately from (and in
+            # addition to) input_tokens, unlike OpenAI where cached_tokens are a
+            # subset of prompt_tokens. Detect the Anthropic-style keys so billing
+            # does not cap the cache tokens against the much smaller input_tokens.
+            cache_tokens_separate = (
+                usage_details.get("cache_read_input_tokens") is not None
+                or usage_details.get("cache_creation_input_tokens") is not None
+            )
         cost = calculate_cost_from_billing(
             billing=billing,
             input_tokens=input_tokens,
@@ -837,6 +940,7 @@ class ProxyService:
             image_count=image_count,
             cached_input_tokens=cached_input_tokens,
             cache_creation_input_tokens=cache_creation_input_tokens,
+            cache_tokens_separate=cache_tokens_separate,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -1449,12 +1553,19 @@ class ProxyService:
                 # Extract cached tokens from stream usage details
                 stream_cached_input_tokens = None
                 stream_cache_creation_input_tokens = None
+                stream_cache_tokens_separate = False
                 if usage_details:
                     stream_cached_input_tokens = (
                         usage_details.get("cached_tokens")
                         or usage_details.get("cache_read_input_tokens")
                     )
                     stream_cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
+                    # See non-stream path: Anthropic reports cache tokens as
+                    # additive/separate from input_tokens.
+                    stream_cache_tokens_separate = (
+                        usage_details.get("cache_read_input_tokens") is not None
+                        or usage_details.get("cache_creation_input_tokens") is not None
+                    )
                 cost = calculate_cost_from_billing(
                     billing=billing,
                     input_tokens=input_tokens,
@@ -1462,6 +1573,7 @@ class ProxyService:
                     image_count=image_count,
                     cached_input_tokens=stream_cached_input_tokens,
                     cache_creation_input_tokens=stream_cache_creation_input_tokens,
+                    cache_tokens_separate=stream_cache_tokens_separate,
                 )
                 raw_stream_text = (
                     b"".join(raw_stream_chunks).decode("utf-8", errors="replace")

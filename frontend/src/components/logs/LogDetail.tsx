@@ -50,6 +50,7 @@ import {
 } from "@/components/common/StreamJsonViewer";
 import { useTranslations } from "next-intl";
 import { getStoredAdminToken } from "@/lib/api/client";
+import { getConvertedRequest } from "@/lib/api/logs";
 
 interface LogDetailProps {
   /** Log data */
@@ -163,6 +164,15 @@ export function LogDetail({ log }: LogDetailProps) {
   const [traceCopied, setTraceCopied] = useState(false);
   const [originalCurlCopied, setOriginalCurlCopied] = useState(false);
   const [convertedCurlCopied, setConvertedCurlCopied] = useState(false);
+  // Full (non-truncated) converted upstream request body, reconstructed on
+  // demand from the server. Falls back to log.converted_request_body when not
+  // yet loaded or when reconstruction fails.
+  const [fullConvertedBody, setFullConvertedBody] = useState<Record<
+    string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any
+  > | null>(null);
+  const [fullConvertedUrl, setFullConvertedUrl] = useState<string | null>(null);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
   const [debugCopied, setDebugCopied] = useState(false);
   const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
@@ -183,6 +193,35 @@ export function LogDetail({ log }: LogDetailProps) {
     if (typeof window === "undefined") return;
     setClientOrigin(window.location.origin);
   }, []);
+
+  // Reconstruct the full converted upstream request body for the current log.
+  // The stored body is truncated for storage, so we fetch the complete one
+  // and use it for both the JSON display and "Copy as cURL".
+  const logId = log?.id;
+  const hasConvertedBody = Boolean(log?.converted_request_body);
+  useEffect(() => {
+    setFullConvertedBody(null);
+    setFullConvertedUrl(null);
+    if (!logId || !hasConvertedBody) return;
+    let cancelled = false;
+    getConvertedRequest(logId)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.converted_request_body) {
+          setFullConvertedBody(res.converted_request_body);
+        }
+        if (res.upstream_url) {
+          setFullConvertedUrl(res.upstream_url);
+        }
+      })
+      .catch(() => {
+        // Reconstruction failed (e.g. detail expired, provider removed).
+        // Fall back to the stored truncated body silently.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [logId, hasConvertedBody]);
 
   const responseStatus = log?.response_status;
   const statusVariant = useMemo<BadgeProps["variant"]>(() => {
@@ -272,10 +311,11 @@ export function LogDetail({ log }: LogDetailProps) {
   };
 
   const handleCopyConvertedAsCurl = async () => {
-    if (!log?.converted_request_body) return;
-    const method = (log.request_method || "POST").toUpperCase();
-    const url = log.upstream_url || "<URL>";
-    const body = JSON.stringify(log.converted_request_body, null, 2);
+    const convertedBody = fullConvertedBody ?? log?.converted_request_body;
+    if (!convertedBody) return;
+    const method = (log?.request_method || "POST").toUpperCase();
+    const url = fullConvertedUrl || log?.upstream_url || "<URL>";
+    const body = JSON.stringify(convertedBody, null, 2);
     const lines = [
       `curl -X ${method} '${url}'`,
       `  -H 'Content-Type: application/json'`,
@@ -1130,7 +1170,7 @@ export function LogDetail({ log }: LogDetailProps) {
                     )}
                   </div>
                   <JsonViewer
-                    data={log.converted_request_body}
+                    data={fullConvertedBody ?? log.converted_request_body}
                     defaultRawView
                     defaultWrapLines
                     maxHeight={layout === "horizontal" ? "65vh" : "45vh"}

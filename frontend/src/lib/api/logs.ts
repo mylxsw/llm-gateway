@@ -11,6 +11,7 @@ import {
   LogCostStatsResponse,
   PaginatedResponse,
   RetryLogResponse,
+  ConvertedRequestResponse,
   LogPlaygroundExecuteRequest,
 } from '@/types';
 import { getStoredAdminToken } from './client';
@@ -48,6 +49,19 @@ export async function retryLog(id: number): Promise<RetryLogResponse> {
   return post<RetryLogResponse>(`${BASE_URL}/${id}/retry`, undefined, {
     timeout: RETRY_TIMEOUT_MS,
   });
+}
+
+/**
+ * Get the full (non-truncated) upstream converted request body.
+ *
+ * The stored converted_request_body is truncated for storage; this endpoint
+ * re-runs the protocol conversion on the server to return the complete body.
+ * @param id - Log ID
+ */
+export async function getConvertedRequest(
+  id: number
+): Promise<ConvertedRequestResponse> {
+  return get<ConvertedRequestResponse>(`${BASE_URL}/${id}/converted-request`);
 }
 
 export async function executeLogPlaygroundRequest(

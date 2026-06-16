@@ -59,6 +59,14 @@ export interface RetryLogResponse {
   trace_id?: string | null;
 }
 
+export interface ConvertedRequestResponse {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  converted_request_body?: Record<string, any> | null;
+  upstream_url?: string | null;
+  request_method?: string | null;
+  supplier_protocol?: string | null;
+}
+
 export interface LogPlaygroundExecuteRequest {
   protocol: string;
   request_path?: string | null;

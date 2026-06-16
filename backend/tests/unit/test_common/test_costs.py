@@ -867,6 +867,59 @@ class TestCacheCreationBilling:
         assert cost.total_cost == 5.0
 
 
+# ==================== Anthropic separate (additive) cache tokens ====================
+
+
+class TestSeparateCacheTokens:
+    """cache_tokens_separate=True bills cache read/write in full alongside input.
+
+    Anthropic reports cache_read_input_tokens and cache_creation_input_tokens
+    separately from (and in addition to) input_tokens, so they must not be
+    capped against the small input_tokens value.
+    """
+
+    def test_anthropic_cache_billed_in_full(self):
+        # Real-world case: input=1, cache_creation=2186 @ $10, cache_read=87041
+        # @ $0.5, output=616 @ $25. The buggy OpenAI-cap path collapsed cache
+        # cost to ~0 and produced ~$0.0155.
+        cost = calculate_cost(
+            input_tokens=1,
+            output_tokens=616,
+            input_price=5.0,
+            output_price=25.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=87041,
+            cached_input_price=0.5,
+            cache_creation_input_tokens=2186,
+            cache_creation_input_price=10.0,
+            cache_tokens_separate=True,
+        )
+        # read:   87041/1M * 0.5  = 0.0435205 -> ceil 0.0436
+        # write:  2186/1M  * 10.0 = 0.02186   -> ceil 0.0219
+        # input:  1/1M     * 5.0  ~ 0          -> ceil 0.0001
+        # output: 616/1M   * 25.0 = 0.0154
+        assert cost.input_cost == 0.0656
+        assert cost.output_cost == 0.0154
+        assert cost.total_cost == 0.081
+        assert cost.cached_input_cost == 0.0655  # read 0.0436 + write 0.0219
+
+    def test_default_caps_like_openai(self):
+        """Without the flag, cache tokens are capped at input_tokens (legacy)."""
+        cost = calculate_cost(
+            input_tokens=1,
+            output_tokens=616,
+            input_price=5.0,
+            output_price=25.0,
+            cache_billing_enabled=True,
+            cached_input_tokens=87041,
+            cached_input_price=0.5,
+            cache_creation_input_tokens=2186,
+            cache_creation_input_price=10.0,
+        )
+        # Cache tokens collapse against input_tokens=1; only output is billed.
+        assert cost.total_cost == 0.0155
+
+
 class TestResolveBillingCacheCreation:
     """resolve_billing correctly resolves cache_creation_input_price."""
 
