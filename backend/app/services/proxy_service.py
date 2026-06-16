@@ -462,6 +462,7 @@ class ProxyService:
                 model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
                 model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
                 model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
+                model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
@@ -487,6 +488,9 @@ class ProxyService:
                 if provider_mapping
                 else None,
                 provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
+                if provider_mapping
+                else None,
+                provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
                 if provider_mapping
                 else None,
             )
@@ -813,20 +817,26 @@ class ProxyService:
             provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
             if provider_mapping
             else None,
+            provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
+            if provider_mapping
+            else None,
         )
         # Extract cached tokens from usage details
         cached_input_tokens = None
+        cache_creation_input_tokens = None
         if usage_details:
             cached_input_tokens = (
                 usage_details.get("cached_tokens")
                 or usage_details.get("cache_read_input_tokens")
             )
+            cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
         cost = calculate_cost_from_billing(
             billing=billing,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             image_count=image_count,
             cached_input_tokens=cached_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens,
         )
         log_data = RequestLogCreate(
             request_time=request_time,
@@ -1223,6 +1233,7 @@ class ProxyService:
                 model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
                 model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
                 model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
+                model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
                 provider_billing_mode=provider_mapping.billing_mode
                 if provider_mapping
                 else None,
@@ -1248,6 +1259,9 @@ class ProxyService:
                 if provider_mapping
                 else None,
                 provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
+                if provider_mapping
+                else None,
+                provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
                 if provider_mapping
                 else None,
             )
@@ -1428,20 +1442,26 @@ class ProxyService:
                     provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
                     if provider_mapping
                     else None,
+                    provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
+                    if provider_mapping
+                    else None,
                 )
                 # Extract cached tokens from stream usage details
                 stream_cached_input_tokens = None
+                stream_cache_creation_input_tokens = None
                 if usage_details:
                     stream_cached_input_tokens = (
                         usage_details.get("cached_tokens")
                         or usage_details.get("cache_read_input_tokens")
                     )
+                    stream_cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
                 cost = calculate_cost_from_billing(
                     billing=billing,
                     input_tokens=input_tokens,
                     output_tokens=usage_result.output_tokens,
                     image_count=image_count,
                     cached_input_tokens=stream_cached_input_tokens,
+                    cache_creation_input_tokens=stream_cache_creation_input_tokens,
                 )
                 raw_stream_text = (
                     b"".join(raw_stream_chunks).decode("utf-8", errors="replace")

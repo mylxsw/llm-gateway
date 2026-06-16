@@ -18,10 +18,12 @@ export interface ProviderBillingFormValues {
     input_price: string;
     output_price: string;
     cached_input_price: string;
+    cache_creation_input_price: string;
     cached_output_price: string;
   }>;
   cache_billing_enabled: boolean;
   cached_input_price: string;
+  cache_creation_input_price: string;
   cached_output_price: string;
 }
 
@@ -41,9 +43,10 @@ export function getPriceHistoryFormValues(
       output_price: '0',
       per_request_price: String(item.resolved_per_request_price ?? item.per_request_price ?? 0),
       per_image_price: '0',
-      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       cache_billing_enabled: false,
       cached_input_price: '',
+      cache_creation_input_price: '',
       cached_output_price: '',
     };
   }
@@ -55,9 +58,10 @@ export function getPriceHistoryFormValues(
       output_price: '0',
       per_request_price: '0',
       per_image_price: String(item.resolved_per_image_price ?? item.per_image_price ?? 0),
-      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+      tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       cache_billing_enabled: false,
       cached_input_price: '',
+      cache_creation_input_price: '',
       cached_output_price: '',
     };
   }
@@ -83,14 +87,19 @@ export function getPriceHistoryFormValues(
                 tier.cached_input_price === null || tier.cached_input_price === undefined
                   ? ''
                   : String(tier.cached_input_price),
+              cache_creation_input_price:
+                tier.cache_creation_input_price === null || tier.cache_creation_input_price === undefined
+                  ? ''
+                  : String(tier.cache_creation_input_price),
               cached_output_price:
                 tier.cached_output_price === null || tier.cached_output_price === undefined
                   ? ''
                   : String(tier.cached_output_price),
             }))
-          : [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+          : [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       cache_billing_enabled: !!item.resolved_cache_billing_enabled,
       cached_input_price: '',
+      cache_creation_input_price: '',
       cached_output_price: '',
     };
   }
@@ -101,12 +110,16 @@ export function getPriceHistoryFormValues(
     output_price: String(item.resolved_output_price ?? item.output_price ?? 0),
     per_request_price: '0',
     per_image_price: '0',
-    tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cached_output_price: '' }],
+    tiers: [{ max_input_tokens: '', input_price: '0', output_price: '0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
     cache_billing_enabled: !!item.resolved_cache_billing_enabled,
     cached_input_price:
       item.resolved_cached_input_price === null || item.resolved_cached_input_price === undefined
         ? ''
         : String(item.resolved_cached_input_price),
+    cache_creation_input_price:
+      item.resolved_cache_creation_input_price === null || item.resolved_cache_creation_input_price === undefined
+        ? ''
+        : String(item.resolved_cache_creation_input_price),
     cached_output_price:
       item.resolved_cached_output_price === null || item.resolved_cached_output_price === undefined
         ? ''

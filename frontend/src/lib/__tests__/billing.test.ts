@@ -50,7 +50,11 @@ describe('buildBillingSubmitData', () => {
     output_price: '15.0',
     per_request_price: '0.05',
     per_image_price: '0.04',
-    tiers: [{ max_input_tokens: '32768', input_price: '1.0', output_price: '2.0' }],
+    tiers: [{ max_input_tokens: '32768', input_price: '1.0', output_price: '2.0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
+    cache_billing_enabled: false,
+    cached_input_price: '',
+    cache_creation_input_price: '',
+    cached_output_price: '',
   };
 
   it('non-billing model type returns all nulls', () => {
@@ -109,7 +113,7 @@ describe('buildBillingSubmitData', () => {
     );
     expect(result.billing_mode).toBe('token_tiered');
     expect(result.tiered_pricing).toEqual([
-      { max_input_tokens: 32768, input_price: 1.0, output_price: 2.0 },
+      { max_input_tokens: 32768, input_price: 1.0, output_price: 2.0, cached_input_price: null, cache_creation_input_price: null, cached_output_price: null },
     ]);
     expect(result.per_request_price).toBeNull();
     expect(result.per_image_price).toBeNull();
@@ -122,12 +126,12 @@ describe('buildBillingSubmitData', () => {
       {
         ...baseValues,
         billing_mode: 'token_tiered',
-        tiers: [{ max_input_tokens: '', input_price: '3.0', output_price: '4.0' }],
+        tiers: [{ max_input_tokens: '', input_price: '3.0', output_price: '4.0', cached_input_price: '', cache_creation_input_price: '', cached_output_price: '' }],
       },
       true,
     );
     expect(result.tiered_pricing).toEqual([
-      { max_input_tokens: null, input_price: 3.0, output_price: 4.0 },
+      { max_input_tokens: null, input_price: 3.0, output_price: 4.0, cached_input_price: null, cache_creation_input_price: null, cached_output_price: null },
     ]);
   });
 

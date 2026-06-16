@@ -472,6 +472,9 @@ class ModelService:
             item.resolved_cached_output_price = (
                 model.cached_output_price if model else None
             )
+            item.resolved_cache_creation_input_price = (
+                model.cache_creation_input_price if model else None
+            )
             return item
 
         item.resolved_billing_mode = provider_mode
@@ -483,6 +486,7 @@ class ModelService:
         item.resolved_cache_billing_enabled = item.cache_billing_enabled
         item.resolved_cached_input_price = item.cached_input_price
         item.resolved_cached_output_price = item.cached_output_price
+        item.resolved_cache_creation_input_price = item.cache_creation_input_price
         return item
     
     async def update_provider_mapping(
@@ -529,6 +533,7 @@ class ModelService:
             "cache_billing_enabled": existing.cache_billing_enabled or False,
             "cached_input_price": existing.cached_input_price,
             "cached_output_price": existing.cached_output_price,
+            "cache_creation_input_price": existing.cache_creation_input_price,
         }
         merged.update(update_data)
         if merged.get("cache_billing_enabled") is None:
@@ -819,6 +824,7 @@ class ModelService:
             cache_billing_enabled=mapping.cache_billing_enabled,
             cached_input_price=mapping.cached_input_price,
             cached_output_price=mapping.cached_output_price,
+            cache_creation_input_price=mapping.cache_creation_input_price,
             created_at=mapping.created_at,
             updated_at=mapping.updated_at,
             provider_count=provider_count,

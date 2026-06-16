@@ -460,7 +460,7 @@
         "tieredPreview": "分档：{preview}{more}",
         "tieredPreviewMore": " (+{count})",
         "tieredEntry": "≤{max}: {input}/{output}",
-        "cacheSuffix": "缓存：{cachedInput}/{cachedOutput}",
+        "cacheSuffix": "缓存：读 {cachedInput}/写 {cacheCreationInput}/{cachedOutput}",
         "inheritModel": "继承模型默认值"
       }
     },
@@ -525,11 +525,13 @@
       "noProviderModelsMatched": "没有匹配的模型。",
       "useSelectedModel": "使用所选模型",
       "cacheBilling": "缓存计费",
-      "cachedInputPrice": "缓存写入价格（美元/1M tokens）",
-      "cachedOutputPrice": "缓存读取价格（美元/1M tokens）",
+      "cachedInputPrice": "缓存读取价格（美元/1M tokens）",
+      "cachedOutputPrice": "缓存输出价格（美元/1M tokens）",
+      "cacheCreationInputPrice": "缓存写入价格（美元/1M tokens）",
       "cachedPricePlaceholder": "留空则同标准价格",
-      "tierCachedInputPrice": "缓存写入（美元/1M）",
-      "tierCachedOutputPrice": "缓存读取（美元/1M）"
+      "tierCachedInputPrice": "缓存读取（美元/1M）",
+      "tierCachedOutputPrice": "缓存输出（美元/1M）",
+      "tierCacheCreationInputPrice": "缓存写入（美元/1M）"
     },
     "ruleBuilder": {
       "title": "🎯 匹配规则",

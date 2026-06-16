@@ -30,10 +30,12 @@ export interface ModelMapping {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   provider_count?: number;            // Associated provider count
   active_provider_count?: number;     // Associated active provider count
@@ -60,10 +62,12 @@ export interface ModelMappingProvider {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   resolved_cache_billing_enabled?: boolean | null;
   resolved_cached_input_price?: number | null;
+  resolved_cache_creation_input_price?: number | null;
   resolved_cached_output_price?: number | null;
   target_model_name: string;          // Target model name for this provider
   provider_rules?: RuleSet | null;    // Provider level rules
@@ -82,10 +86,12 @@ export interface ModelMappingProvider {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   priority: number;
   weight: number;
@@ -111,10 +117,12 @@ export interface ModelMappingCreate {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
 }
 
@@ -134,10 +142,12 @@ export interface ModelMappingUpdate {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
 }
 
@@ -157,10 +167,12 @@ export interface ModelMappingProviderCreate {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   priority?: number;
   weight?: number;
@@ -181,10 +193,12 @@ export interface ModelMappingProviderUpdate {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   priority?: number;
   weight?: number;
@@ -206,10 +220,12 @@ export interface ModelProviderBulkUpgradeRequest {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
 }
 
@@ -253,10 +269,12 @@ export interface ModelProviderExport {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   priority?: number;
   weight?: number;
@@ -309,10 +327,12 @@ export interface ModelMatchProvider {
     input_price: number;
     output_price: number;
     cached_input_price?: number | null;
+    cache_creation_input_price?: number | null;
     cached_output_price?: number | null;
   }> | null;
   cache_billing_enabled?: boolean | null;
   cached_input_price?: number | null;
+  cache_creation_input_price?: number | null;
   cached_output_price?: number | null;
   model_input_price?: number | null;
   model_output_price?: number | null;
