@@ -95,6 +95,7 @@ class CandidateProvider:
         protocol: Provider Protocol (openai/anthropic)
         api_key: Provider API Key
         target_model: Target Model Name (Actual model corresponding to this provider)
+        response_timeout_seconds: No-response timeout for upstream requests
         priority: Priority (Lower value means higher priority)
         weight: Weight (Used for weighted selection)
         billing_mode: Billing mode (token_flat/token_tiered/per_request/per_image)
@@ -117,6 +118,7 @@ class CandidateProvider:
     provider_options: Optional[dict[str, Any]] = None
     proxy_enabled: bool = False
     proxy_url: Optional[str] = None
+    response_timeout_seconds: int = 1800
     priority: int = 0
     weight: int = 1
     billing_mode: Optional[str] = None

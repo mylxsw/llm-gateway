@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Optional
 
+from app.domain.provider import DEFAULT_RESPONSE_TIMEOUT_SECONDS
+
 
 @dataclass
 class ProviderResponse:
@@ -61,6 +63,7 @@ class ProviderClient(ABC):
         response_mode: str = "parsed",
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> ProviderResponse:
         """
         Forward request to upstream provider
@@ -78,6 +81,7 @@ class ProviderClient(ABC):
             response_mode: Response mode, "parsed" (parse JSON) or "raw" (return raw bytes)
             extra_headers: Extra headers
             proxy_config: httpx proxy configuration
+            response_timeout_seconds: No-response timeout in seconds
         
         Returns:
             ProviderResponse: Provider response
@@ -118,6 +122,7 @@ class ProviderClient(ABC):
         target_model: str,
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
         Forward streaming request to upstream provider
@@ -132,6 +137,7 @@ class ProviderClient(ABC):
             target_model: Target model name
             extra_headers: Extra headers
             proxy_config: httpx proxy configuration
+            response_timeout_seconds: No-response timeout in seconds
         
         Yields:
             tuple[bytes, ProviderResponse]: (Data chunk, Response info)
@@ -154,6 +160,21 @@ class ProviderClient(ABC):
         new_body = body.copy()
         new_body["model"] = target_model
         return new_body
+
+    def _resolve_timeout(self, response_timeout_seconds: Optional[int] = None) -> int:
+        """
+        Resolve the upstream no-response timeout.
+
+        httpx applies numeric timeout values to connect, read, write and pool
+        operations. For streaming, the read timeout is enforced between bytes
+        from upstream, which matches the gateway's no-response behavior.
+        """
+        timeout = (
+            response_timeout_seconds
+            if response_timeout_seconds is not None
+            else getattr(self, "timeout", DEFAULT_RESPONSE_TIMEOUT_SECONDS)
+        )
+        return max(1, int(timeout))
     
     def _prepare_headers(
         self,

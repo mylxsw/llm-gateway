@@ -15,6 +15,7 @@ def test_to_response_includes_extra_headers():
         api_type="chat",
         api_key="sk-test",
         extra_headers={"X-Test": "1"},
+        response_timeout_seconds=45,
         is_active=True,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
@@ -23,4 +24,4 @@ def test_to_response_includes_extra_headers():
     resp = service._to_response(provider)
 
     assert resp.extra_headers == {"X-Test": "1"}
-
+    assert resp.response_timeout_seconds == 45

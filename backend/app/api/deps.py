@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.admin_auth import is_admin_auth_enabled, verify_admin_token
 from app.config import get_settings
+from app.db.session import AsyncSessionLocal
 from app.db.session import get_db as _get_db
 from app.domain.api_key import ApiKeyModel
 from app.repositories.sqlalchemy import (
@@ -104,32 +105,41 @@ def get_log_service(db: DbSession) -> LogService:
     return LogService(repo)
 
 
-def _get_kv_repo(db: AsyncSession):
-    """Get KV Store Repository based on configuration"""
+def _build_protocol_hooks() -> ProtocolConversionHooks:
+    """Build protocol hooks with KV access that does not pin a DB connection.
+
+    - Redis mode: a long-lived Redis-backed repo (no DB session).
+    - DB mode: a factory + session_factory so each KV op opens a short-lived
+      session and releases the pooled connection immediately.
+    """
     settings = get_settings()
     if settings.KV_STORE_TYPE == "redis":
         from app.db.redis import get_redis
         from app.repositories.redis import RedisKVStoreRepository
 
-        return RedisKVStoreRepository(get_redis())
-    return SQLAlchemyKVStoreRepository(db)
+        return ProtocolConversionHooks(kv_repo=RedisKVStoreRepository(get_redis()))
+    return ProtocolConversionHooks(
+        kv_repo_factory=lambda s: SQLAlchemyKVStoreRepository(s),
+        session_factory=AsyncSessionLocal,
+    )
 
 
-def get_proxy_service(db: DbSession) -> ProxyService:
-    """Get Proxy Service"""
-    model_repo = SQLAlchemyModelRepository(db)
-    provider_repo = SQLAlchemyProviderRepository(db)
-    log_repo = SQLAlchemyLogRepository(db)
-    kv_repo = _get_kv_repo(db)
-    protocol_hooks = ProtocolConversionHooks(kv_repo=kv_repo)
+def get_proxy_service() -> ProxyService:
+    """Get Proxy Service.
+
+    Wired with a session factory and per-repo factories so each DB operation
+    uses a short-lived session. This prevents streaming responses from holding
+    a pooled connection for the entire upstream stream (see pool-exhaustion fix).
+    """
     return ProxyService(
-        model_repo,
-        provider_repo,
-        log_repo,
+        session_factory=AsyncSessionLocal,
+        model_repo_factory=lambda s: SQLAlchemyModelRepository(s),
+        provider_repo_factory=lambda s: SQLAlchemyProviderRepository(s),
+        log_repo_factory=lambda s: SQLAlchemyLogRepository(s),
         round_robin_strategy=_round_robin_strategy,
         cost_first_strategy=_cost_first_strategy,
         priority_strategy=_priority_strategy,
-        protocol_hooks=protocol_hooks,
+        protocol_hooks=_build_protocol_hooks(),
     )
 
 

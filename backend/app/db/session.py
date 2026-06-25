@@ -192,6 +192,7 @@ def _run_migrations(sync_conn) -> None:
             "proxy_url": "proxy_url TEXT",
             "provider_options": "provider_options JSON",
             "remark": "remark TEXT",
+            "response_timeout_seconds": "response_timeout_seconds INTEGER DEFAULT 1800",
         },
     )
     ensure_columns(

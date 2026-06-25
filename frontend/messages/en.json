@@ -291,6 +291,12 @@
         "placeholderNew": "Enter provider API Key",
         "placeholderEdit": "Leave blank to keep unchanged"
       },
+      "responseTimeout": {
+        "label": "No-response Timeout (seconds)",
+        "required": "Enter a no-response timeout",
+        "min": "No-response timeout must be greater than 0 seconds",
+        "help": "Default is 1800 seconds. Non-streaming requests time out if no response arrives within this window; streaming requests time out if the gap between responses exceeds it."
+      },
       "extraHeaders": {
         "label": "Extra Headers",
         "add": "Add",
@@ -749,6 +755,28 @@
       "request": "Request",
       "response": "Response",
       "headers": "Headers",
+      "prompt": {
+        "tab": "Prompt",
+        "system": "System",
+        "parameters": "Parameters",
+        "messages": "Messages",
+        "tools": "Tools",
+        "toolsCount": "{count} tool(s)",
+        "toolCall": "Tool Call",
+        "toolResult": "Tool Result",
+        "arguments": "Arguments",
+        "schema": "Schema",
+        "showSchema": "Show schema",
+        "hideSchema": "Hide schema",
+        "image": "[image]",
+        "empty": "This request has no chat messages to display.",
+        "role": {
+          "system": "System",
+          "user": "User",
+          "assistant": "Assistant",
+          "tool": "Tool"
+        }
+      },
       "retry": "Retry",
       "retryConfirmTitle": "Confirm Retry",
       "retryConfirmDescription": "This will replay the original request recorded in the current log. Continue?",

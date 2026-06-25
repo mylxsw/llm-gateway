@@ -147,6 +147,7 @@ class AnthropicClient(ProviderClient):
         response_mode: str = "parsed",
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> ProviderResponse:
         """
         Forward request to Anthropic-compatible provider
@@ -185,7 +186,8 @@ class AnthropicClient(ProviderClient):
         
         try:
             proxy_url = proxy_config.get("all://") if proxy_config else None
-            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
+            timeout = self._resolve_timeout(response_timeout_seconds)
+            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -327,6 +329,7 @@ class AnthropicClient(ProviderClient):
         target_model: str,
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         """
         Forward streaming request to Anthropic-compatible provider
@@ -365,7 +368,8 @@ class AnthropicClient(ProviderClient):
         
         try:
             proxy_url = proxy_config.get("all://") if proxy_config else None
-            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
+            timeout = self._resolve_timeout(response_timeout_seconds)
+            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
                 async with client.stream(
                     method=method,
                     url=url,

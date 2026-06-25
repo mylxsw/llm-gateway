@@ -202,6 +202,7 @@ class TestRuleEngine:
                 protocol="openai",
                 api_type="chat",
                 api_key="sk-xxx",
+                response_timeout_seconds=42,
                 is_active=True,
                 created_at=now,
                 updated_at=now,
@@ -273,6 +274,7 @@ class TestRuleEngine:
         assert len(candidates) == 2
         assert candidates[0].provider_name == "OpenAI"
         assert candidates[0].target_model == "gpt-4-0613"
+        assert candidates[0].response_timeout_seconds == 42
         assert candidates[1].provider_name == "Azure"
         assert candidates[1].target_model == "gpt-4-azure"
     

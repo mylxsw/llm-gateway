@@ -7,10 +7,13 @@ import copy
 import json
 import logging
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
 
 import anyio
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.common.costs import calculate_cost_from_billing, resolve_billing
 from app.common.errors import NotFoundError, ServiceError
@@ -130,9 +133,16 @@ class ProxyService:
 
     def __init__(
         self,
-        model_repo: ModelRepository,
-        provider_repo: ProviderRepository,
-        log_repo: LogRepository,
+        model_repo: Optional[ModelRepository] = None,
+        provider_repo: Optional[ProviderRepository] = None,
+        log_repo: Optional[LogRepository] = None,
+        *,
+        session_factory: Optional[async_sessionmaker] = None,
+        model_repo_factory: Optional[Callable[[AsyncSession], ModelRepository]] = None,
+        provider_repo_factory: Optional[
+            Callable[[AsyncSession], ProviderRepository]
+        ] = None,
+        log_repo_factory: Optional[Callable[[AsyncSession], LogRepository]] = None,
         round_robin_strategy: Optional[SelectionStrategy] = None,
         cost_first_strategy: Optional[SelectionStrategy] = None,
         priority_strategy: Optional[SelectionStrategy] = None,
@@ -141,23 +151,64 @@ class ProxyService:
         """
         Initialize Service
 
+        Two wiring modes:
+
+        - Production: pass ``session_factory`` plus ``*_repo_factory`` callables.
+          Each DB operation opens a short-lived session from the factory and
+          releases the pooled connection immediately, so streaming responses do
+          not pin a connection for the whole upstream stream.
+        - Tests/legacy: pass repo instances (``model_repo`` etc.) and no
+          ``session_factory``; the same instances are reused for every op.
+
+        The selector between modes is ``session_factory is None`` (NOT
+        ``callable()`` — Mock/AsyncMock instances are themselves callable).
+
         Args:
-            model_repo: Model Repository
-            provider_repo: Provider Repository
-            log_repo: Log Repository
+            model_repo: Model Repository instance (legacy/test mode)
+            provider_repo: Provider Repository instance (legacy/test mode)
+            log_repo: Log Repository instance (legacy/test mode)
+            session_factory: async_sessionmaker for per-op sessions (prod mode)
+            model_repo_factory: builds a ModelRepository from a session
+            provider_repo_factory: builds a ProviderRepository from a session
+            log_repo_factory: builds a LogRepository from a session
             round_robin_strategy: Optional Round Robin Strategy instance
             cost_first_strategy: Optional Cost First Strategy instance
             priority_strategy: Optional Priority Strategy instance
         """
+        self._session_factory = session_factory
+        # Legacy/test instances (used when session_factory is None). Exposed under
+        # the public names too so existing tests can assert on service.log_repo etc.
         self.model_repo = model_repo
         self.provider_repo = provider_repo
         self.log_repo = log_repo
+        self._model_repo = model_repo
+        self._provider_repo = provider_repo
+        self._log_repo = log_repo
+        # Production factories (used when session_factory is set)
+        self._model_repo_factory = model_repo_factory
+        self._provider_repo_factory = provider_repo_factory
+        self._log_repo_factory = log_repo_factory
         self.rule_engine = RuleEngine()
         # Strategy selection instances (reused for performance)
         self._round_robin_strategy = round_robin_strategy or RoundRobinStrategy()
         self._cost_first_strategy = cost_first_strategy or CostFirstStrategy()
         self._priority_strategy = priority_strategy or PriorityStrategy()
         self._protocol_hooks = protocol_hooks or ProtocolConversionHooks()
+
+    @asynccontextmanager
+    async def _repos(self):
+        """Yield (model_repo, provider_repo, log_repo) bound to a short-lived
+        session in production mode, or the injected legacy instances in
+        tests. The pooled connection is released when the block exits."""
+        if self._session_factory is None:
+            yield self._model_repo, self._provider_repo, self._log_repo
+            return
+        async with self._session_factory() as session:
+            yield (
+                self._model_repo_factory(session),
+                self._provider_repo_factory(session),
+                self._log_repo_factory(session),
+            )
 
     async def _write_log(
         self, log_data: RequestLogCreate, record_details: bool = True
@@ -169,7 +220,8 @@ class ProxyService:
         # earlier (e.g. before debug logging) so the payload never leaks.
         if not record_details:
             _strip_detail_payload(log_data)
-        await self.log_repo.create(log_data)
+        async with self._repos() as (_model_repo, _provider_repo, log_repo):
+            await log_repo.create(log_data)
 
     def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
         """
@@ -309,7 +361,8 @@ class ProxyService:
                 code="converted_request_provider_missing",
             )
 
-        provider = await self.provider_repo.get_by_id(log.provider_id)
+        async with self._repos() as (_model_repo, provider_repo, _log_repo):
+            provider = await provider_repo.get_by_id(log.provider_id)
         if not provider:
             raise NotFoundError(
                 message="Provider for this log no longer exists",
@@ -391,36 +444,37 @@ class ProxyService:
             tuple: (model_mapping, candidates, input_tokens, protocol, provider_mapping_by_id)
         """
         request_protocol = (request_protocol or "openai").lower()
-        model_mapping = await self.model_repo.get_mapping(requested_model)
-        if not model_mapping:
-            raise NotFoundError(
-                message=f"Model '{requested_model}' is not configured",
-                code="model_not_found",
+        async with self._repos() as (model_repo, provider_repo, _log_repo):
+            model_mapping = await model_repo.get_mapping(requested_model)
+            if not model_mapping:
+                raise NotFoundError(
+                    message=f"Model '{requested_model}' is not configured",
+                    code="model_not_found",
+                )
+
+            if not model_mapping.is_active:
+                raise ServiceError(
+                    message=f"Model '{requested_model}' is disabled",
+                    code="model_disabled",
+                )
+
+            provider_mappings = await model_repo.get_provider_mappings(
+                requested_model=requested_model,
+                is_active=True,
             )
 
-        if not model_mapping.is_active:
-            raise ServiceError(
-                message=f"Model '{requested_model}' is disabled",
-                code="model_disabled",
-            )
+            if not provider_mappings:
+                raise ServiceError(
+                    message=f"No providers configured for model '{requested_model}'",
+                    code="no_available_provider",
+                )
 
-        provider_mappings = await self.model_repo.get_provider_mappings(
-            requested_model=requested_model,
-            is_active=True,
-        )
-
-        if not provider_mappings:
-            raise ServiceError(
-                message=f"No providers configured for model '{requested_model}'",
-                code="no_available_provider",
-            )
-
-        provider_ids = [pm.provider_id for pm in provider_mappings]
-        providers: dict[int, Provider] = {}
-        for pid in provider_ids:
-            provider = await self.provider_repo.get_by_id(pid)
-            if provider:
-                providers[pid] = provider
+            provider_ids = [pm.provider_id for pm in provider_mappings]
+            providers: dict[int, Provider] = {}
+            for pid in provider_ids:
+                provider = await provider_repo.get_by_id(pid)
+                if provider:
+                    providers[pid] = provider
 
         eligible_provider_mappings = [
             pm
@@ -753,6 +807,7 @@ class ProxyService:
                     else ("raw" if same_protocol else "parsed"),
                     extra_headers=candidate.extra_headers,
                     proxy_config=proxy_config,
+                    response_timeout_seconds=candidate.response_timeout_seconds,
                 )
             except Exception as e:
                 error_msg = str(e)
@@ -1215,6 +1270,7 @@ class ProxyService:
                 target_model=candidate.target_model,
                 extra_headers=candidate.extra_headers,
                 proxy_config=proxy_config,
+                response_timeout_seconds=candidate.response_timeout_seconds,
             )
 
             async def wrapped() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
@@ -1263,7 +1319,19 @@ class ProxyService:
 
                     async for event in process_chunk(first_chunk):
                         yield event
-                    async for chunk, _ in upstream_gen:
+                    async for chunk, resp in upstream_gen:
+                        if not resp.is_success:
+                            # first_resp is the same object surfaced as initial_response;
+                            # mutate it so final stream logging records the failure.
+                            first_resp.status_code = resp.status_code
+                            first_resp.headers.update(resp.headers)
+                            first_resp.error = resp.error or "Upstream stream interrupted"
+                            first_resp.body = resp.body
+                            first_resp.total_time_ms = resp.total_time_ms
+                            raise ServiceError(
+                                message=first_resp.error,
+                                code="upstream_stream_failed",
+                            )
                         async for event in process_chunk(chunk):
                             yield event
 
@@ -1316,6 +1384,9 @@ class ProxyService:
                             yield hooked_out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
+                    if first_resp.is_success:
+                        first_resp.status_code = 502
+                    first_resp.error = err
                     logger.error(
                         "Error during stream response conversion: provider_id=%s, provider_name=%s, "
                         "request_protocol=%s, supplier_protocol=%s, error=%s",

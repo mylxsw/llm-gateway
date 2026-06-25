@@ -61,6 +61,7 @@ interface FormData {
   base_url: string;
   protocol: ProtocolType;
   api_key: string;
+  response_timeout_seconds: number;
   is_active: boolean;
   proxy_enabled: boolean;
   proxy_url: string;
@@ -104,6 +105,7 @@ export function ProviderForm({
       base_url: '',
       protocol: 'openai',
       api_key: '',
+      response_timeout_seconds: 1800,
       is_active: true,
       proxy_enabled: false,
       proxy_url: '',
@@ -201,6 +203,7 @@ export function ProviderForm({
         base_url: provider.base_url,
         protocol: provider.protocol,
         api_key: '', // API Key not echoed
+        response_timeout_seconds: provider.response_timeout_seconds ?? 1800,
         is_active: provider.is_active,
         proxy_enabled: provider.proxy_enabled ?? false,
         proxy_url: '',
@@ -245,6 +248,7 @@ export function ProviderForm({
         base_url: '',
         protocol: 'openai',
         api_key: '',
+        response_timeout_seconds: 1800,
         is_active: true,
         proxy_enabled: false,
         proxy_url: '',
@@ -318,6 +322,7 @@ export function ProviderForm({
       remark: data.remark,
       base_url: data.base_url,
       protocol: data.protocol,
+      response_timeout_seconds: Number(data.response_timeout_seconds) || 1800,
       is_active: data.is_active,
       extra_headers: shouldIncludeHeaders ? headers : undefined,
       provider_options: shouldIncludeOptions
@@ -448,6 +453,36 @@ export function ProviderForm({
               }
               {...register('api_key')}
             />
+          </div>
+
+          {/* Response Timeout */}
+          <div className="space-y-2">
+            <Label htmlFor="response_timeout_seconds">
+              {t('form.responseTimeout.label')} <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="response_timeout_seconds"
+              type="number"
+              min={1}
+              step={1}
+              placeholder="1800"
+              {...register('response_timeout_seconds', {
+                valueAsNumber: true,
+                required: t('form.responseTimeout.required'),
+                min: {
+                  value: 1,
+                  message: t('form.responseTimeout.min'),
+                },
+              })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('form.responseTimeout.help')}
+            </p>
+            {errors.response_timeout_seconds && (
+              <p className="text-sm text-destructive">
+                {errors.response_timeout_seconds.message}
+              </p>
+            )}
           </div>
 
           {/* Remark */}

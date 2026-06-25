@@ -24,6 +24,7 @@ export interface Provider {
   provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string; // Sanitized display
+  response_timeout_seconds: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -48,6 +49,7 @@ export interface ProviderCreate {
   provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string;
+  response_timeout_seconds?: number;
   is_active?: boolean;
 }
 
@@ -62,6 +64,7 @@ export interface ProviderUpdate {
   provider_options?: ProviderOptions;
   proxy_enabled?: boolean;
   proxy_url?: string;
+  response_timeout_seconds?: number;
   is_active?: boolean;
 }
 

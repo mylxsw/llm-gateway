@@ -51,6 +51,7 @@ import {
 import { useTranslations } from "next-intl";
 import { getStoredAdminToken } from "@/lib/api/client";
 import { getConvertedRequest } from "@/lib/api/logs";
+import { PromptView, hasPromptContent } from "./PromptView";
 
 interface LogDetailProps {
   /** Log data */
@@ -158,8 +159,8 @@ export function LogDetail({ log }: LogDetailProps) {
   const t = useTranslations("logs");
   const tc = useTranslations("common");
   const [activeTab, setActiveTab] = useState<
-    "request" | "response" | "headers"
-  >("request");
+    "prompt" | "request" | "response" | "headers"
+  >("prompt");
   const [layout, setLayout] = useState<"vertical" | "horizontal">("vertical");
   const [traceCopied, setTraceCopied] = useState(false);
   const [originalCurlCopied, setOriginalCurlCopied] = useState(false);
@@ -232,6 +233,18 @@ export function LogDetail({ log }: LogDetailProps) {
     if (status >= 500) return "error";
     return "outline";
   }, [responseStatus]);
+
+  // Whether the request body can be rendered as a friendly chat/prompt view.
+  const showPromptTab = useMemo(
+    () => hasPromptContent(log?.request_body, log?.request_protocol),
+    [log?.request_body, log?.request_protocol],
+  );
+  // The Prompt tab is the default; fall back to Request when it is unavailable.
+  useEffect(() => {
+    if (!showPromptTab && activeTab === "prompt") {
+      setActiveTab("request");
+    }
+  }, [showPromptTab, activeTab]);
 
   const modelMapping = useMemo(() => {
     const requestedModel = log?.requested_model;
@@ -1033,6 +1046,14 @@ export function LogDetail({ log }: LogDetailProps) {
               </div>
             )}
             <div className="inline-flex w-full rounded-lg border bg-muted/30 p-1 sm:w-auto">
+              {showPromptTab && (
+                <button
+                  className={tabButtonClass("prompt")}
+                  onClick={() => setActiveTab("prompt")}
+                >
+                  {t("detail.prompt.tab")}
+                </button>
+              )}
               <button
                 className={tabButtonClass("request")}
                 onClick={() => setActiveTab("request")}
@@ -1056,6 +1077,12 @@ export function LogDetail({ log }: LogDetailProps) {
         </CardHeader>
 
         <CardContent>
+          {activeTab === "prompt" && (
+            <PromptView
+              body={log.request_body}
+              protocol={log.request_protocol}
+            />
+          )}
           {activeTab === "request" && (
             <div
               className={

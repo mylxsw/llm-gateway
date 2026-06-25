@@ -67,6 +67,10 @@ class ServiceProvider(Base):
     proxy_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Proxy URL (schema://auth@host:port)
     proxy_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # No-response timeout for upstream model requests, in seconds
+    response_timeout_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1800
+    )
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Creation Time

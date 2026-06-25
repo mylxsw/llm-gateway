@@ -222,6 +222,7 @@ class ProviderService:
                     is_active=p.is_active,
                     proxy_enabled=p.proxy_enabled,
                     proxy_url=p.proxy_url,
+                    response_timeout_seconds=p.response_timeout_seconds,
                 )
             )
         return export_list
@@ -362,6 +363,7 @@ class ProviderService:
             provider_options=provider.provider_options,
             proxy_enabled=provider.proxy_enabled,
             proxy_url=sanitize_proxy_url(provider.proxy_url) if provider.proxy_url else None,
+            response_timeout_seconds=provider.response_timeout_seconds,
             is_active=provider.is_active,
             created_at=provider.created_at,
             updated_at=provider.updated_at,

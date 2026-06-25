@@ -41,6 +41,35 @@ async def test_openai_client_proxy_config_passing():
         assert "proxy" in call_kwargs
         assert call_kwargs["proxy"] == "http://proxy.example.com"
 
+
+@pytest.mark.asyncio
+async def test_openai_client_uses_provider_response_timeout():
+    client = OpenAIClient()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.request.return_value = MagicMock(
+            status_code=200,
+            headers={},
+            text='{"id": "test"}',
+            json=lambda: {"id": "test"},
+        )
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        await client.forward(
+            base_url="https://api.openai.com",
+            api_key="sk-test",
+            path="/v1/chat/completions",
+            method="POST",
+            headers={},
+            body={"model": "gpt-3.5-turbo"},
+            target_model="gpt-3.5-turbo",
+            response_timeout_seconds=7,
+        )
+
+        call_kwargs = mock_client_cls.call_args.kwargs
+        assert call_kwargs["timeout"] == 7
+
 @pytest.mark.asyncio
 async def test_openai_client_stream_proxy_config_passing():
     client = OpenAIClient()
@@ -83,7 +112,8 @@ async def test_openai_client_stream_proxy_config_passing():
             headers={},
             body={"model": "gpt-3.5-turbo"},
             target_model="gpt-3.5-turbo",
-            proxy_config=proxy_config
+            proxy_config=proxy_config,
+            response_timeout_seconds=9,
         ):
             pass
         
@@ -95,3 +125,4 @@ async def test_openai_client_stream_proxy_config_passing():
         assert "proxies" not in call_kwargs
         assert "proxy" in call_kwargs
         assert call_kwargs["proxy"] == "http://proxy.example.com"
+        assert call_kwargs["timeout"] == 9

@@ -291,6 +291,12 @@
         "placeholderNew": "输入供应商 API Key",
         "placeholderEdit": "留空以保持不变"
       },
+      "responseTimeout": {
+        "label": "无响应超时（秒）",
+        "required": "请输入无响应超时时间",
+        "min": "无响应超时时间必须大于 0 秒",
+        "help": "默认 1800 秒。非流式请求超过该时间未响应会判定超时；流式请求连续两次响应间隔超过该时间也会判定超时。"
+      },
       "extraHeaders": {
         "label": "额外请求头",
         "add": "添加",
@@ -749,6 +755,28 @@
       "request": "请求",
       "response": "响应",
       "headers": "请求头",
+      "prompt": {
+        "tab": "提示词",
+        "system": "系统提示",
+        "parameters": "参数",
+        "messages": "消息",
+        "tools": "工具",
+        "toolsCount": "{count} 个工具",
+        "toolCall": "工具调用",
+        "toolResult": "工具结果",
+        "arguments": "参数",
+        "schema": "Schema",
+        "showSchema": "展开 Schema",
+        "hideSchema": "收起 Schema",
+        "image": "[图片]",
+        "empty": "该请求没有可展示的对话消息。",
+        "role": {
+          "system": "系统",
+          "user": "用户",
+          "assistant": "助手",
+          "tool": "工具"
+        }
+      },
       "retry": "Retry",
       "retryConfirmTitle": "确认重试请求",
       "retryConfirmDescription": "将按照当前日志记录的原始请求再次发起一次调用，是否继续？",

@@ -305,6 +305,205 @@ async def test_protocol_hooks_apply_to_stream_chunks():
 
 
 @pytest.mark.asyncio
+async def test_stream_upstream_failure_after_first_chunk_is_logged_as_failure():
+    now = utc_now()
+    model_mapping = ModelMapping(
+        requested_model="test-model",
+        strategy="round_robin",
+        matching_rules=None,
+        capabilities=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    candidate = CandidateProvider(
+        provider_id=1,
+        provider_name="p-openai",
+        base_url="https://example.com",
+        protocol="openai",
+        api_key="sk-test",
+        target_model="gpt-4o",
+        priority=0,
+        weight=1,
+    )
+
+    service = ProxyService(
+        model_repo=AsyncMock(),
+        provider_repo=AsyncMock(),
+        log_repo=AsyncMock(),
+        protocol_hooks=ProtocolConversionHooks(),
+    )
+    service._resolve_candidates = AsyncMock(
+        return_value=(model_mapping, [candidate], 0, "openai", {})
+    )  # type: ignore[method-assign]
+
+    def forward_stream(**kwargs):
+        async def gen():
+            yield b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n', ProviderResponse(
+                status_code=200,
+                headers={},
+            )
+            yield b"", ProviderResponse(
+                status_code=504,
+                error="Request timeout: no stream response",
+            )
+
+        return gen()
+
+    fake_client = AsyncMock()
+    fake_client.forward_stream = forward_stream
+
+    with patch(
+        "app.services.proxy_service.convert_request_for_supplier",
+        return_value=("/v1/chat/completions", {"converted": True}),
+    ):
+        with patch(
+            "app.services.proxy_service.get_provider_client",
+            return_value=fake_client,
+        ):
+            initial_response, stream_gen, _ = await service.process_request_stream(
+                api_key_id=1,
+                api_key_name="k",
+                request_protocol="openai",
+                path="/v1/chat/completions",
+                request_url="/v1/chat/completions",
+                method="POST",
+                headers={},
+                body={"model": "test-model", "stream": True, "messages": []},
+            )
+
+    chunks = []
+    async for chunk in stream_gen:
+        chunks.append(chunk)
+
+    assert initial_response.status_code == 504
+    assert "Request timeout" in (initial_response.error or "")
+    assert chunks[0] == b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
+    assert any(b'"error"' in chunk for chunk in chunks)
+    service.log_repo.create.assert_awaited()
+    log_data = service.log_repo.create.await_args.args[0]
+    assert log_data.response_status == 504
+    assert "Request timeout" in (log_data.error_info or "")
+
+
+@pytest.mark.asyncio
+async def test_stream_first_event_timeout_fails_over_to_next_provider():
+    class RetrySettings:
+        RETRY_MAX_ATTEMPTS = 1
+        RETRY_DELAY_MS = 0
+
+    now = utc_now()
+    model_mapping = ModelMapping(
+        requested_model="test-model",
+        strategy="priority",
+        matching_rules=None,
+        capabilities=None,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+    )
+    first_candidate = CandidateProvider(
+        provider_id=1,
+        provider_name="p-timeout",
+        base_url="https://first.example.com",
+        protocol="openai",
+        api_key="sk-timeout",
+        target_model="timeout-model",
+        priority=0,
+        weight=1,
+    )
+    second_candidate = CandidateProvider(
+        provider_id=2,
+        provider_name="p-ok",
+        base_url="https://second.example.com",
+        protocol="openai",
+        api_key="sk-ok",
+        target_model="ok-model",
+        priority=1,
+        weight=1,
+    )
+
+    service = ProxyService(
+        model_repo=AsyncMock(),
+        provider_repo=AsyncMock(),
+        log_repo=AsyncMock(),
+        protocol_hooks=ProtocolConversionHooks(),
+    )
+    service._resolve_candidates = AsyncMock(
+        return_value=(
+            model_mapping,
+            [first_candidate, second_candidate],
+            0,
+            "openai",
+            {},
+        )
+    )  # type: ignore[method-assign]
+
+    called_models: list[str] = []
+
+    def forward_stream(**kwargs):
+        target_model = kwargs["target_model"]
+        called_models.append(target_model)
+
+        async def gen():
+            if target_model == "timeout-model":
+                yield b"", ProviderResponse(
+                    status_code=504,
+                    error="Request timeout: first event",
+                )
+                return
+            yield b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n', ProviderResponse(
+                status_code=200,
+                headers={},
+            )
+
+        return gen()
+
+    fake_client = AsyncMock()
+    fake_client.forward_stream = forward_stream
+
+    with patch(
+        "app.services.retry_handler.get_settings",
+        return_value=RetrySettings(),
+    ):
+        with patch(
+            "app.services.proxy_service.convert_request_for_supplier",
+            return_value=("/v1/chat/completions", {"converted": True}),
+        ):
+            with patch(
+                "app.services.proxy_service.get_provider_client",
+                return_value=fake_client,
+            ):
+                initial_response, stream_gen, metadata = await service.process_request_stream(
+                    api_key_id=1,
+                    api_key_name="k",
+                    request_protocol="openai",
+                    path="/v1/chat/completions",
+                    request_url="/v1/chat/completions",
+                    method="POST",
+                    headers={},
+                    body={"model": "test-model", "stream": True, "messages": []},
+                )
+
+    chunks = []
+    async for chunk in stream_gen:
+        chunks.append(chunk)
+
+    assert called_models == ["timeout-model", "ok-model"]
+    assert initial_response.status_code == 200
+    assert metadata["retry_count"] == 1
+    assert metadata["provider_name"] == "p-ok"
+    assert chunks == [b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n']
+    assert service.log_repo.create.await_count == 2
+    failure_log = service.log_repo.create.await_args_list[0].args[0]
+    final_log = service.log_repo.create.await_args_list[-1].args[0]
+    assert failure_log.provider_name == "p-timeout"
+    assert failure_log.response_status == 504
+    assert final_log.provider_name == "p-ok"
+    assert final_log.response_status == 200
+
+
+@pytest.mark.asyncio
 async def test_convert_request_receives_candidate_protocol_not_resolved_implementation():
     """Test that convert_request_for_supplier receives candidate.protocol (frontend) not the resolved implementation.
 

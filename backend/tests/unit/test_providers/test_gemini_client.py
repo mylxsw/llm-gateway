@@ -107,6 +107,34 @@ async def test_gemini_forward_sanitizes_tool_schema_before_request():
 
 
 @pytest.mark.asyncio
+async def test_gemini_client_uses_provider_response_timeout():
+    client = GeminiClient()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.request.return_value = MagicMock(
+            status_code=200,
+            headers={},
+            text='{"ok":true}',
+            json=lambda: {"ok": True},
+        )
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        await client.forward(
+            base_url="https://generativelanguage.googleapis.com",
+            api_key="k",
+            path="/v1beta/models/gemini-2.0-flash:generateContent",
+            method="POST",
+            headers={},
+            body={"contents": [{"parts": [{"text": "hi"}]}]},
+            target_model="gemini-2.0-flash",
+            response_timeout_seconds=13,
+        )
+
+        assert mock_client_cls.call_args.kwargs["timeout"] == 13
+
+
+@pytest.mark.asyncio
 async def test_gemini_forward_stream_sanitizes_tool_schema_before_request():
     client = GeminiClient()
 

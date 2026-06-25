@@ -93,6 +93,7 @@ class GeminiClient(ProviderClient):
         response_mode: str = "parsed",
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> ProviderResponse:
         url = self._build_url(base_url, path)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
@@ -111,7 +112,8 @@ class GeminiClient(ProviderClient):
 
         try:
             proxy_url = proxy_config.get("all://") if proxy_config else None
-            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
+            timeout = self._resolve_timeout(response_timeout_seconds)
+            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -253,6 +255,7 @@ class GeminiClient(ProviderClient):
         target_model: str,  # Gemini model is encoded in the URL path, not in body
         extra_headers: Optional[dict[str, str]] = None,
         proxy_config: Optional[dict[str, str]] = None,
+        response_timeout_seconds: Optional[int] = None,
     ) -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
         url = self._build_url(base_url, path)
         prepared_headers = self._prepare_headers(headers, api_key, extra_headers)
@@ -272,7 +275,8 @@ class GeminiClient(ProviderClient):
 
         try:
             proxy_url = proxy_config.get("all://") if proxy_config else None
-            async with httpx.AsyncClient(timeout=self.timeout, proxy=proxy_url) as client:
+            timeout = self._resolve_timeout(response_timeout_seconds)
+            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
                 async with client.stream(
                     method=method,
                     url=url,

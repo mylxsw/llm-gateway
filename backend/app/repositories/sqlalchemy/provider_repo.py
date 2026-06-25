@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import ModelMappingProvider as ModelMappingProviderORM
 from app.db.models import ServiceProvider
-from app.domain.provider import Provider, ProviderCreate, ProviderUpdate
+from app.domain.provider import (
+    DEFAULT_RESPONSE_TIMEOUT_SECONDS,
+    Provider,
+    ProviderCreate,
+    ProviderUpdate,
+)
 from app.repositories.provider_repo import ProviderRepository
 
 
@@ -54,6 +59,9 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             provider_options=entity.provider_options,
             proxy_enabled=entity.proxy_enabled,
             proxy_url=entity.proxy_url,
+            response_timeout_seconds=(
+                entity.response_timeout_seconds or DEFAULT_RESPONSE_TIMEOUT_SECONDS
+            ),
             is_active=entity.is_active,
             created_at=ensure_utc(entity.created_at),
             updated_at=ensure_utc(entity.updated_at),
@@ -72,6 +80,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             provider_options=data.provider_options,
             proxy_enabled=data.proxy_enabled,
             proxy_url=data.proxy_url,
+            response_timeout_seconds=data.response_timeout_seconds,
             is_active=data.is_active,
         )
         self.session.add(entity)

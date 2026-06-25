@@ -15,6 +15,8 @@ from app.common.url_validator import validate_provider_url_loose
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_RESPONSE_TIMEOUT_SECONDS = 1800
+
 
 class ProviderBase(BaseModel):
     """Provider Base Model"""
@@ -39,6 +41,12 @@ class ProviderBase(BaseModel):
     proxy_enabled: bool = Field(False, description="Proxy Enabled")
     # Proxy URL (schema://auth@host:port)
     proxy_url: Optional[str] = Field(None, description="Proxy URL")
+    # No-response timeout in seconds
+    response_timeout_seconds: int = Field(
+        DEFAULT_RESPONSE_TIMEOUT_SECONDS,
+        ge=1,
+        description="No-response timeout in seconds",
+    )
 
     @field_validator("base_url")
     @classmethod
@@ -74,6 +82,7 @@ class ProviderUpdate(BaseModel):
     is_active: Optional[bool] = None
     proxy_enabled: Optional[bool] = None
     proxy_url: Optional[str] = None
+    response_timeout_seconds: Optional[int] = Field(None, ge=1)
 
 
 class Provider(ProviderBase):

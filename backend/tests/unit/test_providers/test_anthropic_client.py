@@ -102,6 +102,34 @@ async def test_anthropic_client_forward_raw_passthrough_body_bytes():
             response_mode="raw",
         )
 
-        assert isinstance(resp, ProviderResponse)
-        assert resp.status_code == 200
-        assert resp.body == b'{"id":"raw"}'
+    assert isinstance(resp, ProviderResponse)
+    assert resp.status_code == 200
+    assert resp.body == b'{"id":"raw"}'
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_uses_provider_response_timeout():
+    client = AnthropicClient()
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.request.return_value = MagicMock(
+            status_code=200,
+            headers={},
+            text='{"id": "msg_123"}',
+            json=lambda: {"id": "msg_123"},
+        )
+        mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+        await client.forward(
+            base_url="https://api.anthropic.com",
+            api_key="sk-test",
+            path="/v1/messages",
+            method="POST",
+            headers={},
+            body={"model": "claude-2"},
+            target_model="claude-2",
+            response_timeout_seconds=11,
+        )
+
+        assert mock_client_cls.call_args.kwargs["timeout"] == 11
