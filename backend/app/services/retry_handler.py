@@ -8,12 +8,16 @@ import asyncio
 import logging
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Awaitable
+from typing import Any, AsyncIterator, Callable, Optional, Awaitable
 
 from app.config import get_settings
 from app.common.time import utc_now
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
+from app.services.provider_health import (
+    ProviderHealthTracker,
+    provider_health_key,
+)
 from app.services.strategy import SelectionStrategy
 
 logger = logging.getLogger(__name__)
@@ -62,7 +66,11 @@ class RetryHandler:
     - All providers failed: Return the last failed response
     """
     
-    def __init__(self, strategy: SelectionStrategy):
+    def __init__(
+        self,
+        strategy: SelectionStrategy,
+        health_tracker: ProviderHealthTracker | None = None,
+    ):
         """
         Initialize Handler
         
@@ -75,6 +83,7 @@ class RetryHandler:
         self.max_retries = settings.RETRY_MAX_ATTEMPTS
         # Retry interval (ms)
         self.retry_delay_ms = settings.RETRY_DELAY_MS
+        self.health_tracker = health_tracker
 
     @staticmethod
     def _candidate_key(
@@ -97,32 +106,111 @@ class RetryHandler:
 
         This mirrors provider selection + failover ordering without making requests.
         """
-        if not candidates:
-            return []
+        return [
+            candidate
+            async for candidate in self._iter_ordered_candidates(
+                candidates,
+                requested_model,
+                input_tokens=input_tokens,
+                image_count=image_count,
+            )
+        ]
 
-        ordered: list[CandidateProvider] = []
+    async def _iter_ordered_candidates(
+        self,
+        candidates: list[CandidateProvider],
+        requested_model: str,
+        *,
+        input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
+    ) -> AsyncIterator[CandidateProvider]:
+        """Yield candidates lazily in health-aware strategy order.
+
+        Strategy selection for a fallback group is deferred until the caller
+        actually asks for a candidate from that group. This is important for
+        stateful weighted strategies: a successful primary request must not
+        advance counters for fallback providers that were never attempted.
+        """
+        if not candidates:
+            return
+
+        groups: list[tuple[str, list[CandidateProvider]]] = []
+        if self.health_tracker is None or not self.health_tracker.enabled:
+            groups.append((requested_model, candidates))
+        else:
+            snapshots = await self.health_tracker.get_snapshots(candidates)
+            healthy: list[CandidateProvider] = []
+            degraded_groups: dict[float, list[CandidateProvider]] = {}
+            for candidate in candidates:
+                snapshot = snapshots[provider_health_key(candidate)]
+                if not snapshot.degraded:
+                    healthy.append(candidate)
+                    continue
+                degraded_groups.setdefault(snapshot.failure_rate, []).append(candidate)
+
+            if healthy:
+                groups.append((requested_model, healthy))
+            for failure_rate in sorted(degraded_groups):
+                # Isolate round-robin counters for degraded fallback groups so
+                # their distribution does not disturb the healthy pool.
+                group_model_key = f"{requested_model}::degraded::{failure_rate:.6f}"
+                groups.append((group_model_key, degraded_groups[failure_rate]))
+
+        for group_model_key, group_candidates in groups:
+            async for candidate in self._iter_strategy_candidates(
+                group_candidates,
+                group_model_key,
+                input_tokens=input_tokens,
+                image_count=image_count,
+            ):
+                yield candidate
+
+    async def _iter_strategy_candidates(
+        self,
+        candidates: list[CandidateProvider],
+        requested_model: str,
+        *,
+        input_tokens: Optional[int] = None,
+        image_count: Optional[int] = None,
+    ) -> AsyncIterator[CandidateProvider]:
+        """Lazily yield one strategy group in selection/failover order."""
+        if not candidates:
+            return
+
         tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
         while current_provider is not None:
             current_key = self._candidate_key(current_provider)
             if current_key in tried_candidates:
                 break
-            ordered.append(current_provider)
             tried_candidates.add(current_key)
+            yield current_provider
             if len(tried_candidates) >= len(candidates):
-                break
+                return
             current_provider = await self._get_next_untried_provider(
                 candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
             )
 
-        if len(ordered) == len(candidates):
-            return ordered
-
         for candidate in candidates:
             if self._candidate_key(candidate) not in tried_candidates:
-                ordered.append(candidate)
+                yield candidate
 
-        return ordered
+    async def _record_health(
+        self,
+        provider: CandidateProvider,
+        response: ProviderResponse,
+    ) -> None:
+        if self.health_tracker is None:
+            return
+        try:
+            await self.health_tracker.record_response(provider, response)
+        except Exception:
+            # Health tracking must never make the proxy request fail.
+            logger.exception(
+                "Failed to update provider health: provider_id=%s target_model=%s",
+                provider.provider_id,
+                provider.target_model,
+            )
     
     async def execute_with_retry(
         self,
@@ -158,21 +246,20 @@ class RetryHandler:
                 attempts=[],
             )
         
-        # Track tried candidates
-        tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         total_retry_count = 0
         last_response: Optional[ProviderResponse] = None
         last_provider: Optional[CandidateProvider] = None
         attempts: list[AttemptRecord] = []
         attempt_index = 0
         
-        # Select the first provider
-        current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
-        
-        while current_provider is not None:
-            # Record current provider as tried
-            tried_candidates.add(self._candidate_key(current_provider))
+        async for current_provider in self._iter_ordered_candidates(
+            candidates,
+            requested_model,
+            input_tokens=input_tokens,
+            image_count=image_count,
+        ):
             last_provider = current_provider
+            provider_response: Optional[ProviderResponse] = None
             
             # Same provider retry count
             same_provider_retries = 0
@@ -182,6 +269,7 @@ class RetryHandler:
                 attempt_time = utc_now()
                 response = await forward_fn(current_provider)
                 last_response = response
+                provider_response = response
                 attempt_record = AttemptRecord(
                     provider=current_provider,
                     response=response,
@@ -193,6 +281,7 @@ class RetryHandler:
 
                 # Success response
                 if response.is_success:
+                    await self._record_health(current_provider, response)
                     return RetryResult(
                         response=response,
                         retry_count=total_retry_count,
@@ -251,17 +340,9 @@ class RetryHandler:
                     )
                     total_retry_count += 1
                     break
-            
-            # Try to switch to the next provider
-            next_provider = await self._get_next_untried_provider(
-                candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
-            )
 
-            if next_provider is None:
-                # All providers tried
-                break
-
-            current_provider = next_provider
+            if provider_response is not None:
+                await self._record_health(current_provider, provider_response)
 
         # All providers failed
         return RetryResult(
@@ -304,20 +385,21 @@ class RetryHandler:
             ), None, 0
             return
             
-        tried_candidates: set[tuple[str, int] | tuple[str, int, str]] = set()
         total_retry_count = 0
         last_chunk: bytes = b""
         last_response: Optional[ProviderResponse] = None
         last_provider: Optional[CandidateProvider] = None
         attempt_index = 0
 
-        current_provider = await self.strategy.select(candidates, requested_model, input_tokens, image_count)
-
-        while current_provider is not None:
-            tried_candidates.add(self._candidate_key(current_provider))
+        async for current_provider in self._iter_ordered_candidates(
+            candidates,
+            requested_model,
+            input_tokens=input_tokens,
+            image_count=image_count,
+        ):
             last_provider = current_provider
             same_provider_retries = 0
-            pending_attempt_record: Optional[AttemptRecord] = None
+            provider_response: Optional[ProviderResponse] = None
             
             while same_provider_retries < self.max_retries:
                 try:
@@ -332,6 +414,7 @@ class RetryHandler:
                     # Get first chunk
                     chunk, response = await anext(generator)
                     last_response = response
+                    provider_response = response
                     last_chunk = chunk
                     attempt_record = AttemptRecord(
                         provider=current_provider,
@@ -344,8 +427,12 @@ class RetryHandler:
                     if response.is_success:
                         # Success, yield subsequent data
                         yield chunk, response, current_provider, total_retry_count
-                        async for chunk, response in generator:
-                            yield chunk, response, current_provider, total_retry_count
+                        final_response = response
+                        async for chunk, stream_response in generator:
+                            final_response = stream_response
+                            last_response = stream_response
+                            yield chunk, stream_response, current_provider, total_retry_count
+                        await self._record_health(current_provider, final_response)
                         return
 
                     if on_failure_attempt is not None:
@@ -384,7 +471,6 @@ class RetryHandler:
                                 current_provider.provider_id,
                                 current_provider.provider_name,
                             )
-                            pending_attempt_record = attempt_record
                             break
                     else:
                         logger.warning(
@@ -394,7 +480,6 @@ class RetryHandler:
                             response.status_code,
                         )
                         total_retry_count += 1
-                        pending_attempt_record = attempt_record
                         break
 
                 except Exception as e:
@@ -406,6 +491,8 @@ class RetryHandler:
                         request_time=attempt_time,
                         attempt_index=attempt_index,
                     )
+                    last_response = attempt_record.response
+                    provider_response = attempt_record.response
                     attempt_index += 1
                     if on_failure_attempt is not None:
                         try:
@@ -437,15 +524,10 @@ class RetryHandler:
                             current_provider.provider_id,
                             current_provider.provider_name,
                         )
-                        pending_attempt_record = attempt_record
                         break
-            
-            next_provider = await self._get_next_untried_provider(
-                candidates, tried_candidates, requested_model, current_provider, input_tokens, image_count
-            )
-            if next_provider is None:
-                break
-            current_provider = next_provider
+
+            if provider_response is not None:
+                await self._record_health(current_provider, provider_response)
             
         # All failed, return last error
         yield last_chunk, last_response or ProviderResponse(

@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # Retry interval (ms)
     RETRY_DELAY_MS: int = 1000
 
+    # Provider Health / Soft Circuit Breaker Config
+    # Degraded providers remain available but are tried after healthy providers.
+    PROVIDER_HEALTH_ENABLED: bool = True
+    # Sliding-window duration in seconds (default: 10 minutes)
+    PROVIDER_HEALTH_WINDOW_SECONDS: int = 600
+    # Minimum logical provider calls required before degradation
+    PROVIDER_HEALTH_MIN_SAMPLES: int = 6
+    # Failure rate at or above which a provider/model mapping is degraded
+    PROVIDER_HEALTH_FAILURE_RATE_THRESHOLD: float = 0.5
+
     # HTTP Client Config
     # Request timeout (seconds)
     HTTP_TIMEOUT: int = 1800
@@ -107,6 +117,14 @@ class Settings(BaseSettings):
         if self.LOG_DETAIL_RETENTION_DAYS > self.LOG_RETENTION_DAYS:
             raise ValueError(
                 "LOG_DETAIL_RETENTION_DAYS must be less than or equal to LOG_RETENTION_DAYS"
+            )
+        if self.PROVIDER_HEALTH_WINDOW_SECONDS < 1:
+            raise ValueError("PROVIDER_HEALTH_WINDOW_SECONDS must be >= 1")
+        if self.PROVIDER_HEALTH_MIN_SAMPLES < 1:
+            raise ValueError("PROVIDER_HEALTH_MIN_SAMPLES must be >= 1")
+        if not 0 < self.PROVIDER_HEALTH_FAILURE_RATE_THRESHOLD <= 1:
+            raise ValueError(
+                "PROVIDER_HEALTH_FAILURE_RATE_THRESHOLD must be in (0, 1]"
             )
         return self
 

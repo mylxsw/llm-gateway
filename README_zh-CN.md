@@ -254,6 +254,10 @@ response = client.responses.create(
 | `DATABASE_URL` | sqlite+aiosqlite:///./llm_gateway.db | 数据库连接字符串 |
 | `RETRY_MAX_ATTEMPTS` | 3 | 500+ 错误的最大重试次数 |
 | `RETRY_DELAY_MS` | 1000 | 重试间隔（毫秒） |
+| `PROVIDER_HEALTH_ENABLED` | true | 是否启用 Provider 运行时健康降级 |
+| `PROVIDER_HEALTH_WINDOW_SECONDS` | 600 | Provider 健康统计滑动窗口（秒） |
+| `PROVIDER_HEALTH_MIN_SAMPLES` | 6 | 触发降级判断所需的最小逻辑请求数 |
+| `PROVIDER_HEALTH_FAILURE_RATE_THRESHOLD` | 0.5 | 将 Provider 排到健康候选之后的失败率阈值 |
 | `HTTP_TIMEOUT` | 1800 | 上游请求超时（秒） |
 | `API_KEY_PREFIX` | lgw- | 生成的 API Key 前缀 |
 | `API_KEY_LENGTH` | 32 | 生成的 API Key 长度 |

@@ -30,6 +30,7 @@ from app.common.costs import (
 from app.rules.context import RuleContext, TokenUsage
 from app.rules.engine import RuleEngine
 from app.services.retry_handler import RetryHandler
+from app.services.provider_health import ProviderHealthTracker
 from app.services.strategy import CostFirstStrategy, PriorityStrategy, RoundRobinStrategy, SelectionStrategy
 
 
@@ -44,6 +45,7 @@ class ModelService:
         self,
         model_repo: ModelRepository,
         provider_repo: ProviderRepository,
+        health_tracker: ProviderHealthTracker | None = None,
     ):
         """
         Initialize Service
@@ -54,6 +56,7 @@ class ModelService:
         """
         self.model_repo = model_repo
         self.provider_repo = provider_repo
+        self._health_tracker = health_tracker
         self._round_robin_strategy = RoundRobinStrategy()
         self._cost_first_strategy = CostFirstStrategy()
         self._priority_strategy = PriorityStrategy()
@@ -177,7 +180,7 @@ class ModelService:
             )
 
         strategy = self._get_strategy(mapping.strategy)
-        retry_handler = RetryHandler(strategy)
+        retry_handler = RetryHandler(strategy, self._health_tracker)
         ordered_candidates = await retry_handler.get_ordered_candidates(
             candidates,
             requested_model,
@@ -795,6 +798,18 @@ class ModelService:
             providers = await self.model_repo.get_provider_mappings(
                 requested_model=mapping.requested_model
             )
+            if self._health_tracker is not None and providers:
+                health_by_mapping = await self._health_tracker.get_mapping_snapshots(
+                    provider.id for provider in providers
+                )
+                for provider in providers:
+                    health = health_by_mapping.get(provider.id)
+                    if health is None:
+                        continue
+                    provider.health_degraded = health.degraded
+                    provider.health_sample_count = health.sample_count
+                    provider.health_failure_count = health.failure_count
+                    provider.health_failure_rate = health.failure_rate
             provider_count = len(providers)
             # Active provider count requires both: mapping is_active AND provider is_active
             active_provider_count = sum(

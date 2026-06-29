@@ -450,6 +450,8 @@
       "protocolTitle": "Protocol: {protocol}",
       "configured": "Configured",
       "providerDisabledTooltip": "The provider for this model is currently disabled",
+      "healthDegraded": "Degraded",
+      "healthDegradedTooltip": "The current health window contains {samples} requests and {failures} failures ({failureRate}). This provider remains available as a fallback.",
       "priorityPromoted": "Promoted this model to top priority and reordered priorities",
       "priorityPromoteFailed": "Failed to update priorities",
       "noProviders": "No providers configured, click button above to add",

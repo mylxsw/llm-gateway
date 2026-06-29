@@ -10,9 +10,11 @@ from app.domain.model import (
     ModelProviderBulkUpgradeRequest,
 )
 from app.domain.provider import ProviderCreate
+from app.rules.models import CandidateProvider
 from app.repositories.sqlalchemy.model_repo import SQLAlchemyModelRepository
 from app.repositories.sqlalchemy.provider_repo import SQLAlchemyProviderRepository
 from app.services.model_service import ModelService
+from app.services.provider_health import HealthOutcome, ProviderHealthTracker
 
 
 @pytest.mark.asyncio
@@ -90,6 +92,55 @@ async def test_get_mapping_includes_provider_active_status(db_session):
     assert mapping.providers is not None
     assert len(mapping.providers) == 1
     assert mapping.providers[0].provider_is_active is False
+
+
+@pytest.mark.asyncio
+async def test_get_mapping_includes_runtime_provider_health(db_session):
+    model_repo = SQLAlchemyModelRepository(db_session)
+    provider_repo = SQLAlchemyProviderRepository(db_session)
+    health_tracker = ProviderHealthTracker(
+        min_samples=2,
+        failure_rate_threshold=0.5,
+    )
+    service = ModelService(model_repo, provider_repo, health_tracker)
+
+    await model_repo.create_mapping(ModelMappingCreate(requested_model="health-model"))
+    provider = await provider_repo.create(
+        ProviderCreate(
+            name="health-provider",
+            base_url="https://example.com",
+            protocol="openai",
+            api_type="chat",
+        )
+    )
+    created = await service.create_provider_mapping(
+        ModelMappingProviderCreate(
+            requested_model="health-model",
+            provider_id=provider.id,
+            target_model_name="upstream-health-model",
+            input_price=0.0,
+            output_price=0.0,
+        )
+    )
+    candidate = CandidateProvider(
+        provider_mapping_id=created.id,
+        provider_id=provider.id,
+        provider_name=provider.name,
+        base_url=provider.base_url,
+        protocol=provider.protocol,
+        api_key=provider.api_key,
+        target_model=created.target_model_name,
+    )
+    await health_tracker.record(candidate, HealthOutcome.FAILURE)
+    await health_tracker.record(candidate, HealthOutcome.SUCCESS)
+
+    mapping = await service.get_mapping("health-model")
+
+    assert mapping.providers is not None
+    assert mapping.providers[0].health_degraded is True
+    assert mapping.providers[0].health_sample_count == 2
+    assert mapping.providers[0].health_failure_count == 1
+    assert mapping.providers[0].health_failure_rate == 0.5
 
 
 @pytest.mark.asyncio

@@ -67,11 +67,15 @@ export function useModels(params?: ModelListParams) {
 /**
  * Get Single Model Mapping Detail Hook (Includes Provider Config)
  */
-export function useModel(requestedModel: string) {
+export function useModel(
+  requestedModel: string,
+  options?: { refetchInterval?: number | false }
+) {
   return useQuery({
     queryKey: QUERY_KEYS.modelDetail(requestedModel),
     queryFn: () => getModel(requestedModel),
     enabled: !!requestedModel, // Only query when requestedModel is valid
+    refetchInterval: options?.refetchInterval,
   });
 }
 

@@ -41,6 +41,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.provider_health import ProviderHealthTracker
 from app.services.protocol_hooks import OPENAI_IMAGE_PATHS, ProtocolConversionHooks
 from app.services.strategy import (
     CostFirstStrategy,
@@ -147,6 +148,7 @@ class ProxyService:
         cost_first_strategy: Optional[SelectionStrategy] = None,
         priority_strategy: Optional[SelectionStrategy] = None,
         protocol_hooks: Optional[ProtocolConversionHooks] = None,
+        health_tracker: Optional[ProviderHealthTracker] = None,
     ):
         """
         Initialize Service
@@ -194,6 +196,7 @@ class ProxyService:
         self._cost_first_strategy = cost_first_strategy or CostFirstStrategy()
         self._priority_strategy = priority_strategy or PriorityStrategy()
         self._protocol_hooks = protocol_hooks or ProtocolConversionHooks()
+        self._health_tracker = health_tracker
 
     @asynccontextmanager
     async def _repos(self):
@@ -612,7 +615,7 @@ class ProxyService:
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
-        retry_handler = RetryHandler(strategy)
+        retry_handler = RetryHandler(strategy, self._health_tracker)
 
         failed_attempt_logged = False
         # Track protocol conversion data for logging
@@ -1170,7 +1173,7 @@ class ProxyService:
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
-        retry_handler = RetryHandler(strategy)
+        retry_handler = RetryHandler(strategy, self._health_tracker)
 
         # Track protocol conversion data for logging
         stream_conversion_data: dict[str, Any] = {

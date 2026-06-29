@@ -52,6 +52,10 @@ export interface ModelMappingProvider {
   provider_name: string;              // Obtained via join
   provider_protocol?: ProtocolType | null; // Obtained via join
   provider_is_active?: boolean | null; // Obtained via join
+  health_degraded?: boolean;           // Runtime soft-circuit state
+  health_sample_count?: number;
+  health_failure_count?: number;
+  health_failure_rate?: number;
   resolved_billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | 'inherit_model_default' | null;
   resolved_input_price?: number | null;
   resolved_output_price?: number | null;

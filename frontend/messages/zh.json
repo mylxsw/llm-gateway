@@ -450,6 +450,8 @@
       "protocolTitle": "协议：{protocol}",
       "configured": "已配置",
       "providerDisabledTooltip": "当前模型的供应商已禁用",
+      "healthDegraded": "已降级",
+      "healthDegradedTooltip": "当前健康窗口共 {samples} 次请求，其中 {failures} 次失败，失败率 {failureRate}。该供应商仍会作为后备候选。",
       "priorityPromoted": "已将该模型设为最高优先级并重新排序",
       "priorityPromoteFailed": "更新优先级失败",
       "noProviders": "未配置供应商，点击上方按钮添加",

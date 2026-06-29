@@ -28,6 +28,7 @@ from app.services import (
     ModelService,
     PriorityStrategy,
     ProviderService,
+    ProviderHealthTracker,
     ProxyService,
     RoundRobinStrategy,
 )
@@ -37,6 +38,7 @@ from app.services.protocol_hooks import ProtocolConversionHooks
 _round_robin_strategy = RoundRobinStrategy()
 _cost_first_strategy = CostFirstStrategy()
 _priority_strategy = PriorityStrategy()
+_provider_health_tracker = ProviderHealthTracker.from_settings(get_settings())
 
 
 async def get_db():
@@ -90,7 +92,7 @@ def get_model_service(db: DbSession) -> ModelService:
     """Get Model Service"""
     model_repo = SQLAlchemyModelRepository(db)
     provider_repo = SQLAlchemyProviderRepository(db)
-    return ModelService(model_repo, provider_repo)
+    return ModelService(model_repo, provider_repo, _provider_health_tracker)
 
 
 def get_api_key_service(db: DbSession) -> ApiKeyService:
@@ -140,6 +142,7 @@ def get_proxy_service() -> ProxyService:
         cost_first_strategy=_cost_first_strategy,
         priority_strategy=_priority_strategy,
         protocol_hooks=_build_protocol_hooks(),
+        health_tracker=_provider_health_tracker,
     )
 
 

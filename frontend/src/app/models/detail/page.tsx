@@ -27,7 +27,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, ChevronsUp, Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronsUp,
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react';
 import {
   BillingDisplay,
   ModelProviderForm,
@@ -98,7 +106,9 @@ function ModelDetailContent() {
   const [deletingMapping, setDeletingMapping] = useState<ModelMappingProvider | null>(null);
   const [prioritizingMappingId, setPrioritizingMappingId] = useState<number | null>(null);
 
-  const { data: model, isLoading, isError, refetch } = useModel(requestedModel);
+  const { data: model, isLoading, isError, refetch } = useModel(requestedModel, {
+    refetchInterval: 30 * 1000,
+  });
   const { data: modelStatsData } = useModelStats({ requested_model: requestedModel });
   const { data: providerStatsData } = useModelProviderStats({ requested_model: requestedModel });
   const { data: providerNames = [] } = useProviderNames();
@@ -431,10 +441,21 @@ function ModelDetailContent() {
                   const protocol =
                     mapping.provider_protocol ??
                     providersById.get(mapping.provider_id)?.protocol;
+                  const healthFailureRate = formatRate(mapping.health_failure_rate);
+                  const healthTooltip = mapping.health_degraded
+                    ? t('detail.healthDegradedTooltip', {
+                        samples: mapping.health_sample_count ?? 0,
+                        failures: mapping.health_failure_count ?? 0,
+                        failureRate: healthFailureRate,
+                      })
+                    : undefined;
                   return (
-                    <TableRow key={mapping.id}>
+                    <TableRow
+                      key={mapping.id}
+                      className={mapping.health_degraded ? 'bg-amber-500/[0.04]' : undefined}
+                    >
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span>{mapping.provider_name}</span>
                           {protocol ? (
                             <Badge
@@ -444,6 +465,33 @@ function ModelDetailContent() {
                             >
                               {protocolLabel(protocol, protocolConfigs)}
                             </Badge>
+                          ) : null}
+                          {mapping.health_degraded ? (
+                            <TooltipProvider delayDuration={200}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge
+                                    variant="warning"
+                                    className="gap-1 whitespace-nowrap font-medium"
+                                    tabIndex={0}
+                                    aria-label={healthTooltip}
+                                  >
+                                    <TriangleAlert
+                                      className="h-3 w-3"
+                                      aria-hidden="true"
+                                      suppressHydrationWarning
+                                    />
+                                    {t('detail.healthDegraded')}
+                                    <span className="font-mono tabular-nums">
+                                      {healthFailureRate}
+                                    </span>
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-72 text-xs leading-relaxed">
+                                  {healthTooltip}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           ) : null}
                         </div>
                       </TableCell>

@@ -349,6 +349,11 @@ class ModelMappingProviderResponse(ModelMappingProvider):
     provider_protocol: Optional[str] = Field(None, description="Provider Protocol Type")
     # Provider Active Status
     provider_is_active: Optional[bool] = Field(None, description="Provider Active Status")
+    # Runtime health state from the soft circuit breaker (not persisted config)
+    health_degraded: bool = Field(False, description="Runtime health degraded")
+    health_sample_count: int = Field(0, description="Health-window sample count")
+    health_failure_count: int = Field(0, description="Health-window failure count")
+    health_failure_rate: float = Field(0.0, description="Health-window failure rate")
     # Resolved billing config for history copy/apply scenarios
     resolved_billing_mode: Optional[BillingMode] = Field(
         None, description="Resolved billing mode after applying model fallback"

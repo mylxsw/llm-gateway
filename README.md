@@ -253,6 +253,10 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 | `DATABASE_URL` | sqlite+aiosqlite:///./llm_gateway.db | Database connection string |
 | `RETRY_MAX_ATTEMPTS` | 3 | Max retry attempts for 500+ errors |
 | `RETRY_DELAY_MS` | 1000 | Delay between retries (milliseconds) |
+| `PROVIDER_HEALTH_ENABLED` | true | Enable runtime provider health degradation |
+| `PROVIDER_HEALTH_WINDOW_SECONDS` | 600 | Provider health sliding-window duration |
+| `PROVIDER_HEALTH_MIN_SAMPLES` | 6 | Minimum logical provider calls before degradation |
+| `PROVIDER_HEALTH_FAILURE_RATE_THRESHOLD` | 0.5 | Failure rate that moves a provider behind healthy candidates |
 | `HTTP_TIMEOUT` | 1800 | Upstream request timeout (seconds) |
 | `API_KEY_PREFIX` | lgw- | Prefix for generated API keys |
 | `API_KEY_LENGTH` | 32 | Length of generated API keys |
