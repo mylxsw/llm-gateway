@@ -51,7 +51,26 @@ class LogService:
             RequestLogModel: Created log
         """
         return await self.repo.create(data)
-    
+
+    async def create_initial(self, data: RequestLogCreate) -> int:
+        """
+        Create a minimal log entry when a request is received.
+        Returns the new log ID for later update.
+        """
+        return await self.repo.create_initial(data)
+
+    async def update(self, log_id: int, data: RequestLogCreate) -> RequestLogModel:
+        """
+        Update an existing log entry with completion data.
+        """
+        return await self.repo.update(log_id, data)
+
+    async def cancel(self, log_id: int) -> None:
+        """
+        Cancel an in-progress request.
+        """
+        await self.repo.cancel(log_id)
+
     async def get_by_id(self, id: int) -> RequestLogModel:
         """
         Get Log Details by ID
@@ -146,6 +165,7 @@ class LogService:
                 response_status=s.response_status,
                 trace_id=s.trace_id,
                 is_stream=s.is_stream,
+                is_completed=s.is_completed,
             )
             for s in summaries
         ]
