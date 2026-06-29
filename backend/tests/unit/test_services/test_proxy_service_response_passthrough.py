@@ -72,9 +72,10 @@ async def test_process_request_same_protocol_response_body_passthrough_bytes():
 
     assert response.status_code == 200
     assert response.body == b'{"id":"raw","usage":{"completion_tokens":12}}'
-    service.log_repo.create.assert_awaited()
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
 
-    log_data = service.log_repo.create.await_args.args[0]
+    log_data = service.log_repo.update.await_args.args[1]
     assert log_data.output_tokens == 12
 
 
@@ -134,5 +135,5 @@ async def test_process_request_logs_normalized_upstream_url():
             )
 
     assert response.status_code == 200
-    log_data = service.log_repo.create.await_args.args[0]
+    log_data = service.log_repo.update.await_args.args[1]
     assert log_data.upstream_url == "https://sub2api.fallout.in/v1/chat/completions"

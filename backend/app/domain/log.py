@@ -31,6 +31,8 @@ class RequestLogBase(BaseModel):
     provider_id: Optional[int] = Field(None, description="Provider ID")
     # Provider Name
     provider_name: Optional[str] = Field(None, description="Provider Name")
+    # Whether the request has completed (False = still in progress)
+    is_completed: bool = Field(True, description="Whether the request has completed")
 
     @field_validator("request_time", mode="after")
     @classmethod
@@ -138,6 +140,7 @@ class RequestLogSummary(BaseModel):
     response_status: Optional[int] = None
     trace_id: Optional[str] = None
     is_stream: bool = False
+    is_completed: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -165,6 +168,7 @@ class RequestLogResponse(RequestLogBase):
     response_status: Optional[int] = None
     trace_id: Optional[str] = None
     is_stream: bool = False
+    is_completed: bool = True
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -219,6 +223,8 @@ class RequestLogQuery(BaseModel):
     # Sorting
     sort_by: str = Field("request_time", description="Sort Field")
     sort_order: str = Field("desc", pattern="^(asc|desc)$", description="Sort Order")
+    # Is Completed Filter
+    is_completed: Optional[bool] = Field(None, description="Is Completed")
 
     @field_validator("start_time", "end_time", mode="after")
     @classmethod

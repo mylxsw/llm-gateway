@@ -54,6 +54,7 @@ _SUMMARY_COLUMNS = [
     RequestLogORM.response_status,
     RequestLogORM.trace_id,
     RequestLogORM.is_stream,
+    RequestLogORM.is_completed,
 ]
 
 
@@ -131,6 +132,7 @@ class SQLAlchemyLogRepository(LogRepository):
             matched_provider_count=entity.matched_provider_count,
             trace_id=entity.trace_id,
             is_stream=entity.is_stream,
+            is_completed=entity.is_completed,
             request_protocol=entity.request_protocol,
             supplier_protocol=entity.supplier_protocol,
             converted_request_body=detail.converted_request_body if detail else entity.converted_request_body,
@@ -166,6 +168,7 @@ class SQLAlchemyLogRepository(LogRepository):
             response_status=row["response_status"],
             trace_id=row["trace_id"],
             is_stream=row["is_stream"],
+            is_completed=row["is_completed"],
         )
 
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
@@ -193,6 +196,7 @@ class SQLAlchemyLogRepository(LogRepository):
             response_status=data.response_status,
             trace_id=data.trace_id,
             is_stream=data.is_stream,
+            is_completed=data.is_completed,
             request_protocol=data.request_protocol,
             supplier_protocol=data.supplier_protocol,
             request_path=data.request_path,
@@ -260,6 +264,7 @@ class SQLAlchemyLogRepository(LogRepository):
             matched_provider_count=entity.matched_provider_count,
             trace_id=entity.trace_id,
             is_stream=entity.is_stream,
+            is_completed=entity.is_completed,
             request_protocol=entity.request_protocol,
             supplier_protocol=entity.supplier_protocol,
             converted_request_body=data.converted_request_body,
@@ -270,6 +275,137 @@ class SQLAlchemyLogRepository(LogRepository):
             upstream_url=entity.upstream_url,
             detail_available=True,
         )
+
+    async def create_initial(self, data: RequestLogCreate) -> int:
+        """Create a minimal log entry immediately when a request is received.
+        Returns the new log ID for later update."""
+        entity = RequestLogORM(
+            request_time=to_utc_naive(data.request_time),
+            api_key_id=data.api_key_id,
+            api_key_name=data.api_key_name,
+            user_id=data.user_id,
+            requested_model=data.requested_model,
+            target_model=data.target_model,
+            trace_id=data.trace_id,
+            is_stream=data.is_stream,
+            is_completed=False,
+            request_protocol=data.request_protocol,
+            request_path=data.request_path,
+            request_url=data.request_url,
+            request_method=data.request_method,
+            # All other fields remain NULL until update
+        )
+        self.session.add(entity)
+        await self.session.flush()
+        log_id = entity.id
+        await self.session.commit()
+        return log_id
+
+    async def update(self, log_id: int, data: RequestLogCreate) -> RequestLogModel:
+        """Complete an in-progress log without overwriting a concurrent cancel."""
+        from sqlalchemy import update as sa_update
+
+        from app.common.errors import NotFoundError
+
+        stmt = (
+            sa_update(RequestLogORM)
+            .where(
+                RequestLogORM.id == log_id,
+                RequestLogORM.is_completed.is_(False),
+            )
+            .values(
+                provider_id=data.provider_id,
+                provider_name=data.provider_name,
+                retry_count=data.retry_count,
+                matched_provider_count=data.matched_provider_count,
+                first_byte_delay_ms=data.first_byte_delay_ms,
+                total_time_ms=data.total_time_ms,
+                input_tokens=data.input_tokens,
+                output_tokens=data.output_tokens,
+                total_cost=data.total_cost,
+                input_cost=data.input_cost,
+                output_cost=data.output_cost,
+                cached_input_cost=data.cached_input_cost,
+                cached_output_cost=data.cached_output_cost,
+                price_source=data.price_source,
+                response_status=data.response_status,
+                is_completed=True,
+                target_model=data.target_model,
+                supplier_protocol=data.supplier_protocol,
+                upstream_url=data.upstream_url,
+            )
+        )
+        update_result = await self.session.execute(stmt)
+
+        if update_result.rowcount == 0:
+            # A cancellation or another completion won the compare-and-set.
+            # Never overwrite its status/detail payload.
+            await self.session.rollback()
+            existing = await self.get_by_id(log_id)
+            if existing is None:
+                raise NotFoundError(
+                    message=f"Request log with id {log_id} not found",
+                    code="log_not_found",
+                )
+            return existing
+
+        # Upsert detail row
+        detail = RequestLogDetailORM(
+            log_id=log_id,
+            request_body=data.request_body,
+            response_body=data.response_body,
+            request_headers=data.request_headers,
+            response_headers=data.response_headers,
+            converted_request_body=data.converted_request_body,
+            upstream_response_body=data.upstream_response_body,
+            usage_details=data.usage_details,
+            error_info=data.error_info,
+        )
+        await self.session.merge(detail)
+        await self.session.commit()
+
+        # Re-fetch with joined detail
+        result = await self.session.execute(
+            select(RequestLogORM)
+            .options(joinedload(RequestLogORM.detail))
+            .where(RequestLogORM.id == log_id)
+        )
+        entity = result.unique().scalar_one()
+        return self._to_domain(entity)
+
+    async def cancel(self, log_id: int, error_info: str = "Request cancelled by admin") -> None:
+        """Atomically mark an in-progress log as cancelled."""
+        from sqlalchemy import update as sa_update
+
+        from app.common.errors import NotFoundError
+
+        stmt = (
+            sa_update(RequestLogORM)
+            .where(
+                RequestLogORM.id == log_id,
+                RequestLogORM.is_completed.is_(False),
+            )
+            .values(
+                is_completed=True,
+                response_status=499,  # Client Closed Request
+            )
+        )
+        result = await self.session.execute(stmt)
+
+        if result.rowcount == 0:
+            await self.session.rollback()
+            raise NotFoundError(
+                message=f"No in-progress request found with id {log_id}",
+                code="log_not_found_or_completed",
+            )
+
+        # Only the transaction that won the state transition may write details.
+        error_detail = RequestLogDetailORM(
+            log_id=log_id,
+            error_info=error_info,
+        )
+        await self.session.merge(error_detail)
+        await self.session.commit()
 
     async def cleanup_old_log_details(self, days_to_keep: int) -> int:
         """
@@ -418,6 +554,10 @@ class SQLAlchemyLogRepository(LogRepository):
         if query.user_id:
             conditions.append(RequestLogORM.user_id.ilike(f"%{query.user_id}%"))
 
+        # Is Completed filter
+        if query.is_completed is not None:
+            conditions.append(RequestLogORM.is_completed == query.is_completed)
+
         # Retry count filter
         if query.retry_count_min is not None:
             conditions.append(RequestLogORM.retry_count >= query.retry_count_min)
@@ -502,7 +642,9 @@ class SQLAlchemyLogRepository(LogRepository):
         return result.rowcount
 
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
-        conditions = []
+        # In-progress rows have no final status, usage, or cost. Counting them
+        # here would incorrectly classify them as successful requests.
+        conditions = [RequestLogORM.is_completed.is_(True)]
         tz_offset_minutes = int(query.tz_offset_minutes or 0)
 
         if query.start_time:

@@ -52,6 +52,13 @@ export async function retryLog(id: number): Promise<RetryLogResponse> {
 }
 
 /**
+ * Cancel an in-progress request by its log ID.
+ */
+export async function cancelLog(logId: number): Promise<{ status: string; log_id: number }> {
+  return post<{ status: string; log_id: number }>(`${BASE_URL}/${logId}/cancel`);
+}
+
+/**
  * Get the full (non-truncated) upstream converted request body.
  *
  * The stored converted_request_body is truncated for storage; this endpoint

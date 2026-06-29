@@ -356,6 +356,8 @@ class RequestLog(Base):
     trace_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Is Stream Request
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Is Request Completed (False = still in progress, True = completed or failed)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Request path (e.g., /v1/chat/completions)
     request_path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     # Original request URL used by the client

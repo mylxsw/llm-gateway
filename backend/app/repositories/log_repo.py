@@ -27,12 +27,54 @@ class LogRepository(ABC):
     async def create(self, data: RequestLogCreate) -> RequestLogModel:
         """
         Create Request Log
-        
+
         Args:
             data: Log creation data
-            
+
         Returns:
             RequestLogModel: Created log model
+        """
+        pass
+
+    @abstractmethod
+    async def create_initial(self, data: RequestLogCreate) -> int:
+        """
+        Create a minimal log entry (is_completed=False) when a request is received.
+        Returns the new log ID for later update.
+
+        Args:
+            data: Log creation data (minimal fields)
+
+        Returns:
+            int: The ID of the created log entry
+        """
+        pass
+
+    @abstractmethod
+    async def update(self, log_id: int, data: RequestLogCreate) -> RequestLogModel:
+        """
+        Update an existing log entry with completion data, setting is_completed=True.
+
+        Args:
+            log_id: ID of the log entry to update
+            data: Completion data
+
+        Returns:
+            RequestLogModel: Updated log model
+        """
+        pass
+
+    @abstractmethod
+    async def cancel(self, log_id: int, error_info: str = "Request cancelled by admin") -> None:
+        """
+        Mark an in-progress log as cancelled (is_completed=True, with error_info).
+        
+        Args:
+            log_id: ID of the log entry to cancel
+            error_info: Error message to record
+            
+        Raises:
+            NotFoundError: If no in-progress request found with given ID
         """
         pass
     

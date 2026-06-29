@@ -26,9 +26,10 @@ from app.common.provider_protocols import (
     OPENAI_RESPONSES_PROTOCOL,
     resolve_implementation_protocol,
 )
-from app.common.errors import AppError, ValidationError
+from app.common.errors import AppError, NotFoundError, ValidationError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
+from app.services.active_requests import active_requests
 from app.domain.log import (
     RequestLogQuery,
     RequestLogResponse,
@@ -500,6 +501,7 @@ async def list_logs(
     input_tokens_max: Optional[int] = Query(None, description="Max Input Tokens"),
     total_time_min: Optional[int] = Query(None, description="Min Total Time (ms)"),
     total_time_max: Optional[int] = Query(None, description="Max Total Time (ms)"),
+    is_completed: Optional[bool] = Query(None, description="Is Completed"),
     page: int = Query(1, ge=1, description="Page Number"),
     page_size: int = Query(20, ge=1, le=100, description="Items Per Page"),
     sort_by: str = Query("request_time", description="Sort Field"),
@@ -536,6 +538,7 @@ async def list_logs(
             input_tokens_max=input_tokens_max,
             total_time_min=total_time_min,
             total_time_max=total_time_max,
+            is_completed=is_completed,
             page=page,
             page_size=page_size,
             sort_by=sort_by,
@@ -573,6 +576,33 @@ async def get_log(
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.post("/{log_id}/cancel")
+async def cancel_request(
+    log_id: int,
+    log_service: LogServiceDep,
+):
+    """
+    Cancel an in-progress request.
+
+    Cancels the underlying asyncio task and marks the log as completed.
+    """
+    # Persist the terminal state first. The normal completion path uses a
+    # compare-and-set and therefore cannot overwrite status 499 afterwards.
+    try:
+        await log_service.cancel(log_id)
+    except NotFoundError as exc:
+        raise NotFoundError(
+            message=f"No in-progress request found with id {log_id}",
+            code="request_not_found_or_completed",
+        ) from exc
+
+    # Best effort: the request may already be leaving the process-local tracker
+    # by the time the database transition commits.
+    await active_requests.cancel(log_id)
+
+    return {"status": "cancelled", "log_id": log_id}
 
 
 @router.get(

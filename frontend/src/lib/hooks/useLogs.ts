@@ -3,8 +3,8 @@
  * Provides data fetching and caching management
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { getLogs, getLogDetail, getLogCostStats, retryLog } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getLogs, getLogDetail, getLogCostStats, retryLog, cancelLog } from '@/lib/api';
 import { LogQueryParams } from '@/types';
 
 /** Query Keys */
@@ -25,6 +25,9 @@ export function useLogs(params?: LogQueryParams) {
     queryFn: () => getLogs(params),
     // Log data changes frequently, set shorter cache time
     staleTime: 30 * 1000, // 30 seconds
+    // Discover new requests and replace in-progress rows after completion.
+    refetchInterval: 2 * 1000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -50,5 +53,15 @@ export function useLogCostStats(params?: LogQueryParams) {
 export function useRetryLog() {
   return useMutation({
     mutationFn: (id: number) => retryLog(id),
+  });
+}
+
+export function useCancelLog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => cancelLog(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.all });
+    },
   });
 }

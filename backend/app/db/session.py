@@ -183,8 +183,20 @@ def _run_migrations(sync_conn) -> None:
             "cached_input_cost": "cached_input_cost NUMERIC(12,4)",
             "cached_output_cost": "cached_output_cost NUMERIC(12,4)",
             "user_id": "user_id VARCHAR(255)",
+            "is_completed": "is_completed BOOLEAN DEFAULT TRUE",
         },
     )
+    # Any unfinished row visible during startup belongs to a previous process
+    # and can no longer have a live task behind it.
+    if "request_logs" in table_names:
+        sync_conn.execute(
+            text(
+                "UPDATE request_logs "
+                "SET is_completed = TRUE, response_status = 500, "
+                "error_info = 'Request interrupted by server restart' "
+                "WHERE is_completed = FALSE"
+            )
+        )
     ensure_columns(
         "service_providers",
         {

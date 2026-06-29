@@ -132,7 +132,8 @@ async def test_protocol_hooks_apply_to_non_stream_flow():
                 )
 
     assert response.body == {"after_response": {"converted_response": True}}
-    service.log_repo.create.assert_awaited()
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -217,7 +218,8 @@ async def test_protocol_hooks_apply_to_image_non_stream_flow():
         "image_after_response": {"converted_image_response": True},
         "path": "/v1/images/generations",
     }
-    service.log_repo.create.assert_awaited()
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -301,7 +303,8 @@ async def test_protocol_hooks_apply_to_stream_chunks():
         chunks.append(chunk)
 
     assert chunks == [b'data: {"choices":[{"delta":{"content":"hi!"}}]}\n\n']
-    service.log_repo.create.assert_awaited()
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -380,8 +383,9 @@ async def test_stream_upstream_failure_after_first_chunk_is_logged_as_failure():
     assert "Request timeout" in (initial_response.error or "")
     assert chunks[0] == b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
     assert any(b'"error"' in chunk for chunk in chunks)
-    service.log_repo.create.assert_awaited()
-    log_data = service.log_repo.create.await_args.args[0]
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
+    log_data = service.log_repo.update.await_args.args[1]
     assert log_data.response_status == 504
     assert "Request timeout" in (log_data.error_info or "")
 
@@ -494,9 +498,11 @@ async def test_stream_first_event_timeout_fails_over_to_next_provider():
     assert metadata["retry_count"] == 1
     assert metadata["provider_name"] == "p-ok"
     assert chunks == [b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n']
-    assert service.log_repo.create.await_count == 2
+    assert service.log_repo.create.await_count == 1  # only the failed attempt
+    assert service.log_repo.create_initial.await_count == 1
+    assert service.log_repo.update.await_count == 1
     failure_log = service.log_repo.create.await_args_list[0].args[0]
-    final_log = service.log_repo.create.await_args_list[-1].args[0]
+    final_log = service.log_repo.update.await_args_list[0].args[1]
     assert failure_log.provider_name == "p-timeout"
     assert failure_log.response_status == 504
     assert final_log.provider_name == "p-ok"

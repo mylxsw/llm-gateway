@@ -80,7 +80,8 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
             )
 
     assert response.status_code == 200
-    service.log_repo.create.assert_awaited()
-    log_data = service.log_repo.create.await_args.args[0]
+    service.log_repo.create_initial.assert_awaited()
+    service.log_repo.update.assert_awaited()
+    log_data = service.log_repo.update.await_args.args[1]
     assert log_data.request_body["_files"][0]["size"] == len(b"fake-audio")
     assert log_data.response_body == "[binary data: 8 bytes]"

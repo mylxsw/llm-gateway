@@ -659,7 +659,9 @@
     },
     "toasts": {
       "refreshSuccess": "已刷新",
-      "refreshFailed": "刷新失败"
+      "refreshFailed": "刷新失败",
+      "cancelSuccess": "请求已取消",
+      "cancelFailed": "取消请求失败"
     },
     "list": {
       "title": "日志列表",
@@ -682,6 +684,10 @@
       "outTokens": "输出：{count}",
       "userId": "用户：{userId}",
       "retry": "重试：{count}",
+      "cancelRequest": "取消",
+      "cancelConfirmTitle": "确认取消请求？",
+      "cancelConfirmDescription": "该操作会终止正在处理的请求，且无法撤销。",
+      "processing": "处理中",
       "ttfb": "首字节",
       "totalDuration": "总耗时"
     },
