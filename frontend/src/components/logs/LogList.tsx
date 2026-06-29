@@ -33,6 +33,8 @@ import { RequestLog } from '@/types';
 import { formatDateTime, formatDuration, getStatusColor, formatUsd } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import { useCancelLog } from '@/lib/hooks/useLogs';
+import { ConfirmDialog } from '@/components/common';
+import { toast } from 'sonner';
 
 interface LogListProps {
   /** Log list data */
@@ -47,15 +49,29 @@ interface LogListProps {
 export function LogList({ logs, onView }: LogListProps) {
   const t = useTranslations('logs');
   const cancelMutation = useCancelLog();
+  const [now, setNow] = React.useState(() => Date.now());
+  const [cancelLogId, setCancelLogId] = React.useState<number | null>(null);
 
   const isInProgress = (log: RequestLog) => log.is_completed === false;
 
+  React.useEffect(() => {
+    if (!logs.some((log) => log.is_completed === false)) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [logs]);
+
   const renderResponseTime = (log: RequestLog) => {
     if (isInProgress(log)) {
+      const startedAt = new Date(log.request_time).getTime();
+      const elapsedMs = Number.isFinite(startedAt)
+        ? Math.max(0, now - startedAt)
+        : undefined;
       return (
         <div className="flex items-center gap-1 text-xs">
           <Loader2 className="h-3 w-3 animate-spin text-blue-500" suppressHydrationWarning />
-          <span className="font-mono text-blue-500">{t('list.processing')}</span>
+          <span className="font-mono text-blue-500">
+            {elapsedMs === undefined ? t('list.processing') : formatDuration(elapsedMs)}
+          </span>
         </div>
       );
     }
@@ -80,8 +96,17 @@ export function LogList({ logs, onView }: LogListProps) {
     );
   };
 
-  const handleCancel = async (logId: number) => {
-    cancelMutation.mutate(logId);
+  const handleConfirmCancel = () => {
+    if (cancelLogId === null) return;
+    cancelMutation.mutate(cancelLogId, {
+      onSuccess: () => {
+        toast.success(t('toasts.cancelSuccess'));
+        setCancelLogId(null);
+      },
+      onError: () => {
+        toast.error(t('toasts.cancelFailed'));
+      },
+    });
   };
 
   return (
@@ -210,7 +235,7 @@ export function LogList({ logs, onView }: LogListProps) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleCancel(log.id)}
+                            onClick={() => setCancelLogId(log.id)}
                             disabled={cancelMutation.isPending}
                             title={t('list.cancelRequest')}
                           >
@@ -237,6 +262,18 @@ export function LogList({ logs, onView }: LogListProps) {
           })}
         </TableBody>
       </Table>
+      <ConfirmDialog
+        open={cancelLogId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelLogId(null);
+        }}
+        title={t('list.cancelConfirmTitle')}
+        description={t('list.cancelConfirmDescription')}
+        confirmText={t('list.cancelRequest')}
+        onConfirm={handleConfirmCancel}
+        destructive
+        loading={cancelMutation.isPending}
+      />
     </TooltipProvider>
   );
 }

@@ -25,6 +25,9 @@ export function useLogs(params?: LogQueryParams) {
     queryFn: () => getLogs(params),
     // Log data changes frequently, set shorter cache time
     staleTime: 30 * 1000, // 30 seconds
+    // Discover new requests and replace in-progress rows after completion.
+    refetchInterval: 2 * 1000,
+    refetchIntervalInBackground: false,
   });
 }
 

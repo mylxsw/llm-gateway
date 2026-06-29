@@ -302,12 +302,17 @@ class SQLAlchemyLogRepository(LogRepository):
         return log_id
 
     async def update(self, log_id: int, data: RequestLogCreate) -> RequestLogModel:
-        """Update a log entry with completion data, setting is_completed=True."""
+        """Complete an in-progress log without overwriting a concurrent cancel."""
         from sqlalchemy import update as sa_update
+
+        from app.common.errors import NotFoundError
 
         stmt = (
             sa_update(RequestLogORM)
-            .where(RequestLogORM.id == log_id)
+            .where(
+                RequestLogORM.id == log_id,
+                RequestLogORM.is_completed.is_(False),
+            )
             .values(
                 provider_id=data.provider_id,
                 provider_name=data.provider_name,
@@ -330,7 +335,19 @@ class SQLAlchemyLogRepository(LogRepository):
                 upstream_url=data.upstream_url,
             )
         )
-        await self.session.execute(stmt)
+        update_result = await self.session.execute(stmt)
+
+        if update_result.rowcount == 0:
+            # A cancellation or another completion won the compare-and-set.
+            # Never overwrite its status/detail payload.
+            await self.session.rollback()
+            existing = await self.get_by_id(log_id)
+            if existing is None:
+                raise NotFoundError(
+                    message=f"Request log with id {log_id} not found",
+                    code="log_not_found",
+                )
+            return existing
 
         # Upsert detail row
         detail = RequestLogDetailORM(
@@ -357,14 +374,17 @@ class SQLAlchemyLogRepository(LogRepository):
         return self._to_domain(entity)
 
     async def cancel(self, log_id: int, error_info: str = "Request cancelled by admin") -> None:
-        """Mark an in-progress log as cancelled."""
+        """Atomically mark an in-progress log as cancelled."""
         from sqlalchemy import update as sa_update
 
         from app.common.errors import NotFoundError
 
         stmt = (
             sa_update(RequestLogORM)
-            .where(RequestLogORM.id == log_id, RequestLogORM.is_completed == False)
+            .where(
+                RequestLogORM.id == log_id,
+                RequestLogORM.is_completed.is_(False),
+            )
             .values(
                 is_completed=True,
                 response_status=499,  # Client Closed Request
@@ -372,19 +392,20 @@ class SQLAlchemyLogRepository(LogRepository):
         )
         result = await self.session.execute(stmt)
 
-        # Also write the error info
+        if result.rowcount == 0:
+            await self.session.rollback()
+            raise NotFoundError(
+                message=f"No in-progress request found with id {log_id}",
+                code="log_not_found_or_completed",
+            )
+
+        # Only the transaction that won the state transition may write details.
         error_detail = RequestLogDetailORM(
             log_id=log_id,
             error_info=error_info,
         )
         await self.session.merge(error_detail)
         await self.session.commit()
-
-        if result.rowcount == 0:
-            raise NotFoundError(
-                message=f"No in-progress request found with id {log_id}",
-                code="log_not_found_or_completed",
-            )
 
     async def cleanup_old_log_details(self, days_to_keep: int) -> int:
         """
@@ -621,7 +642,9 @@ class SQLAlchemyLogRepository(LogRepository):
         return result.rowcount
 
     async def get_cost_stats(self, query: LogCostStatsQuery) -> LogCostStatsResponse:
-        conditions = []
+        # In-progress rows have no final status, usage, or cost. Counting them
+        # here would incorrectly classify them as successful requests.
+        conditions = [RequestLogORM.is_completed.is_(True)]
         tz_offset_minutes = int(query.tz_offset_minutes or 0)
 
         if query.start_time:

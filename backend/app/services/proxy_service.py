@@ -274,6 +274,48 @@ class ProxyService:
         except Exception:
             logger.exception("Failed to update log: log_id=%s", log_id)
 
+    async def _finalize_initial_log_error(
+        self,
+        *,
+        log_id: int,
+        request_time: datetime,
+        api_key_id: int | None,
+        api_key_name: str | None,
+        user_id: str | None,
+        requested_model: str,
+        trace_id: str,
+        is_stream: bool,
+        request_protocol: str,
+        path: str,
+        request_url: str | None,
+        method: str,
+        headers: dict[str, str],
+        sanitized_body: dict[str, Any],
+        error: BaseException,
+        record_details: bool,
+    ) -> None:
+        """Turn an initial row into a terminal failure row."""
+        status_code = getattr(error, "status_code", 500)
+        log_data = RequestLogCreate(
+            request_time=request_time,
+            api_key_id=api_key_id,
+            api_key_name=api_key_name,
+            user_id=user_id,
+            requested_model=requested_model,
+            request_headers=sanitize_headers(headers),
+            request_body=sanitized_body,
+            response_status=status_code,
+            error_info=str(error),
+            trace_id=trace_id,
+            is_stream=is_stream,
+            request_protocol=request_protocol,
+            request_path=path,
+            request_url=request_url,
+            request_method=method,
+        )
+        with anyio.CancelScope(shield=True):
+            await self._update_log(log_id, log_data, record_details=record_details)
+
     def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
         """
         Get strategy instance based on strategy name
@@ -656,7 +698,25 @@ class ProxyService:
                 headers=headers,
                 body=body,
             )
-        except Exception:
+        except Exception as exc:
+            await self._finalize_initial_log_error(
+                log_id=log_id,
+                request_time=request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                user_id=user_id,
+                requested_model=requested_model,
+                trace_id=trace_id,
+                is_stream=False,
+                request_protocol=request_protocol,
+                path=path,
+                request_url=request_url,
+                method=method,
+                headers=headers,
+                sanitized_body=sanitized_body,
+                error=exc,
+                record_details=record_details,
+            )
             await active_requests.deregister(log_id)
             raise
         token_counter = get_token_counter(protocol)
@@ -687,7 +747,6 @@ class ProxyService:
         strategy = self._get_strategy(model_mapping.strategy)
         retry_handler = RetryHandler(strategy, self._health_tracker)
 
-        failed_attempt_logged = False
         # Track protocol conversion data for logging
         conversion_data: dict[str, Any] = {
             "request_protocol": request_protocol,
@@ -697,7 +756,6 @@ class ProxyService:
         }
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
-            nonlocal failed_attempt_logged
             provider_mapping = provider_mapping_by_id.get(
                 self._candidate_key(attempt.provider)
             )
@@ -789,7 +847,6 @@ class ProxyService:
             )
             try:
                 await self._write_log(attempt_log, record_details=record_details)
-                failed_attempt_logged = True
             except Exception:
                 logger.exception(
                     "Failed to write attempt log: trace_id=%s provider_id=%s attempt_index=%s",
@@ -1154,8 +1211,9 @@ class ProxyService:
             # Fallback for Pydantic v1
             logger.debug(f"Request Log: {log_data.json()}")
 
-        if result.success or not failed_attempt_logged:
-            await self._update_log(log_id, log_data, record_details=record_details)
+        # The initial row represents the overall request and must always reach
+        # a terminal state. Failed-attempt rows remain useful retry diagnostics.
+        await self._update_log(log_id, log_data, record_details=record_details)
         await active_requests.deregister(log_id)
 
         return result.response, {
@@ -1238,7 +1296,25 @@ class ProxyService:
                 headers=headers,
                 body=body,
             )
-        except Exception:
+        except Exception as exc:
+            await self._finalize_initial_log_error(
+                log_id=log_id,
+                request_time=request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                user_id=user_id,
+                requested_model=requested_model,
+                trace_id=trace_id,
+                is_stream=True,
+                request_protocol=request_protocol,
+                path=path,
+                request_url=request_url,
+                method=method,
+                headers=headers,
+                sanitized_body=sanitized_body,
+                error=exc,
+                record_details=record_details,
+            )
             await active_requests.deregister(log_id)
             raise
 
@@ -1628,13 +1704,53 @@ class ProxyService:
                 stream_gen
             )
         except StopAsyncIteration:
+            error = ServiceError(
+                message="Stream ended unexpectedly", code="stream_error"
+            )
+            await self._finalize_initial_log_error(
+                log_id=log_id,
+                request_time=request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                user_id=user_id,
+                requested_model=requested_model,
+                trace_id=trace_id,
+                is_stream=True,
+                request_protocol=request_protocol,
+                path=path,
+                request_url=request_url,
+                method=method,
+                headers=headers,
+                sanitized_body=sanitized_body,
+                error=error,
+                record_details=record_details,
+            )
             await active_requests.deregister(log_id)
-            raise ServiceError(message="Stream ended unexpectedly", code="stream_error")
+            raise error
         except Exception as e:
-            await active_requests.deregister(log_id)
-            raise ServiceError(
+            error = ServiceError(
                 message=f"Stream connection error: {str(e)}", code="stream_error"
             )
+            await self._finalize_initial_log_error(
+                log_id=log_id,
+                request_time=request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                user_id=user_id,
+                requested_model=requested_model,
+                trace_id=trace_id,
+                is_stream=True,
+                request_protocol=request_protocol,
+                path=path,
+                request_url=request_url,
+                method=method,
+                headers=headers,
+                sanitized_body=sanitized_body,
+                error=error,
+                record_details=record_details,
+            )
+            await active_requests.deregister(log_id)
+            raise error from e
 
         # Wrap generator to handle logging
         async def wrapped_generator():

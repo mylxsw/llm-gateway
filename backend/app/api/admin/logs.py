@@ -588,18 +588,19 @@ async def cancel_request(
 
     Cancels the underlying asyncio task and marks the log as completed.
     """
-    # Try to cancel the underlying task first
-    task_cancelled = await active_requests.cancel(log_id)
-
-    # Mark the log as cancelled in the database
+    # Persist the terminal state first. The normal completion path uses a
+    # compare-and-set and therefore cannot overwrite status 499 afterwards.
     try:
         await log_service.cancel(log_id)
-    except NotFoundError:
-        if not task_cancelled:
-            raise NotFoundError(
-                message=f"No in-progress request found with id {log_id}",
-                code="request_not_found_or_completed",
-            )
+    except NotFoundError as exc:
+        raise NotFoundError(
+            message=f"No in-progress request found with id {log_id}",
+            code="request_not_found_or_completed",
+        ) from exc
+
+    # Best effort: the request may already be leaving the process-local tracker
+    # by the time the database transition commits.
+    await active_requests.cancel(log_id)
 
     return {"status": "cancelled", "log_id": log_id}
 

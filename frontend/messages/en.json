@@ -659,7 +659,9 @@
     },
     "toasts": {
       "refreshSuccess": "Refreshed",
-      "refreshFailed": "Refresh failed"
+      "refreshFailed": "Refresh failed",
+      "cancelSuccess": "Request cancelled",
+      "cancelFailed": "Failed to cancel request"
     },
     "list": {
       "title": "Log List",
@@ -683,6 +685,8 @@
       "userId": "User: {userId}",
       "retry": "Retry: {count}",
       "cancelRequest": "Cancel",
+      "cancelConfirmTitle": "Cancel request?",
+      "cancelConfirmDescription": "This stops the active request and cannot be undone.",
       "processing": "Processing",
       "ttfb": "TTFB",
       "totalDuration": "Total"

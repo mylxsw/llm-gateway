@@ -186,6 +186,17 @@ def _run_migrations(sync_conn) -> None:
             "is_completed": "is_completed BOOLEAN DEFAULT TRUE",
         },
     )
+    # Any unfinished row visible during startup belongs to a previous process
+    # and can no longer have a live task behind it.
+    if "request_logs" in table_names:
+        sync_conn.execute(
+            text(
+                "UPDATE request_logs "
+                "SET is_completed = TRUE, response_status = 500, "
+                "error_info = 'Request interrupted by server restart' "
+                "WHERE is_completed = FALSE"
+            )
+        )
     ensure_columns(
         "service_providers",
         {

@@ -116,6 +116,7 @@ export interface LogQueryParams {
   
   // Error filter
   has_error?: boolean;
+  is_completed?: boolean;
   
   // API Key filter
   api_key_id?: number;
