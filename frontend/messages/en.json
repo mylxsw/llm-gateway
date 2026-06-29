@@ -682,6 +682,8 @@
       "outTokens": "Out: {count}",
       "userId": "User: {userId}",
       "retry": "Retry: {count}",
+      "cancelRequest": "Cancel",
+      "processing": "Processing",
       "ttfb": "TTFB",
       "totalDuration": "Total"
     },

@@ -25,6 +25,7 @@ export interface RequestLog {
   response_status?: number;
   trace_id?: string;
   is_stream?: boolean;
+  is_completed?: boolean;
 }
 
 /** Request Log Detail Entity (Includes full request/response) */

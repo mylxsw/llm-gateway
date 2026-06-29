@@ -682,6 +682,8 @@
       "outTokens": "输出：{count}",
       "userId": "用户：{userId}",
       "retry": "重试：{count}",
+      "cancelRequest": "取消",
+      "processing": "处理中",
       "ttfb": "首字节",
       "totalDuration": "总耗时"
     },
