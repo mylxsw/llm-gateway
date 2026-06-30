@@ -211,15 +211,12 @@ export function LogList({ logs, onView }: LogListProps) {
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col items-start gap-1">
-                    {inProgress ? (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
-                        {t('list.processing')}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className={statusColor}>
-                        {log.response_status ?? t('unknown')}
-                      </Badge>
-                    )}
+                    <Badge
+                      variant="outline"
+                      className={inProgress ? 'text-muted-foreground' : statusColor}
+                    >
+                      {inProgress ? '-' : (log.response_status ?? t('unknown'))}
+                    </Badge>
                     {log.retry_count > 0 && (
                       <span className="text-xs text-orange-500">
                         {t('list.retry', { count: log.retry_count })}
