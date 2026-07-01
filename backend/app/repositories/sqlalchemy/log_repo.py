@@ -9,7 +9,7 @@ from typing import Optional
 
 from sqlalchemy import Integer, and_, case, cast, delete, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import aliased, joinedload
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import RequestLog as RequestLogORM
@@ -477,12 +477,29 @@ class SQLAlchemyLogRepository(LogRepository):
 
         Supports multi-condition filtering, pagination, and sorting.
         """
-        # Build base query with only summary columns
+        # A trace represents one client request. The first row is the root row
+        # created when the request arrives and later updated with the final result;
+        # subsequent rows are failed provider attempts.
+        earlier_log = aliased(RequestLogORM)
+        is_trace_root = or_(
+            RequestLogORM.trace_id.is_(None),
+            RequestLogORM.trace_id == "",
+            ~select(earlier_log.id)
+            .where(
+                earlier_log.trace_id == RequestLogORM.trace_id,
+                earlier_log.id < RequestLogORM.id,
+            )
+            .correlate(RequestLogORM)
+            .exists(),
+        )
+
+        # Build base query with only summary columns. Pagination is deliberately
+        # applied to roots before retry attempt rows are loaded.
         stmt = select(*_SUMMARY_COLUMNS)
         count_stmt = select(func.count()).select_from(RequestLogORM)
 
         # Build filter conditions list
-        conditions = []
+        conditions = [is_trace_root]
 
         # Time range filter
         if query.start_time:
@@ -577,9 +594,8 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(RequestLogORM.total_time_ms <= query.total_time_max)
 
         # Apply filter conditions
-        if conditions:
-            stmt = stmt.where(and_(*conditions))
-            count_stmt = count_stmt.where(and_(*conditions))
+        stmt = stmt.where(and_(*conditions))
+        count_stmt = count_stmt.where(and_(*conditions))
 
         # Get total count
         total_result = await self.session.execute(count_stmt)
@@ -588,9 +604,9 @@ class SQLAlchemyLogRepository(LogRepository):
         # Sorting
         sort_column = getattr(RequestLogORM, query.sort_by, RequestLogORM.request_time)
         if query.sort_order == "asc":
-            stmt = stmt.order_by(sort_column.asc())
+            stmt = stmt.order_by(sort_column.asc(), RequestLogORM.id.asc())
         else:
-            stmt = stmt.order_by(sort_column.desc())
+            stmt = stmt.order_by(sort_column.desc(), RequestLogORM.id.desc())
 
         # Pagination
         stmt = stmt.offset((query.page - 1) * query.page_size).limit(query.page_size)
@@ -598,8 +614,33 @@ class SQLAlchemyLogRepository(LogRepository):
         # Execute query
         result = await self.session.execute(stmt)
         rows = result.mappings().all()
+        summaries = [self._row_to_summary(r) for r in rows]
 
-        return [self._row_to_summary(r) for r in rows], total
+        trace_roots = {
+            summary.trace_id: summary
+            for summary in summaries
+            if summary.trace_id
+        }
+        if trace_roots:
+            attempts_stmt = (
+                select(*_SUMMARY_COLUMNS)
+                .where(
+                    RequestLogORM.trace_id.in_(list(trace_roots)),
+                    RequestLogORM.id.notin_([summary.id for summary in trace_roots.values()]),
+                )
+                .order_by(RequestLogORM.id.asc())
+            )
+            attempt_result = await self.session.execute(attempts_stmt)
+            for row in attempt_result.mappings().all():
+                attempt = self._row_to_summary(row)
+                root = trace_roots.get(attempt.trace_id)
+                if root is not None:
+                    root.retry_attempts.append(attempt)
+
+            for root in trace_roots.values():
+                root.retry_attempt_count = len(root.retry_attempts)
+
+        return summaries, total
 
     async def cleanup_old_logs(self, days_to_keep: int) -> int:
         """

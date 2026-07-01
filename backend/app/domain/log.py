@@ -141,6 +141,10 @@ class RequestLogSummary(BaseModel):
     trace_id: Optional[str] = None
     is_stream: bool = False
     is_completed: bool = True
+    retry_attempt_count: int = Field(0, description="Number of retry attempt logs")
+    retry_attempts: list["RequestLogSummary"] = Field(
+        default_factory=list, description="Failed provider attempts for this request"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -169,6 +173,10 @@ class RequestLogResponse(RequestLogBase):
     trace_id: Optional[str] = None
     is_stream: bool = False
     is_completed: bool = True
+    retry_attempt_count: int = Field(0, description="Number of retry attempt logs")
+    retry_attempts: list["RequestLogResponse"] = Field(
+        default_factory=list, description="Failed provider attempts for this request"
+    )
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -26,6 +26,8 @@ export interface RequestLog {
   trace_id?: string;
   is_stream?: boolean;
   is_completed?: boolean;
+  retry_attempt_count: number;
+  retry_attempts: RequestLog[];
 }
 
 /** Request Log Detail Entity (Includes full request/response) */
