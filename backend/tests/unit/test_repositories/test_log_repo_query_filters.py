@@ -108,3 +108,96 @@ async def test_query_user_id_filter(db_session):
     assert matching_log.id in ids
     assert other_log.id not in ids
     assert items[0].user_id == "tenant-user-123"
+
+
+@pytest.mark.asyncio
+async def test_query_groups_retry_attempts_before_pagination(db_session):
+    repo = SQLAlchemyLogRepository(db_session)
+    now = datetime.now(timezone.utc)
+
+    root = await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="grouped-model",
+            provider_name="final-provider",
+            response_status=200,
+            retry_count=2,
+            trace_id="trace-with-retries",
+        )
+    )
+    attempts = []
+    for index in range(2):
+        attempts.append(
+            await repo.create(
+                RequestLogCreate(
+                    request_time=now,
+                    requested_model="grouped-model",
+                    provider_name=f"failed-provider-{index}",
+                    response_status=500,
+                    retry_count=index + 1,
+                    trace_id="trace-with-retries",
+                )
+            )
+        )
+
+    standalone = await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="standalone-model",
+            response_status=200,
+            trace_id=None,
+        )
+    )
+
+    page_one, total = await repo.query(
+        RequestLogQuery(page=1, page_size=1, sort_by="id", sort_order="asc")
+    )
+    page_two, _ = await repo.query(
+        RequestLogQuery(page=2, page_size=1, sort_by="id", sort_order="asc")
+    )
+
+    assert total == 2
+    assert [item.id for item in page_one] == [root.id]
+    assert page_one[0].retry_attempt_count == 2
+    assert [item.id for item in page_one[0].retry_attempts] == [
+        attempt.id for attempt in attempts
+    ]
+    assert [item.id for item in page_two] == [standalone.id]
+
+
+@pytest.mark.asyncio
+async def test_query_filters_group_by_final_result(db_session):
+    repo = SQLAlchemyLogRepository(db_session)
+    now = datetime.now(timezone.utc)
+
+    root = await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="recovered-model",
+            response_status=200,
+            retry_count=1,
+            trace_id="recovered-trace",
+        )
+    )
+    await repo.create(
+        RequestLogCreate(
+            request_time=now,
+            requested_model="recovered-model",
+            response_status=503,
+            retry_count=1,
+            trace_id="recovered-trace",
+        )
+    )
+
+    success_items, success_total = await repo.query(
+        RequestLogQuery(status_min=200, status_max=299)
+    )
+    error_items, error_total = await repo.query(
+        RequestLogQuery(status_min=500, status_max=599)
+    )
+
+    assert success_total == 1
+    assert [item.id for item in success_items] == [root.id]
+    assert success_items[0].retry_attempt_count == 1
+    assert error_total == 0
+    assert error_items == []

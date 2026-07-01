@@ -387,6 +387,7 @@ class RequestLog(Base):
         Index("idx_request_logs_model", "requested_model"),
         Index("idx_request_logs_api_key", "api_key_id"),
         Index("idx_request_logs_user_id", "user_id"),
+        Index("idx_request_logs_trace_id_id", "trace_id", "id"),
     )
 
     # Relationships

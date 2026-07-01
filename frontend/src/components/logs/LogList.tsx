@@ -28,6 +28,8 @@ import {
   Waves,
   Loader2,
   XCircle,
+  ChevronRight,
+  RotateCcw,
 } from 'lucide-react';
 import { RequestLog } from '@/types';
 import { formatDateTime, formatDuration, getStatusColor, formatUsd } from '@/lib/utils';
@@ -51,6 +53,7 @@ export function LogList({ logs, onView }: LogListProps) {
   const cancelMutation = useCancelLog();
   const [now, setNow] = React.useState(() => Date.now());
   const [cancelLogId, setCancelLogId] = React.useState<number | null>(null);
+  const [expandedLogIds, setExpandedLogIds] = React.useState<Set<number>>(new Set());
 
   const isInProgress = (log: RequestLog) => log.is_completed === false;
 
@@ -109,6 +112,15 @@ export function LogList({ logs, onView }: LogListProps) {
     });
   };
 
+  const toggleAttempts = (logId: number) => {
+    setExpandedLogIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) next.delete(logId);
+      else next.add(logId);
+      return next;
+    });
+  };
+
   return (
     <TooltipProvider>
       <Table>
@@ -128,9 +140,13 @@ export function LogList({ logs, onView }: LogListProps) {
           {logs.map((log) => {
             const statusColor = getStatusColor(log.response_status);
             const inProgress = isInProgress(log);
+            const retryAttempts = log.retry_attempts ?? [];
+            const retryAttemptCount = log.retry_attempt_count ?? retryAttempts.length;
+            const attemptsExpanded = expandedLogIds.has(log.id);
             
             return (
-              <TableRow key={log.id} className={`group ${inProgress ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}>
+              <React.Fragment key={log.id}>
+              <TableRow className={`group ${inProgress ? 'bg-blue-50/30 dark:bg-blue-950/10' : ''}`}>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   <div>{formatDateTime(log.request_time)}</div>
                   <div className="mt-1 truncate opacity-0 transition-opacity group-hover:opacity-100" title={log.trace_id}>
@@ -217,10 +233,25 @@ export function LogList({ logs, onView }: LogListProps) {
                     >
                       {inProgress ? '-' : (log.response_status ?? t('unknown'))}
                     </Badge>
-                    {log.retry_count > 0 && (
-                      <span className="text-xs text-orange-500">
-                        {t('list.retry', { count: log.retry_count })}
-                      </span>
+                    {retryAttemptCount > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex h-6 items-center gap-0.5 rounded-md border border-amber-300 bg-amber-50 px-1.5 font-mono text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/70"
+                            onClick={() => toggleAttempts(log.id)}
+                            aria-expanded={attemptsExpanded}
+                            aria-label={t('list.toggleAttempts', { count: retryAttemptCount })}
+                          >
+                            <ChevronRight
+                              className={`h-3 w-3 transition-transform ${attemptsExpanded ? 'rotate-90' : ''}`}
+                              suppressHydrationWarning
+                            />
+                            +{retryAttemptCount}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('list.retryHint', { count: retryAttemptCount })}</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                 </TableCell>
@@ -255,6 +286,59 @@ export function LogList({ logs, onView }: LogListProps) {
                   </div>
                 </TableCell>
               </TableRow>
+              {attemptsExpanded && retryAttempts.map((attempt, index) => {
+                const attemptStatusColor = getStatusColor(attempt.response_status);
+                return (
+                  <TableRow
+                    key={attempt.id}
+                    className="group/attempt border-amber-200/70 bg-amber-50/35 hover:bg-amber-50/70 dark:border-amber-900/60 dark:bg-amber-950/10 dark:hover:bg-amber-950/25"
+                  >
+                    <TableCell className="relative font-mono text-xs text-muted-foreground">
+                      <span className="absolute bottom-0 left-3 top-0 w-px bg-amber-300 dark:bg-amber-800" />
+                      <div className="pl-3">{formatDateTime(attempt.request_time)}</div>
+                      <div className="mt-1 pl-3 text-amber-700 dark:text-amber-400">
+                        {t('list.attempt', { number: index + 1 })}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <RotateCcw className="h-3 w-3 text-amber-600" suppressHydrationWarning />
+                        <span>{attempt.provider_name || '-'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 text-sm">
+                        {attempt.requested_model}
+                        {attempt.requested_model !== attempt.target_model && (
+                          <>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
+                            <span className="text-muted-foreground">{attempt.target_model}</span>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{renderResponseTime(attempt)}</TableCell>
+                    <TableCell><span className="text-xs text-muted-foreground">—</span></TableCell>
+                    <TableCell><span className="text-xs text-muted-foreground">—</span></TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={attemptStatusColor}>
+                        {attempt.response_status ?? t('unknown')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onView(attempt)}
+                        title={t('list.viewAttemptDetails')}
+                      >
+                        <Eye className="h-4 w-4" suppressHydrationWarning />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              </React.Fragment>
             );
           })}
         </TableBody>

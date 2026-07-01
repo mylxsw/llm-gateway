@@ -191,6 +191,12 @@ def _run_migrations(sync_conn) -> None:
     if "request_logs" in table_names:
         sync_conn.execute(
             text(
+                "CREATE INDEX IF NOT EXISTS idx_request_logs_trace_id_id "
+                "ON request_logs (trace_id, id)"
+            )
+        )
+        sync_conn.execute(
+            text(
                 "UPDATE request_logs "
                 "SET is_completed = TRUE, response_status = 500, "
                 "error_info = 'Request interrupted by server restart' "

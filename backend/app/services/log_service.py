@@ -143,18 +143,19 @@ class LogService:
         """
         summaries, total = await self.repo.query(query)
 
-        # Convert summary models to response models (fields are identical)
-        responses = [
-            RequestLogResponse(
+        def to_response(s) -> RequestLogResponse:
+            return RequestLogResponse(
                 id=s.id,
                 request_time=s.request_time,
                 api_key_id=s.api_key_id,
                 api_key_name=s.api_key_name,
+                user_id=s.user_id,
                 requested_model=s.requested_model,
                 target_model=s.target_model,
                 provider_id=s.provider_id,
                 provider_name=s.provider_name,
                 retry_count=s.retry_count,
+                matched_provider_count=s.matched_provider_count,
                 first_byte_delay_ms=s.first_byte_delay_ms,
                 total_time_ms=s.total_time_ms,
                 input_tokens=s.input_tokens,
@@ -166,9 +167,11 @@ class LogService:
                 trace_id=s.trace_id,
                 is_stream=s.is_stream,
                 is_completed=s.is_completed,
+                retry_attempt_count=s.retry_attempt_count,
+                retry_attempts=[to_response(attempt) for attempt in s.retry_attempts],
             )
-            for s in summaries
-        ]
+
+        responses = [to_response(s) for s in summaries]
 
         return responses, total
 
