@@ -51,6 +51,13 @@ class ApiKeyUpdate(BaseModel):
     record_details: Optional[bool] = Field(
         None, description="Whether to record request detail payload (bodies & headers)"
     )
+    is_mcp_admin: Optional[bool] = Field(
+        None,
+        description=(
+            "Grant/revoke MCP admin capability. WARNING: granting is equivalent to "
+            "making this key a system administrator over the MCP interface."
+        ),
+    )
 
 
 class ApiKeyModel(ApiKeyBase):
@@ -61,6 +68,9 @@ class ApiKeyModel(ApiKeyBase):
     is_active: bool = Field(True, description="Is Active")
     record_details: bool = Field(
         True, description="Whether to record request detail payload (bodies & headers)"
+    )
+    is_mcp_admin: bool = Field(
+        False, description="Whether this key is granted MCP admin capability"
     )
     created_at: datetime = Field(..., description="Creation Time")
     last_used_at: Optional[datetime] = Field(None, description="Last Used Time")
@@ -77,6 +87,9 @@ class ApiKeyResponse(ApiKeyBase):
     is_active: bool = Field(True, description="Is Active")
     record_details: bool = Field(
         True, description="Whether to record request detail payload (bodies & headers)"
+    )
+    is_mcp_admin: bool = Field(
+        False, description="Whether this key is granted MCP admin capability"
     )
     created_at: datetime = Field(..., description="Creation Time")
     last_used_at: Optional[datetime] = Field(None, description="Last Used Time")
@@ -95,6 +108,9 @@ class ApiKeyCreateResponse(ApiKeyBase):
     is_active: bool = Field(True, description="Is Active")
     record_details: bool = Field(
         True, description="Whether to record request detail payload (bodies & headers)"
+    )
+    is_mcp_admin: bool = Field(
+        False, description="Whether this key is granted MCP admin capability"
     )
     created_at: datetime = Field(..., description="Creation Time")
     last_used_at: Optional[datetime] = Field(None, description="Last Used Time")

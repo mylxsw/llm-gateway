@@ -1,0 +1,11 @@
+-- Adds the `is_mcp_admin` boolean field to the `api_keys` table.
+--
+-- WARNING: A key with is_mcp_admin = TRUE is effectively a SYSTEM ADMINISTRATOR
+-- when used against the MCP interface. It can read all request/response logs
+-- (including bodies), view provider configuration, and manage API keys. Grant
+-- this flag ONLY to trusted automation agents.
+--
+-- The application also applies this column automatically at startup via the
+-- lightweight in-place migration in app/db/session.py (_run_migrations). This
+-- file is provided for operators who apply migrations manually.
+ALTER TABLE api_keys ADD COLUMN is_mcp_admin BOOLEAN DEFAULT FALSE;

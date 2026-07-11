@@ -88,6 +88,13 @@
 - 高级日志查看器，支持多维度筛选
 - 成本统计和用量分析
 
+### MCP 管理接口
+
+- 通过 **Model Context Protocol** 让 AI Agent 管理网关（`/mcp`，Streamable HTTP）
+- 查看供应商、模型配置、请求日志与成本统计；可选开启管理写操作
+- 使用已授予 **MCP 管理权限** 的现有 API Key 鉴权（密钥始终脱敏）
+- 详见 [docs/mcp.md](docs/mcp.md)
+
 ---
 
 ## 快速开始

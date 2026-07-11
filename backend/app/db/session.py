@@ -217,6 +217,7 @@ def _run_migrations(sync_conn) -> None:
         "api_keys",
         {
             "record_details": "record_details BOOLEAN DEFAULT TRUE",
+            "is_mcp_admin": "is_mcp_admin BOOLEAN DEFAULT FALSE",
         },
     )
     _drop_request_logs_provider_fk(sync_conn, inspector)

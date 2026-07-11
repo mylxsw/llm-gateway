@@ -20,6 +20,7 @@ from app.api.admin import api_keys_router, logs_router, models_router, providers
 from app.api.auth import router as auth_router
 from app.api.proxy import anthropic_router, openai_router
 from app.common.errors import AppError
+from app.common.mcp_auth import MCPAuthMiddleware
 from app.config import get_settings
 from app.db.redis import close_redis, init_redis
 from app.db.session import init_db
@@ -31,6 +32,17 @@ logger = logging.getLogger(__name__)
 
 # Initialize logging configuration
 setup_logging()
+
+# Build the MCP server/app once at import time when enabled. The streamable
+# HTTP app carries a session manager that must be run inside the app lifespan.
+_settings_boot = get_settings()
+mcp_app = None
+if _settings_boot.MCP_ENABLED:
+    from app.mcp.server import build_mcp_server
+
+    _mcp_server = build_mcp_server()
+    mcp_app = _mcp_server.streamable_http_app()
+    logger.info("MCP interface enabled at /mcp")
 
 
 # Application Lifecycle Management
@@ -47,6 +59,17 @@ async def lifespan(app: FastAPI):
     if settings.KV_STORE_TYPE == "redis":
         await init_redis()
     start_scheduler()
+
+    # Run the MCP session manager for the lifetime of the app when enabled.
+    if mcp_app is not None:
+        async with _mcp_server.session_manager.run():
+            yield
+            # Shutdown (inside MCP lifespan so it is torn down last)
+            shutdown_scheduler()
+            if settings.KV_STORE_TYPE == "redis":
+                await close_redis()
+        return
+
     yield
     # Shutdown
     shutdown_scheduler()
@@ -198,6 +221,12 @@ api_router.include_router(api_keys_router)
 api_router.include_router(logs_router)
 app.include_router(api_router)
 
+# Mount the MCP interface (authenticated by MCPAuthMiddleware) at /mcp. Must be
+# mounted before the frontend StaticFiles catch-all so it is not swallowed by
+# the SPA fallback.
+if mcp_app is not None:
+    app.mount("/mcp", MCPAuthMiddleware(mcp_app), name="mcp")
+
 
 class FrontendStaticFiles(StaticFiles):
     async def get_response(self, path: str, scope):
@@ -209,6 +238,8 @@ class FrontendStaticFiles(StaticFiles):
         if path == "api" or path.startswith("api/"):
             return response
         if path == "v1" or path.startswith("v1/"):
+            return response
+        if path == "mcp" or path.startswith("mcp/"):
             return response
 
         # Serve /foo as /foo.html (Next static export).

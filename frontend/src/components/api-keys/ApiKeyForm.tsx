@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Copy, Check, AlertCircle } from 'lucide-react';
+import { Copy, Check, AlertCircle, ShieldAlert } from 'lucide-react';
 import { ApiKey, ApiKeyCreate, ApiKeyUpdate } from '@/types';
 import { isValidKeyName, copyToClipboard } from '@/lib/utils';
 
@@ -44,6 +44,7 @@ interface FormData {
   key_name: string;
   is_active: boolean;
   record_details: boolean;
+  is_mcp_admin: boolean;
 }
 
 /**
@@ -62,6 +63,9 @@ export function ApiKeyForm({
   // Check if edit mode
   const isEdit = !!apiKey;
   const [copied, setCopied] = useState(false);
+  // Confirmation gate for granting MCP admin (requires typing the key name).
+  const [grantConfirmOpen, setGrantConfirmOpen] = useState(false);
+  const [grantConfirmText, setGrantConfirmText] = useState('');
   
   // Form control
   const {
@@ -76,11 +80,13 @@ export function ApiKeyForm({
       key_name: '',
       is_active: true,
       record_details: true,
+      is_mcp_admin: false,
     },
   });
 
   const isActive = useWatch({ control, name: 'is_active' });
   const recordDetails = useWatch({ control, name: 'record_details' });
+  const isMcpAdmin = useWatch({ control, name: 'is_mcp_admin' });
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -89,12 +95,14 @@ export function ApiKeyForm({
         key_name: apiKey.key_name,
         is_active: apiKey.is_active,
         record_details: apiKey.record_details,
+        is_mcp_admin: apiKey.is_mcp_admin,
       });
     } else {
       reset({
         key_name: '',
         is_active: true,
         record_details: true,
+        is_mcp_admin: false,
       });
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -108,6 +116,7 @@ export function ApiKeyForm({
         key_name: data.key_name,
         is_active: data.is_active,
         record_details: data.record_details,
+        is_mcp_admin: data.is_mcp_admin,
       });
     } else {
       onSubmit({
@@ -115,6 +124,22 @@ export function ApiKeyForm({
         record_details: data.record_details,
       });
     }
+  };
+
+  // Toggle MCP admin. Turning it ON opens a confirmation dialog (type the key
+  // name to confirm); turning it OFF applies immediately.
+  const handleMcpAdminToggle = (checked: boolean) => {
+    if (checked) {
+      setGrantConfirmText('');
+      setGrantConfirmOpen(true);
+    } else {
+      setValue('is_mcp_admin', false);
+    }
+  };
+
+  const confirmGrantMcpAdmin = () => {
+    setValue('is_mcp_admin', true);
+    setGrantConfirmOpen(false);
   };
 
   // Copy API Key
@@ -187,6 +212,7 @@ export function ApiKeyForm({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
@@ -239,6 +265,28 @@ export function ApiKeyForm({
             />
           </div>
 
+          {/* MCP admin capability (edit mode only) */}
+          {isEdit && (
+            <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="is_mcp_admin" className="flex items-center gap-1.5 text-destructive">
+                    <ShieldAlert className="h-4 w-4" suppressHydrationWarning />
+                    {t('form.mcpAdminLabel')}
+                  </Label>
+                </div>
+                <Switch
+                  id="is_mcp_admin"
+                  checked={isMcpAdmin}
+                  onCheckedChange={handleMcpAdminToggle}
+                />
+              </div>
+              <p className="text-xs text-destructive">
+                {t('form.mcpAdminWarning')}
+              </p>
+            </div>
+          )}
+
           {!isEdit && (
             <p className="text-sm text-muted-foreground">
               {t('form.autoGenerateHint')}
@@ -261,5 +309,48 @@ export function ApiKeyForm({
         </form>
       </DialogContent>
     </Dialog>
+
+    {/* Grant MCP admin confirmation (type key name to confirm) */}
+    <Dialog open={grantConfirmOpen} onOpenChange={setGrantConfirmOpen}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <ShieldAlert className="h-5 w-5" suppressHydrationWarning />
+            {t('form.mcpAdminConfirmTitle')}
+          </DialogTitle>
+          <DialogDescription>{t('form.mcpAdminConfirmDescription')}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="mcp_confirm">
+            {t('form.mcpAdminConfirmPrompt', { name: apiKey?.key_name ?? '' })}
+          </Label>
+          <Input
+            id="mcp_confirm"
+            value={grantConfirmText}
+            onChange={(e) => setGrantConfirmText(e.target.value)}
+            placeholder={apiKey?.key_name ?? ''}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setGrantConfirmOpen(false)}
+          >
+            {t('actions.cancel')}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={grantConfirmText !== (apiKey?.key_name ?? '')}
+            onClick={confirmGrantMcpAdmin}
+          >
+            {t('form.mcpAdminConfirmButton')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

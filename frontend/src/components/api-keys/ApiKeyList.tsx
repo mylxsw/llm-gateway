@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, Copy, Check, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Copy, Check, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiKey } from '@/types';
 import { formatDateTime, getActiveStatus, formatUsdCompact } from '@/lib/utils';
@@ -180,6 +180,16 @@ export function ApiKeyList({
                     >
                       <EyeOff className="h-3.5 w-3.5" suppressHydrationWarning />
                     </span>
+                  )}
+                  {apiKey.is_mcp_admin && (
+                    <Badge
+                      variant="destructive"
+                      className="gap-1"
+                      title={t('list.mcpAdminTip')}
+                    >
+                      <ShieldAlert className="h-3 w-3" suppressHydrationWarning />
+                      {t('list.mcpAdmin')}
+                    </Badge>
                   )}
                 </div>
               </TableCell>

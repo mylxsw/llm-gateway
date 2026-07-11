@@ -40,6 +40,7 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
             key_value=entity.key_value,
             is_active=entity.is_active,
             record_details=entity.record_details,
+            is_mcp_admin=entity.is_mcp_admin,
             created_at=ensure_utc(entity.created_at),
             last_used_at=ensure_utc(entity.last_used_at),
         )

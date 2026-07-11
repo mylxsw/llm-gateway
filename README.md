@@ -87,6 +87,13 @@ Built with **Next.js 16** + **TypeScript** + **shadcn/ui**:
 - Advanced log viewer with multi-dimensional filtering
 - Cost statistics and usage analytics
 
+### MCP Management Interface
+
+- Manage the gateway from AI agents over the **Model Context Protocol** (`/mcp`, Streamable HTTP)
+- Inspect providers, model configs, request logs, and cost stats; optionally perform management writes
+- Authorized with an existing API key granted **MCP admin** capability (secrets always redacted)
+- See [docs/mcp.md](docs/mcp.md)
+
 ---
 
 ## Quick Start

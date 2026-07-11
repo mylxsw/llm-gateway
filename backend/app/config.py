@@ -102,6 +102,24 @@ class Settings(BaseSettings):
     # Rate limit for proxy endpoints (/v1/*)
     RATE_LIMIT_PROXY: str = "200/minute"
 
+    # MCP (Model Context Protocol) Config
+    # Enable the MCP management interface mounted at /mcp. Requests must
+    # authenticate with an API key that has is_mcp_admin=True.
+    MCP_ENABLED: bool = False
+    # Allow MCP write/management tools (create/update/delete providers, models,
+    # API keys, retry/cancel requests). When False, only read-only tools are
+    # exposed. Grant/revoke of MCP admin is NEVER available via MCP.
+    MCP_ALLOW_WRITE: bool = False
+    # DNS-rebinding protection for the MCP transport. Disabled by default since
+    # the gateway is typically deployed behind varying hostnames and MCP access
+    # is already gated by API-key auth. Enable and set MCP_ALLOWED_HOSTS /
+    # MCP_ALLOWED_ORIGINS for hardened deployments.
+    MCP_DNS_REBINDING_PROTECTION: bool = False
+    # Comma-separated allowed Host header values (used when protection enabled).
+    MCP_ALLOWED_HOSTS: str = ""
+    # Comma-separated allowed Origin header values (used when protection enabled).
+    MCP_ALLOWED_ORIGINS: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

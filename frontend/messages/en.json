@@ -134,7 +134,9 @@
         "active": "Active",
         "inactive": "Inactive"
       },
-      "detailsOff": "Request details not logged"
+      "detailsOff": "Request details not logged",
+      "mcpAdmin": "MCP admin",
+      "mcpAdminTip": "This key has MCP admin (system administrator) capability"
     },
     "toasts": {
       "copied": "API Key copied to clipboard",
@@ -156,7 +158,13 @@
       "keyNameLabel": "API Key Name",
       "keyLabel": "API Key",
       "recordDetailsLabel": "Record Request Details",
-      "recordDetailsHint": "When off, request/response bodies and headers aren't logged; tokens and cost still are."
+      "recordDetailsHint": "When off, request/response bodies and headers aren't logged; tokens and cost still are.",
+      "mcpAdminLabel": "MCP admin capability",
+      "mcpAdminWarning": "WARNING: Granting MCP admin makes this key a system administrator. It can read all request/response logs, view provider configuration, and manage API keys via the MCP interface. Grant it only to trusted automation agents.",
+      "mcpAdminConfirmTitle": "Grant MCP admin capability?",
+      "mcpAdminConfirmDescription": "This is equivalent to making the key a system administrator. This action can only be performed here in the admin console.",
+      "mcpAdminConfirmPrompt": "Type the key name \"{name}\" to confirm",
+      "mcpAdminConfirmButton": "Grant admin capability"
     },
     "success": {
       "title": "API Key Created Successfully",
@@ -680,8 +688,8 @@
       "streamRequest": "Stream Request",
       "viewDetails": "View Details",
       "costTooltip": "Input: {input}\nOutput: {output}",
-      "inTokens": "In: {count}",
-      "outTokens": "Out: {count}",
+      "inTokens": "In:",
+      "outTokens": "Out:",
       "userId": "User: {userId}",
       "retry": "Retry: {count}",
       "retryHint": "View {count} failed provider calls",

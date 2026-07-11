@@ -278,6 +278,13 @@ class ApiKey(Base):
     record_details: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )
+    # Whether this key is granted MCP admin capability.
+    # WARNING: A key with is_mcp_admin=True has administrator-level access via
+    # the MCP interface (read all request/response logs, provider configs, and
+    # manage API keys). Grant it only to trusted automation agents.
+    is_mcp_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, nullable=False

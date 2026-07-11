@@ -134,7 +134,9 @@
         "active": "启用",
         "inactive": "停用"
       },
-      "detailsOff": "未记录请求明细"
+      "detailsOff": "未记录请求明细",
+      "mcpAdmin": "MCP 管理员",
+      "mcpAdminTip": "该 Key 拥有 MCP 管理（系统管理员）权限"
     },
     "toasts": {
       "copied": "已复制 API Key 到剪贴板",
@@ -156,7 +158,13 @@
       "keyNameLabel": "API Key 名称",
       "keyLabel": "API Key",
       "recordDetailsLabel": "记录请求明细",
-      "recordDetailsHint": "关闭后不记录请求/响应体和请求头，仍保留 Token、费用等统计。"
+      "recordDetailsHint": "关闭后不记录请求/响应体和请求头，仍保留 Token、费用等统计。",
+      "mcpAdminLabel": "MCP 管理权限",
+      "mcpAdminWarning": "警告：授予 MCP 管理权限等同于将该 Key 变为系统管理员。它可通过 MCP 接口读取全部请求/响应日志、查看供应商配置并管理 API Key。请仅授予受信任的自动化 Agent。",
+      "mcpAdminConfirmTitle": "确认授予 MCP 管理权限？",
+      "mcpAdminConfirmDescription": "此操作等同于将该 Key 设为系统管理员，且只能在管理后台执行。",
+      "mcpAdminConfirmPrompt": "请输入 Key 名称「{name}」以确认",
+      "mcpAdminConfirmButton": "授予管理权限"
     },
     "success": {
       "title": "API Key 创建成功",
@@ -680,8 +688,8 @@
       "streamRequest": "流式请求",
       "viewDetails": "查看详情",
       "costTooltip": "输入：{input}\n输出：{output}",
-      "inTokens": "输入：{count}",
-      "outTokens": "输出：{count}",
+      "inTokens": "输入：",
+      "outTokens": "输出：",
       "userId": "用户：{userId}",
       "retry": "重试：{count}",
       "retryHint": "查看 {count} 次失败的供应商调用",
