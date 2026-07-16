@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { useTranslations } from 'next-intl';
 import { useApiKeys } from '@/lib/hooks';
+import { HomeCallStats } from './HomeCallStats';
 
 type RangePreset =
   | '1h'
@@ -313,6 +314,7 @@ export function HomeCostStats() {
       bucket={displayRange.bucket}
       bucketMinutes={displayRange.bucket_minutes}
       maxBars={MAX_TREND_BARS}
+      afterContent={data ? <HomeCallStats stats={data} /> : null}
       modelStatsControls={
         <div className="flex items-center gap-2">
            <Select

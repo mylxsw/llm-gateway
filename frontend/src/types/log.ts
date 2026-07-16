@@ -146,6 +146,9 @@ export interface LogQueryParams {
 
 export interface LogCostSummary {
   request_count: number;
+  success_count: number;
+  failure_count: number;
+  success_rate: number;
   total_cost: number;
   input_cost: number;
   output_cost: number;
@@ -173,9 +176,21 @@ export interface LogCostByModel {
   output_tokens: number;
 }
 
+export interface ModelCallStats {
+  provider_name: string;
+  model_name: string;
+  request_count: number;
+  success_count: number;
+  failure_count: number;
+  success_rate: number;
+  avg_first_byte_time_ms: number | null;
+  max_first_byte_time_ms: number | null;
+}
+
 export interface LogCostStatsResponse {
   summary: LogCostSummary;
   trend: LogCostTrendPoint[];
   by_model: LogCostByModel[];
   by_model_tokens: LogCostByModel[];
+  model_call_stats: ModelCallStats[];
 }

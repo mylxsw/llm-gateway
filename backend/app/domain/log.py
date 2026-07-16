@@ -292,6 +292,9 @@ class LogCostSummary(BaseModel):
     """Aggregated cost summary"""
 
     request_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    success_rate: float = 0.0
     total_cost: float = 0.0
     input_cost: float = 0.0
     output_cost: float = 0.0
@@ -330,13 +333,27 @@ class LogCostByModel(BaseModel):
     output_tokens: int = 0
 
 
+class ModelCallStats(BaseModel):
+    """Call health stats grouped by provider and actual model"""
+
+    provider_name: str
+    model_name: str
+    request_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    success_rate: float = 0.0
+    avg_first_byte_time_ms: Optional[float] = None
+    max_first_byte_time_ms: Optional[float] = None
+
+
 class LogCostStatsResponse(BaseModel):
     """Cost stats response"""
 
     summary: LogCostSummary
     trend: list[LogCostTrendPoint]
     by_model: list[LogCostByModel]
-    by_model_tokens: list[LogCostByModel] = []
+    by_model_tokens: list[LogCostByModel] = Field(default_factory=list)
+    model_call_stats: list[ModelCallStats] = Field(default_factory=list)
 
 
 class ModelStats(BaseModel):

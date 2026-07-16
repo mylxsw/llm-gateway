@@ -34,6 +34,7 @@ interface CostStatsProps {
   refreshing?: boolean;
   headerActions?: React.ReactNode;
   headerExtras?: React.ReactNode;
+  afterContent?: React.ReactNode;
   modelStatsControls?: React.ReactNode;
   rangeLabel?: string;
   rangeDays?: number;
@@ -448,6 +449,7 @@ export function CostStats({
   refreshing,
   headerActions,
   headerExtras,
+  afterContent,
   rangeLabel,
   rangeDays = 1,
   rangeStart,
@@ -905,6 +907,8 @@ export function CostStats({
                 </div>
               </div>
             </div>
+
+            {afterContent}
           </>
         )}
       </CardContent>

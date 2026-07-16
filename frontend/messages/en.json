@@ -89,6 +89,22 @@
   "home": {
     "title": "LLM Gateway",
     "description": "Model Routing & Proxy Service Management System",
+    "dashboard": {
+      "title": "Call health overview",
+      "description": "Review call reliability for the current filters and locate provider or model issues.",
+      "totalCalls": "Total calls",
+      "successfulCalls": "Successful",
+      "failedCalls": "Failed",
+      "overallSuccessRate": "Overall success rate",
+      "modelStatsTitle": "Calls by model",
+      "provider": "Provider",
+      "model": "Model",
+      "successRate": "Success rate",
+      "averageLatency": "Average latency",
+      "maximumLatency": "Maximum latency",
+      "latencyHint": "Latency uses time to first byte (TTFB) from streaming requests only.",
+      "noData": "No completed calls in this range"
+    },
     "cards": {
       "providersTitle": "Provider Management",
       "providersDescription": "Manage upstream AI providers, configure base URLs and API keys",

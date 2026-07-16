@@ -89,6 +89,22 @@
   "home": {
     "title": "LLM Gateway",
     "description": "模型路由与代理服务管理系统",
+    "dashboard": {
+      "title": "调用健康概览",
+      "description": "快速查看当前筛选范围内的调用稳定性，并定位供应商或模型异常。",
+      "totalCalls": "总调用次数",
+      "successfulCalls": "成功",
+      "failedCalls": "失败",
+      "overallSuccessRate": "整体成功率",
+      "modelStatsTitle": "各模型调用统计",
+      "provider": "供应商",
+      "model": "模型",
+      "successRate": "成功率",
+      "averageLatency": "平均延迟",
+      "maximumLatency": "最大延迟",
+      "latencyHint": "延迟仅统计流式请求的首字节时间（TTFB）。",
+      "noData": "当前范围内暂无已完成的调用"
+    },
     "cards": {
       "providersTitle": "供应商管理",
       "providersDescription": "管理上游 AI 供应商，配置基础 URL 和 API Key",
