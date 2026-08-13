@@ -22,6 +22,7 @@ from app.common.usage_extractor import extract_usage_details
 
 from .base import (
     ConversionResult,
+    DEFAULT_MAX_TOKENS,
     IRequestConverter,
     IResponseConverter,
     IStreamConverter,
@@ -1485,7 +1486,7 @@ class SDKRequestConverter(IRequestConverter):
 
             # Handle max_tokens for Anthropic target
             if self._target == Protocol.ANTHROPIC:
-                body = self._ensure_max_tokens_for_anthropic(body)
+                body = self._ensure_max_tokens_for_anthropic(body, options=options)
 
             # Remove stream_options and include_usage when streaming to OpenAI or OpenAI Responses
             # These parameters are not supported by all providers and can cause errors
@@ -1537,7 +1538,12 @@ class SDKRequestConverter(IRequestConverter):
                 target_protocol=self._target.value,
             ) from e
 
-    def _ensure_max_tokens_for_anthropic(self, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _ensure_max_tokens_for_anthropic(
+        self,
+        body: Dict[str, Any],
+        *,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """
         Ensure max_tokens is set when converting to Anthropic protocol.
 
@@ -1550,25 +1556,39 @@ class SDKRequestConverter(IRequestConverter):
         so the SDK decoder can read it properly.
         """
         body = copy.deepcopy(body)
+        default_parameters = (options or {}).get("default_parameters")
+        configured_max_tokens = None
+        if isinstance(default_parameters, dict):
+            configured_max_tokens = default_parameters.get("max_tokens")
+
+        # The SDK conversion happens after this method. Put the provider default
+        # on the source field that the SDK decoder understands; otherwise the
+        # hard-coded fallback below makes the request look explicit and prevents
+        # the configured default from taking effect.
+        fallback_max_tokens = (
+            configured_max_tokens
+            if configured_max_tokens is not None
+            else DEFAULT_MAX_TOKENS
+        )
 
         if self._source == Protocol.OPENAI_RESPONSES:
             # For OpenAI Responses, ensure max_output_tokens is set
             if body.get("max_output_tokens") is None:
-                body["max_output_tokens"] = 4096
+                body["max_output_tokens"] = fallback_max_tokens
         elif self._source == Protocol.OPENAI:
             # For OpenAI Chat, ensure max_tokens or max_completion_tokens is set
             if (
                 body.get("max_tokens") is None
                 and body.get("max_completion_tokens") is None
             ):
-                body["max_tokens"] = 4096
+                body["max_tokens"] = fallback_max_tokens
         elif self._source == Protocol.ANTHROPIC:
             # For Anthropic source, ensure max_tokens is set
             if body.get("max_tokens") is None:
                 if body.get("max_completion_tokens") is not None:
                     body["max_tokens"] = body["max_completion_tokens"]
                 else:
-                    body["max_tokens"] = 4096
+                    body["max_tokens"] = fallback_max_tokens
 
         return body
 

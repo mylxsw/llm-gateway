@@ -17,6 +17,7 @@ from app.common.reasoning import (
 
 from .base import (
     ConversionResult,
+    DEFAULT_MAX_TOKENS,
     IProtocolAdapter,
     IRequestConverter,
     IResponseConverter,
@@ -375,7 +376,7 @@ class ProtocolConverterManager:
                 if new_body.get("max_completion_tokens") is not None:
                     new_body["max_tokens"] = new_body["max_completion_tokens"]
                 else:
-                    new_body["max_tokens"] = 4096
+                    new_body["max_tokens"] = DEFAULT_MAX_TOKENS
 
         return ConversionResult(path=path, body=new_body)
 

@@ -266,7 +266,7 @@ export function ProviderForm({
     if (defaultParameters.length > 0) return;
     if (protocol !== 'anthropic') return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDefaultParameters([{ key: 'max_tokens', value: '4096' }]);
+    setDefaultParameters([{ key: 'max_tokens', value: '16384' }]);
   }, [provider, protocol, defaultParameters.length]);
 
   // Auto-fill base_url when protocol changes — only if user hasn't manually customised it.
