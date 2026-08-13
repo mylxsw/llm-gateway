@@ -13,6 +13,9 @@ from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 
+DEFAULT_MAX_TOKENS = 16384
+
+
 class Protocol(str, Enum):
     """Supported API protocols."""
     OPENAI = "openai"
