@@ -662,9 +662,61 @@ def test_convert_request_openai_responses_to_anthropic_without_max_output_tokens
 
     assert path == "/v1/messages"
     assert out_body["model"] == "claude-3-5-sonnet"
-    # Default max_tokens should be 4096
-    assert out_body["max_tokens"] == 4096
+    # Global default max_tokens should be 16384
+    assert out_body["max_tokens"] == 16384
     assert isinstance(out_body.get("messages"), list)
+
+
+def test_convert_request_openai_responses_to_anthropic_uses_provider_default_max_tokens():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai_responses",
+        supplier_protocol="anthropic",
+        path="/v1/responses",
+        body={
+            "model": "any",
+            "input": "Hello, how are you?",
+        },
+        target_model="claude-3-5-sonnet",
+        options={"default_parameters": {"max_tokens": 16384}},
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["max_tokens"] == 16384
+
+
+def test_convert_request_openai_to_anthropic_uses_provider_default_max_tokens():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hello"}],
+        },
+        target_model="claude-3-5-sonnet",
+        options={"default_parameters": {"max_tokens": 16384}},
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["max_tokens"] == 16384
+
+
+def test_convert_request_openai_to_anthropic_explicit_max_tokens_wins_over_default():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 2048,
+        },
+        target_model="claude-3-5-sonnet",
+        options={"default_parameters": {"max_tokens": 16384}},
+    )
+
+    assert path == "/v1/messages"
+    assert out_body["max_tokens"] == 2048
 
 
 def test_convert_request_openai_responses_to_openai_accepts_string_tool_choice():
@@ -743,7 +795,7 @@ def test_convert_request_anthropic_to_anthropic_injects_default_max_tokens():
 
     assert path == "/v1/messages"
     assert out_body["model"] == "claude-3-5-sonnet"
-    assert out_body["max_tokens"] == 4096
+    assert out_body["max_tokens"] == 16384
 
 
 def test_convert_request_anthropic_to_anthropic_uses_provider_default_max_tokens():
