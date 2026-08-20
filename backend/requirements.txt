@@ -141,6 +141,8 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
+socksio==1.0.0
+    # via httpx
 sqlalchemy==2.0.45
     # via
     #   alembic
