@@ -1,3 +1,5 @@
+SELECT pg_advisory_xact_lock(hashtext('squirrel:model_alias_integrity'));
+
 CREATE INDEX IF NOT EXISTS idx_model_mappings_alias_target
     ON model_mappings (alias_target_model);
 
@@ -24,21 +26,21 @@ BEGIN
     IF NEW.model_type = 'alias' THEN
         IF NEW.alias_target_model IS NULL
            OR NEW.alias_target_model = NEW.requested_model THEN
-            RAISE EXCEPTION 'invalid_alias_target';
+            RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'invalid_alias_target';
         END IF;
         IF TG_OP = 'UPDATE' AND EXISTS (
             SELECT 1 FROM model_mappings AS alias
             WHERE alias.model_type = 'alias'
               AND alias.alias_target_model = OLD.requested_model
         ) THEN
-            RAISE EXCEPTION 'model_referenced_by_alias';
+            RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'model_referenced_by_alias';
         END IF;
         SELECT TRUE, model_type INTO target_found, target_type
         FROM model_mappings
         WHERE requested_model = NEW.alias_target_model
-        FOR KEY SHARE;
+        FOR UPDATE;
         IF COALESCE(target_found, FALSE) = FALSE OR target_type = 'alias' THEN
-            RAISE EXCEPTION 'invalid_alias_target';
+            RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'invalid_alias_target';
         END IF;
     END IF;
     RETURN NEW;
