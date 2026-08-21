@@ -19,6 +19,7 @@ from app.domain.model import (
     ModelProviderBulkUpgradeRequest,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelAliasTarget,
 )
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
@@ -110,6 +111,9 @@ class ModelService:
             )
         
         return await self._to_mapping_response(mapping, include_providers=True)
+
+    async def get_alias_targets(self) -> list[ModelAliasTarget]:
+        return await self.model_repo.get_alias_targets()
 
     async def match_providers(
         self,

@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   getModels,
+  getAliasTargets,
   getModel,
   createModel,
   updateModel,
@@ -41,6 +42,7 @@ const QUERY_KEYS = {
   models: ['models'] as const,
   modelList: (params?: ModelListParams) => [...QUERY_KEYS.models, 'list', params] as const,
   modelDetail: (requestedModel: string) => [...QUERY_KEYS.models, 'detail', requestedModel] as const,
+  aliasTargets: ['models', 'alias-targets'] as const,
   modelProviders: ['model-providers'] as const,
   modelProviderList: (params?: ModelProviderListParams) =>
     [...QUERY_KEYS.modelProviders, 'list', params] as const,
@@ -61,6 +63,14 @@ export function useModels(params?: ModelListParams) {
   return useQuery({
     queryKey: QUERY_KEYS.modelList(params),
     queryFn: () => getModels(params),
+  });
+}
+
+export function useAliasTargets(enabled = true) {
+  return useQuery({
+    queryKey: QUERY_KEYS.aliasTargets,
+    queryFn: getAliasTargets,
+    enabled,
   });
 }
 

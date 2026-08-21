@@ -26,6 +26,7 @@ from app.domain.model import (
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelAliasTarget,
 )
 from app.repositories.model_repo import ModelRepository
 
@@ -290,6 +291,30 @@ class SQLAlchemyModelRepository(ModelRepository):
             )
         )
         return [self._mapping_to_domain(entity) for entity in result.scalars().all()]
+
+    async def get_alias_targets(self) -> list[ModelAliasTarget]:
+        result = await self.session.execute(
+            select(
+                ModelMappingORM.requested_model,
+                ModelMappingORM.model_type,
+                ModelMappingORM.is_active,
+            )
+            .where(
+                or_(
+                    ModelMappingORM.model_type.is_(None),
+                    ModelMappingORM.model_type != "alias",
+                )
+            )
+            .order_by(ModelMappingORM.requested_model.asc())
+        )
+        return [
+            ModelAliasTarget(
+                requested_model=row.requested_model,
+                model_type=row.model_type or "chat",
+                is_active=row.is_active,
+            )
+            for row in result.all()
+        ]
     
     # ============ Model-Provider Mapping Operations ============
     

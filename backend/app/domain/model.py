@@ -152,6 +152,14 @@ class ModelMappingResponse(ModelMapping):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ModelAliasTarget(BaseModel):
+    """Lightweight concrete model option for alias selection."""
+
+    requested_model: str
+    model_type: ModelType
+    is_active: bool
+
+
 class ModelMatchRequest(BaseModel):
     """Model Match Request Model"""
 

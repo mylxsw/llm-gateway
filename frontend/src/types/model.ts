@@ -11,6 +11,12 @@ export type SelectionStrategy = 'round_robin' | 'cost_first' | 'priority';
 export type ModelType = 'chat' | 'speech' | 'transcription' | 'embedding' | 'images' | 'alias';
 export type ModelListSortBy = 'requested_model_asc' | 'requested_model_desc';
 
+export interface ModelAliasTarget {
+  requested_model: string;
+  model_type: Exclude<ModelType, 'alias'>;
+  is_active: boolean;
+}
+
 /** Model Mapping Entity */
 export interface ModelMapping {
   requested_model: string;            // Primary Key

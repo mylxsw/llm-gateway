@@ -38,6 +38,7 @@ from app.domain.model import (
     ModelMappingUpdate,
     ModelMatchProviderResponse,
     ModelMatchRequest,
+    ModelAliasTarget,
 )
 
 router = APIRouter(
@@ -404,6 +405,12 @@ async def list_models(
         )
     except AppError as e:
         return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+
+
+@router.get("/models/alias-targets", response_model=list[ModelAliasTarget])
+async def list_alias_targets(service: ModelServiceDep):
+    """Get every concrete model using a lightweight projection."""
+    return await service.get_alias_targets()
 
 
 @router.get("/models/stats", response_model=list[ModelStats])

@@ -20,6 +20,7 @@ import {
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useModels,
+  useAliasTargets,
   useModelStats,
   useCreateModel,
   useUpdateModel,
@@ -160,7 +161,7 @@ function ModelsContent() {
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
     sort_by: sortBy,
   });
-  const { data: aliasTargetData } = useModels({ page: 1, page_size: 1000 });
+  const { data: aliasTargets = [] } = useAliasTargets(formOpen);
   const { data: statsData } = useModelStats();
 
   // Mutations
@@ -400,8 +401,8 @@ function ModelsContent() {
         open={formOpen}
         onOpenChange={setFormOpen}
         model={editingModel}
-        aliasTargets={(aliasTargetData?.items ?? []).filter(
-          (item) => item.model_type !== 'alias' && item.requested_model !== editingModel?.requested_model
+        aliasTargets={aliasTargets.filter(
+          (item) => item.requested_model !== editingModel?.requested_model
         )}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}

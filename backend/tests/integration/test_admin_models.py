@@ -126,6 +126,41 @@ async def test_admin_rejects_alias_targeting_an_alias(db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_admin_lists_lightweight_alias_targets(db_session, monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        for name, model_type in (("target-chat", "chat"), ("target-image", "images")):
+            response = await ac.post(
+                "/api/admin/models",
+                json={"requested_model": name, "model_type": model_type},
+            )
+            assert response.status_code == 201, response.text
+        alias_response = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "target-alias",
+                "model_type": "alias",
+                "alias_target_model": "target-chat",
+            },
+        )
+        assert alias_response.status_code == 201, alias_response.text
+
+        response = await ac.get("/api/admin/models/alias-targets")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {"requested_model": "target-chat", "model_type": "chat", "is_active": True},
+        {"requested_model": "target-image", "model_type": "images", "is_active": True},
+    ]
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
 async def test_admin_get_model_supports_slash_in_name(db_session, monkeypatch):
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)

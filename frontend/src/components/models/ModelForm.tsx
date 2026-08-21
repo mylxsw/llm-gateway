@@ -31,6 +31,7 @@ import {
   ModelMapping,
   ModelMappingCreate,
   ModelMappingUpdate,
+  ModelAliasTarget,
   ModelType,
   SelectionStrategy
 } from '@/types';
@@ -46,7 +47,7 @@ interface ModelFormProps {
   /** Model data for edit mode */
   model?: ModelMapping | null;
   /** Existing non-alias models that can be selected as alias targets */
-  aliasTargets?: ModelMapping[];
+  aliasTargets?: ModelAliasTarget[];
   /** Submit callback */
   onSubmit: (data: ModelMappingCreate | ModelMappingUpdate) => void;
   /** Loading state */
