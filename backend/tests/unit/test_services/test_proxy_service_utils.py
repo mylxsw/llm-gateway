@@ -69,3 +69,19 @@ def test_serialize_response_body_truncated_bytes():
     body = b'{"key": "val'
     serialized = ProxyService._serialize_response_body(body)
     assert serialized == '{"key": "val'
+
+
+def test_request_log_snapshot_is_immutable_when_routing_body_changes():
+    body = {
+        "model": "latest",
+        "messages": [{"role": "user", "content": {"text": "hello"}}],
+    }
+
+    snapshot = ProxyService._sanitize_request_body_for_log(body)
+    body["model"] = "real"
+    body["messages"][0]["content"]["text"] = "changed"
+
+    assert snapshot == {
+        "model": "latest",
+        "messages": [{"role": "user", "content": {"text": "hello"}}],
+    }

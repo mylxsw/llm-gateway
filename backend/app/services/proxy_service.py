@@ -386,7 +386,7 @@ class ProxyService:
     @staticmethod
     def _sanitize_request_body_for_log(body: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(body, dict) or "_files" not in body:
-            return body
+            return copy.deepcopy(body)
 
         safe_files = []
         for item in body.get("_files", []):
@@ -401,7 +401,7 @@ class ProxyService:
                     "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
                 }
             )
-        sanitized = dict(body)
+        sanitized = copy.deepcopy(body)
         sanitized["_files"] = safe_files
         return sanitized
 
