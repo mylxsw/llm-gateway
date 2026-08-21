@@ -37,6 +37,7 @@ import {
   SelectionStrategy,
 } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { parseNumberParam, parseStringParam, setParam } from '@/lib/utils';
 
 /**
@@ -54,6 +55,7 @@ function ModelsContent() {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   const parseSortByParam = useCallback(
@@ -305,7 +307,7 @@ function ModelsContent() {
         );
       }
       
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ['models'] });
     } catch (error) {
       console.error('Import failed:', error);
       if (error instanceof Error) {
