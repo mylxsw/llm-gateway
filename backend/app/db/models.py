@@ -143,8 +143,10 @@ class ModelMapping(Base):
     )
     # Selection strategy: round_robin / cost_first / priority
     strategy: Mapped[str] = mapped_column(String(50), default="round_robin")
-    # Model type: chat / speech / transcription / embedding / images
+    # Model type: chat / speech / transcription / embedding / images / alias
     model_type: Mapped[str] = mapped_column(String(50), default="chat")
+    # Real requested model referenced when model_type == alias
+    alias_target_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)
@@ -324,6 +326,8 @@ class RequestLog(Base):
     user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Requested Model Name
     requested_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Model name after resolving an alias, before provider mapping
+    resolved_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Target Model Name (Actually forwarded model)
     target_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Historical provider reference. Intentionally not a foreign key so logs survive provider deletion.

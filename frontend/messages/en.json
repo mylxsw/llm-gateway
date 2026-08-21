@@ -394,6 +394,7 @@
         "costFirst": "Cost First"
       },
       "viewDetails": "View Details",
+      "goToAliasTarget": "Go to Real Model",
       "testModel": "Test Model"
     },
     "filters": {
@@ -409,6 +410,7 @@
       "transcription": "Transcription",
       "embedding": "Embedding",
       "images": "Images",
+      "alias": "Alias",
       "roundRobin": "Round Robin",
       "costFirst": "Cost First",
       "priority": "Priority",
@@ -428,6 +430,10 @@
       "requestedModelImmutable": "Model name is the primary key and cannot be modified",
       "modelTypeLabel": "Model Type",
       "modelTypePlaceholder": "Select model type",
+      "aliasTargetLabel": "Real Model",
+      "aliasTargetPlaceholder": "Select the real model",
+      "aliasTargetRequired": "Please select a real model",
+      "aliasTargetEmpty": "No non-alias models are available.",
       "pricingTitle": "Pricing (USD / 1M tokens)",
       "inputPrice": "Input Price",
       "outputPrice": "Output Price",

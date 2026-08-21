@@ -137,6 +137,7 @@ def _run_migrations(sync_conn) -> None:
         "model_mappings",
         {
             "model_type": "model_type VARCHAR(50)",
+            "alias_target_model": "alias_target_model VARCHAR(100)",
             "input_price": "input_price NUMERIC(12,4)",
             "output_price": "output_price NUMERIC(12,4)",
             "billing_mode": "billing_mode VARCHAR(50)",
@@ -184,6 +185,7 @@ def _run_migrations(sync_conn) -> None:
             "cached_input_cost": "cached_input_cost NUMERIC(12,4)",
             "cached_output_cost": "cached_output_cost NUMERIC(12,4)",
             "user_id": "user_id VARCHAR(255)",
+            "resolved_model": "resolved_model VARCHAR(100)",
             "is_completed": "is_completed BOOLEAN DEFAULT TRUE",
         },
     )

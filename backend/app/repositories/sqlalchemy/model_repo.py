@@ -50,6 +50,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             requested_model=entity.requested_model,
             strategy=entity.strategy,
             model_type=entity.model_type or "chat",
+            alias_target_model=entity.alias_target_model,
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
@@ -116,6 +117,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             requested_model=data.requested_model,
             strategy=data.strategy,
             model_type=data.model_type,
+            alias_target_model=data.alias_target_model,
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
@@ -255,6 +257,15 @@ class SQLAlchemyModelRepository(ModelRepository):
         await self.session.delete(entity)
         await self.session.commit()
         return True
+
+    async def get_aliases_for_target(self, requested_model: str) -> list[ModelMapping]:
+        result = await self.session.execute(
+            select(ModelMappingORM).where(
+                ModelMappingORM.model_type == "alias",
+                ModelMappingORM.alias_target_model == requested_model,
+            )
+        )
+        return [self._mapping_to_domain(entity) for entity in result.scalars().all()]
     
     # ============ Model-Provider Mapping Operations ============
     

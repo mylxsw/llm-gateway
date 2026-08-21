@@ -11,6 +11,7 @@ export interface RequestLog {
   api_key_name?: string;
   user_id?: string;
   requested_model?: string;
+  resolved_model?: string;
   target_model?: string;
   provider_id?: number;
   provider_name?: string;

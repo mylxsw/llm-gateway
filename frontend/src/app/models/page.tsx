@@ -160,6 +160,7 @@ function ModelsContent() {
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
     sort_by: sortBy,
   });
+  const { data: aliasTargetData } = useModels({ page: 1, page_size: 1000 });
   const { data: statsData } = useModelStats();
 
   // Mutations
@@ -217,8 +218,12 @@ function ModelsContent() {
         await createMutation.mutateAsync(createData);
         const requestedModel = createData.requested_model;
         if (requestedModel) {
+          const detailModel =
+            createData.model_type === 'alias' && createData.alias_target_model
+              ? createData.alias_target_model
+              : requestedModel;
           router.push(
-            `/models/detail?model=${encodeURIComponent(requestedModel)}&returnTo=${encodeURIComponent(returnTo)}`
+            `/models/detail?model=${encodeURIComponent(detailModel)}&returnTo=${encodeURIComponent(returnTo)}`
           );
         }
       }
@@ -395,6 +400,9 @@ function ModelsContent() {
         open={formOpen}
         onOpenChange={setFormOpen}
         model={editingModel}
+        aliasTargets={(aliasTargetData?.items ?? []).filter(
+          (item) => item.model_type !== 'alias' && item.requested_model !== editingModel?.requested_model
+        )}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
       />

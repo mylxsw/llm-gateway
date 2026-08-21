@@ -57,6 +57,11 @@ class ModelRepository(ABC):
     async def delete_mapping(self, requested_model: str) -> bool:
         """Delete Model Mapping (Cascades delete associated provider mappings)"""
         pass
+
+    @abstractmethod
+    async def get_aliases_for_target(self, requested_model: str) -> List[ModelMapping]:
+        """Get aliases that reference a concrete model."""
+        pass
     
     # ============ Model-Provider Mapping ============
     

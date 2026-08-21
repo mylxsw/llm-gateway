@@ -19,7 +19,8 @@ def _make_log_data(**overrides) -> RequestLogCreate:
         request_time=datetime.now(timezone.utc),
         api_key_id=1,
         api_key_name="test-key",
-        requested_model="gpt-4",
+        requested_model="gpt-latest",
+        resolved_model="gpt-4",
         target_model="gpt-4",
         provider_id=1,
         provider_name="OpenAI",
@@ -57,6 +58,8 @@ async def test_create_stores_detail_separately(db_session):
         select(RequestLogORM).where(RequestLogORM.id == log.id)
     )
     entity = result.scalar_one()
+    assert entity.requested_model == "gpt-latest"
+    assert entity.resolved_model == "gpt-4"
     assert entity.request_body is None
     assert entity.response_body is None
     assert entity.request_headers is None
@@ -95,6 +98,7 @@ async def test_create_returns_full_model_with_detail(db_session):
     assert created.request_body == {"messages": [{"role": "user", "content": "hello"}]}
     assert created.response_body == '{"result":"ok"}'
     assert created.error_info == "some error"
+    assert created.resolved_model == "gpt-4"
     assert created.request_headers == {"authorization": "Bearer ***"}
 
 
@@ -130,7 +134,8 @@ async def test_query_returns_summary_only(db_session):
     item = items[0]
     # Summary fields should be present
     assert item.id is not None
-    assert item.requested_model == "gpt-4"
+    assert item.requested_model == "gpt-latest"
+    assert item.resolved_model == "gpt-4"
     assert item.response_status == 200
     assert item.input_tokens == 10
     assert item.output_tokens == 20

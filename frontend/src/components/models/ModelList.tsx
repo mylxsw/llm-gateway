@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Play, Server, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Pencil, Play, Server, Trash2 } from 'lucide-react';
 import { ModelListSortBy, ModelMapping, ModelStats, ModelType } from '@/types';
 import { getActiveStatus, formatDuration } from '@/lib/utils';
 
@@ -83,6 +83,8 @@ export function ModelList({
         return t('filters.embedding');
       case 'images':
         return t('filters.images');
+      case 'alias':
+        return t('filters.alias');
       case 'chat':
       default:
         return t('filters.chat');
@@ -121,6 +123,7 @@ export function ModelList({
       <TableBody>
         {models.map((model) => {
           const stats = statsByModel?.[model.requested_model];
+          const isAlias = model.model_type === 'alias';
           const providerCount = model.provider_count ?? model.providers?.length ?? 0;
           const activeProviderCount =
             model.active_provider_count ??
@@ -128,7 +131,7 @@ export function ModelList({
             0;
 
           // Determine status display
-          const isPendingConfig = model.is_active && activeProviderCount === 0;
+          const isPendingConfig = !isAlias && model.is_active && activeProviderCount === 0;
           const statusDisplay = isPendingConfig
             ? {
                 text: t('filters.pendingConfig'),
@@ -159,7 +162,7 @@ export function ModelList({
               </TableCell>
               <TableCell>
                 <Badge variant="outline">
-                  {getStrategyLabel(model.strategy)}
+                  {isAlias ? '—' : getStrategyLabel(model.strategy)}
                 </Badge>
               </TableCell>
               <TableCell>
@@ -167,7 +170,7 @@ export function ModelList({
                   variant="secondary"
                   title={t('list.columns.providerCountHint')}
                 >
-                  {activeProviderCount}/{providerCount}
+                  {isAlias ? '—' : `${activeProviderCount}/${providerCount}`}
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
@@ -189,12 +192,24 @@ export function ModelList({
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
                   <Link
-                    href={`/models/detail?model=${encodeURIComponent(model.requested_model)}${
+                    href={`/models/detail?model=${encodeURIComponent(
+                      isAlias && model.alias_target_model
+                        ? model.alias_target_model
+                        : model.requested_model
+                    )}${
                       returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ''
                     }`}
                   >
-                    <Button variant="ghost" size="icon" title={t('list.viewDetails')}>
-                      <Server className="h-4 w-4" suppressHydrationWarning />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={isAlias ? t('list.goToAliasTarget') : t('list.viewDetails')}
+                    >
+                      {isAlias ? (
+                        <ExternalLink className="h-4 w-4" suppressHydrationWarning />
+                      ) : (
+                        <Server className="h-4 w-4" suppressHydrationWarning />
+                      )}
                     </Button>
                   </Link>
                   <Button

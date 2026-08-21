@@ -523,6 +523,7 @@ class ProxyService:
         request_protocol: str,
         headers: dict[str, str],
         body: dict[str, Any],
+        trace_id: Optional[str] = None,
     ) -> tuple[
         ModelMapping,
         list[CandidateProvider],
@@ -551,8 +552,37 @@ class ProxyService:
                     code="model_disabled",
                 )
 
+            routing_model = requested_model
+            if model_mapping.model_type == "alias":
+                alias_target = model_mapping.alias_target_model
+                if not alias_target:
+                    raise ServiceError(
+                        message=f"Alias model '{requested_model}' has an invalid target",
+                        code="invalid_alias_target",
+                    )
+                target_mapping = await model_repo.get_mapping(alias_target)
+                if not target_mapping or target_mapping.model_type == "alias":
+                    raise ServiceError(
+                        message=f"Alias model '{requested_model}' has an invalid target",
+                        code="invalid_alias_target",
+                    )
+                if not target_mapping.is_active:
+                    raise ServiceError(
+                        message=f"Model '{alias_target}' is disabled",
+                        code="model_disabled",
+                    )
+                routing_model = alias_target
+                model_mapping = target_mapping
+                body["model"] = routing_model
+                logger.info(
+                    "Model alias resolved: alias=%s target=%s trace_id=%s",
+                    requested_model,
+                    routing_model,
+                    trace_id or "",
+                )
+
             provider_mappings = await model_repo.get_provider_mappings(
-                requested_model=requested_model,
+                requested_model=routing_model,
                 is_active=True,
             )
 
@@ -591,10 +621,10 @@ class ProxyService:
         }
 
         token_counter = get_token_counter(request_protocol)
-        input_tokens = token_counter.count_request(body, requested_model)
+        input_tokens = token_counter.count_request(body, routing_model)
 
         context = RuleContext(
-            current_model=requested_model,
+            current_model=routing_model,
             headers=headers,
             request_body=body,
             token_usage=TokenUsage(input_tokens=input_tokens),
@@ -697,6 +727,7 @@ class ProxyService:
                 request_protocol=request_protocol,
                 headers=headers,
                 body=body,
+                trace_id=trace_id,
             )
         except Exception as exc:
             await self._finalize_initial_log_error(
@@ -808,6 +839,7 @@ class ProxyService:
                 api_key_name=api_key_name,
                 user_id=user_id,
                 requested_model=requested_model,
+                resolved_model=model_mapping.requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
                 provider_name=attempt.provider.provider_name,
@@ -1154,6 +1186,7 @@ class ProxyService:
             api_key_name=api_key_name,
             user_id=user_id,
             requested_model=requested_model,
+            resolved_model=model_mapping.requested_model,
             target_model=result.final_provider.target_model
             if result.final_provider
             else None,
@@ -1295,6 +1328,7 @@ class ProxyService:
                 request_protocol=request_protocol,
                 headers=headers,
                 body=body,
+                trace_id=trace_id,
             )
         except Exception as exc:
             await self._finalize_initial_log_error(
@@ -1646,6 +1680,7 @@ class ProxyService:
                 api_key_name=api_key_name,
                 user_id=user_id,
                 requested_model=requested_model,
+                resolved_model=model_mapping.requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
                 provider_name=attempt.provider.provider_name,
@@ -1904,6 +1939,7 @@ class ProxyService:
                     api_key_name=api_key_name,
                     user_id=user_id,
                     requested_model=requested_model,
+                    resolved_model=model_mapping.requested_model,
                     target_model=final_provider.target_model
                     if final_provider
                     else None,

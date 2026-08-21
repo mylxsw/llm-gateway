@@ -8,7 +8,7 @@ import { ProtocolType } from './provider';
 
 /** Selection Strategy Type */
 export type SelectionStrategy = 'round_robin' | 'cost_first' | 'priority';
-export type ModelType = 'chat' | 'speech' | 'transcription' | 'embedding' | 'images';
+export type ModelType = 'chat' | 'speech' | 'transcription' | 'embedding' | 'images' | 'alias';
 export type ModelListSortBy = 'requested_model_asc' | 'requested_model_desc';
 
 /** Model Mapping Entity */
@@ -16,6 +16,7 @@ export interface ModelMapping {
   requested_model: string;            // Primary Key
   strategy: SelectionStrategy;        // Selection strategy
   model_type: ModelType;              // Model type
+  alias_target_model?: string | null; // Real model referenced by an alias
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
   // Pricing (USD per 1,000,000 tokens)
@@ -111,6 +112,7 @@ export interface ModelMappingCreate {
   requested_model: string;
   strategy?: SelectionStrategy;
   model_type?: ModelType;
+  alias_target_model?: string | null;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;
@@ -136,6 +138,7 @@ export interface ModelMappingCreate {
 export interface ModelMappingUpdate {
   strategy?: SelectionStrategy;
   model_type?: ModelType;
+  alias_target_model?: string | null;
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   input_price?: number | null;

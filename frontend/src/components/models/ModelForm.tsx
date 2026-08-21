@@ -45,6 +45,8 @@ interface ModelFormProps {
   onOpenChange: (open: boolean) => void;
   /** Model data for edit mode */
   model?: ModelMapping | null;
+  /** Existing non-alias models that can be selected as alias targets */
+  aliasTargets?: ModelMapping[];
   /** Submit callback */
   onSubmit: (data: ModelMappingCreate | ModelMappingUpdate) => void;
   /** Loading state */
@@ -56,6 +58,7 @@ interface FormData {
   requested_model: string;
   strategy: SelectionStrategy;
   model_type: ModelType;
+  alias_target_model: string;
   is_active: boolean;
   billing_mode: BillingMode;
   input_price: string;
@@ -76,6 +79,7 @@ export function ModelForm({
   open,
   onOpenChange,
   model,
+  aliasTargets = [],
   onSubmit,
   loading = false,
 }: ModelFormProps) {
@@ -98,6 +102,7 @@ export function ModelForm({
       requested_model: '',
       strategy: 'round_robin',
       model_type: 'chat',
+      alias_target_model: '',
       is_active: true,
       billing_mode: 'token_flat' as BillingMode,
       input_price: '',
@@ -119,6 +124,7 @@ export function ModelForm({
 
   const isActive = useWatch({ control, name: 'is_active' });
   const modelType = useWatch({ control, name: 'model_type' });
+  const isAlias = modelType === 'alias';
   const strategy = useWatch({ control, name: 'strategy' });
   const billingMode = useWatch({ control, name: 'billing_mode' });
   const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
@@ -138,6 +144,7 @@ export function ModelForm({
         requested_model: model.requested_model,
         strategy: model.strategy,
         model_type: model.model_type ?? 'chat',
+        alias_target_model: model.alias_target_model ?? '',
         is_active: model.is_active,
         billing_mode: mode,
         input_price:
@@ -180,6 +187,7 @@ export function ModelForm({
         requested_model: '',
         strategy: 'round_robin',
         model_type: 'chat',
+        alias_target_model: '',
         is_active: true,
         billing_mode: 'token_flat' as BillingMode,
         input_price: '',
@@ -197,6 +205,19 @@ export function ModelForm({
 
   // Submit form
   const onFormSubmit = (data: FormData) => {
+    if (data.model_type === 'alias') {
+      const submitData: ModelMappingCreate | ModelMappingUpdate = {
+        model_type: 'alias',
+        alias_target_model: data.alias_target_model,
+        is_active: data.is_active,
+      };
+      if (!isEdit) {
+        (submitData as ModelMappingCreate).requested_model = data.requested_model;
+      }
+      onSubmit(submitData);
+      return;
+    }
+
     const resolvedStrategy = supportsBilling
       ? data.strategy
       : data.strategy === 'cost_first'
@@ -205,6 +226,7 @@ export function ModelForm({
     const submitData: ModelMappingCreate | ModelMappingUpdate = {
       strategy: resolvedStrategy,
       model_type: data.model_type,
+      alias_target_model: null,
       is_active: data.is_active,
     };
 
@@ -352,11 +374,45 @@ export function ModelForm({
                     <SelectItem value="transcription">{t('filters.transcription')}</SelectItem>
                     <SelectItem value="embedding">{t('filters.embedding')}</SelectItem>
                     <SelectItem value="images">{t('filters.images')}</SelectItem>
+                    <SelectItem value="alias">{t('filters.alias')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
             />
           </div>
+
+          {isAlias && (
+            <div className="space-y-2">
+              <Label>
+                {t('form.aliasTargetLabel')} <span className="text-destructive">*</span>
+              </Label>
+              <Controller
+                name="alias_target_model"
+                control={control}
+                rules={{ required: t('form.aliasTargetRequired') }}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('form.aliasTargetPlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aliasTargets.map((target) => (
+                        <SelectItem key={target.requested_model} value={target.requested_model}>
+                          {target.requested_model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.alias_target_model && (
+                <p className="text-sm text-destructive">{errors.alias_target_model.message}</p>
+              )}
+              {aliasTargets.length === 0 && (
+                <p className="text-sm text-muted-foreground">{t('form.aliasTargetEmpty')}</p>
+              )}
+            </div>
+          )}
 
           {/* Billing / Pricing */}
           {supportsBilling && (
@@ -377,7 +433,7 @@ export function ModelForm({
           )}
 
           {/* Strategy */}
-          <div className="space-y-3">
+          {!isAlias && <div className="space-y-3">
             <Label>{t('form.selectionStrategy')}</Label>
             <Controller
               name="strategy"
@@ -514,7 +570,7 @@ export function ModelForm({
             <p className="text-xs text-muted-foreground">
               💡 {t('form.strategyHint')}
             </p>
-          </div>
+          </div>}
 
           {/* Status */}
           <div className="flex items-center justify-between">

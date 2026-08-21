@@ -145,3 +145,18 @@ class TestCreateMappingPersistsPricingFields:
         assert result.tiered_pricing is None
         assert result.per_request_price is None
         assert result.per_image_price is None
+
+    async def test_create_mapping_persists_alias_target(self, model_repo):
+        data = ModelMappingCreate(
+            requested_model="gpt-latest",
+            model_type="alias",
+            alias_target_model="gpt-4o",
+        )
+
+        result = await model_repo.create_mapping(data)
+        fetched = await model_repo.get_mapping("gpt-latest")
+
+        assert result.model_type == "alias"
+        assert result.alias_target_model == "gpt-4o"
+        assert fetched is not None
+        assert fetched.alias_target_model == "gpt-4o"

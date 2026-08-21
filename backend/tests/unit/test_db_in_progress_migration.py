@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, inspect, select, text
 
 from app.db.models import Base, RequestLog, RequestLogDetail
 from app.db.session import _run_migrations
@@ -41,3 +41,23 @@ def test_startup_marks_orphaned_in_progress_logs_failed():
     assert row.is_completed is True
     assert row.response_status == 500
     assert error_info == "Request interrupted by server restart"
+
+
+def test_startup_adds_alias_target_model_to_existing_model_table():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE model_mappings ("
+                "requested_model VARCHAR(100) PRIMARY KEY, "
+                "model_type VARCHAR(50)"
+                ")"
+            )
+        )
+
+        _run_migrations(connection)
+
+        columns = {column["name"] for column in inspect(connection).get_columns("model_mappings")}
+
+    engine.dispose()
+    assert "alias_target_model" in columns

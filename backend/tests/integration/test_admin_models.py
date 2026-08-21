@@ -34,6 +34,98 @@ async def test_admin_create_model_allows_missing_matching_rules(db_session, monk
 
 
 @pytest.mark.asyncio
+async def test_admin_creates_and_updates_alias_for_real_model(db_session, monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        real_resp = await ac.post(
+            "/api/admin/models",
+            json={"requested_model": "gpt-4o", "model_type": "chat"},
+        )
+        assert real_resp.status_code == 201, real_resp.text
+
+        alias_resp = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "gpt-latest",
+                "model_type": "alias",
+                "alias_target_model": "gpt-4o",
+                "is_active": True,
+            },
+        )
+        assert alias_resp.status_code == 201, alias_resp.text
+        assert alias_resp.json()["alias_target_model"] == "gpt-4o"
+
+        fallback_resp = await ac.post(
+            "/api/admin/models",
+            json={"requested_model": "gpt-4o-mini", "model_type": "chat"},
+        )
+        assert fallback_resp.status_code == 201, fallback_resp.text
+        convert_target_resp = await ac.put(
+            "/api/admin/models/gpt-4o",
+            json={"model_type": "alias", "alias_target_model": "gpt-4o-mini"},
+        )
+        assert convert_target_resp.status_code == 409, convert_target_resp.text
+        assert convert_target_resp.json()["error"]["code"] == "model_referenced_by_alias"
+
+        delete_target_resp = await ac.delete("/api/admin/models/gpt-4o")
+        assert delete_target_resp.status_code == 409, delete_target_resp.text
+        assert delete_target_resp.json()["error"]["code"] == "model_referenced_by_alias"
+
+        update_resp = await ac.put(
+            "/api/admin/models/gpt-latest",
+            json={"is_active": False},
+        )
+        assert update_resp.status_code == 200, update_resp.text
+        assert update_resp.json()["model_type"] == "alias"
+        assert update_resp.json()["alias_target_model"] == "gpt-4o"
+        assert update_resp.json()["is_active"] is False
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_admin_rejects_alias_targeting_an_alias(db_session, monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        await ac.post(
+            "/api/admin/models",
+            json={"requested_model": "real-model", "model_type": "chat"},
+        )
+        first_alias = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "first-alias",
+                "model_type": "alias",
+                "alias_target_model": "real-model",
+            },
+        )
+        assert first_alias.status_code == 201, first_alias.text
+
+        chained_alias = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "second-alias",
+                "model_type": "alias",
+                "alias_target_model": "first-alias",
+            },
+        )
+
+    assert chained_alias.status_code == 422, chained_alias.text
+    assert chained_alias.json()["error"]["code"] == "invalid_alias_target"
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
 async def test_admin_get_model_supports_slash_in_name(db_session, monkeypatch):
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
