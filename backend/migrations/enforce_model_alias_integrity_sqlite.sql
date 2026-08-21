@@ -1,7 +1,11 @@
 CREATE INDEX IF NOT EXISTS idx_model_mappings_alias_target
     ON model_mappings (alias_target_model);
 
-CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_insert
+DROP TRIGGER IF EXISTS trg_model_alias_validate_insert;
+DROP TRIGGER IF EXISTS trg_model_alias_validate_update;
+DROP TRIGGER IF EXISTS trg_model_alias_restrict_delete;
+
+CREATE TRIGGER trg_model_alias_validate_insert
 BEFORE INSERT ON model_mappings
 WHEN NEW.model_type = 'alias'
 BEGIN
@@ -13,7 +17,7 @@ BEGIN
     ) THEN RAISE(ABORT, 'invalid_alias_target') END;
 END;
 
-CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_update
+CREATE TRIGGER trg_model_alias_validate_update
 BEFORE UPDATE OF model_type, alias_target_model ON model_mappings
 WHEN NEW.model_type = 'alias'
 BEGIN
@@ -30,7 +34,7 @@ BEGIN
     ) THEN RAISE(ABORT, 'invalid_alias_target') END;
 END;
 
-CREATE TRIGGER IF NOT EXISTS trg_model_alias_restrict_delete
+CREATE TRIGGER trg_model_alias_restrict_delete
 BEFORE DELETE ON model_mappings
 WHEN EXISTS (
     SELECT 1 FROM model_mappings AS alias

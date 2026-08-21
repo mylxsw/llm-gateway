@@ -174,8 +174,14 @@ def _run_migrations(sync_conn) -> None:
         )
 
         if sync_conn.dialect.name == "sqlite":
+            for trigger_name in (
+                "trg_model_alias_validate_insert",
+                "trg_model_alias_validate_update",
+                "trg_model_alias_restrict_delete",
+            ):
+                sync_conn.execute(text(f"DROP TRIGGER IF EXISTS {trigger_name}"))
             sync_conn.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_insert
+                CREATE TRIGGER trg_model_alias_validate_insert
                 BEFORE INSERT ON model_mappings
                 WHEN NEW.model_type = 'alias'
                 BEGIN
@@ -188,7 +194,7 @@ def _run_migrations(sync_conn) -> None:
                 END
             """))
             sync_conn.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_update
+                CREATE TRIGGER trg_model_alias_validate_update
                 BEFORE UPDATE OF model_type, alias_target_model ON model_mappings
                 WHEN NEW.model_type = 'alias'
                 BEGIN
@@ -206,7 +212,7 @@ def _run_migrations(sync_conn) -> None:
                 END
             """))
             sync_conn.execute(text("""
-                CREATE TRIGGER IF NOT EXISTS trg_model_alias_restrict_delete
+                CREATE TRIGGER trg_model_alias_restrict_delete
                 BEFORE DELETE ON model_mappings
                 WHEN EXISTS (
                     SELECT 1 FROM model_mappings AS alias

@@ -140,6 +140,16 @@ def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
                 )
             )
 
+        connection.execute(text("DROP TRIGGER trg_model_alias_validate_update"))
+        connection.execute(
+            text(
+                "CREATE TRIGGER trg_model_alias_validate_update "
+                "BEFORE UPDATE OF model_type, alias_target_model ON model_mappings "
+                "BEGIN SELECT 1; END"
+            )
+        )
+        _run_migrations(connection)
+
         with pytest.raises(IntegrityError, match="invalid_alias_target"):
             connection.execute(
                 text(
