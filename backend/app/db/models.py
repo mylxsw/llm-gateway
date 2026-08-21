@@ -148,9 +148,12 @@ class ModelMapping(Base):
     # Real requested model referenced when model_type == alias
     alias_target_model: Mapped[Optional[str]] = mapped_column(
         String(100),
-        ForeignKey("model_mappings.requested_model", ondelete="RESTRICT"),
+        ForeignKey(
+            "model_mappings.requested_model",
+            name="fk_model_mappings_alias_target",
+            ondelete="RESTRICT",
+        ),
         nullable=True,
-        index=True,
     )
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)

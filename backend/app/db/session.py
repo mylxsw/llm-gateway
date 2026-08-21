@@ -250,7 +250,7 @@ def _run_migrations(sync_conn) -> None:
                         FROM model_mappings
                         WHERE requested_model = NEW.alias_target_model
                         FOR KEY SHARE;
-                        IF NOT target_found OR target_type = 'alias' THEN
+                        IF COALESCE(target_found, FALSE) = FALSE OR target_type = 'alias' THEN
                             RAISE EXCEPTION 'invalid_alias_target';
                         END IF;
                     END IF;

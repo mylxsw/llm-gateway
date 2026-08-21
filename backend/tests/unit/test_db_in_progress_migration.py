@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Base, RequestLog, RequestLogDetail
+from app.db.models import Base, ModelMapping, RequestLog, RequestLogDetail
 from app.db.session import _run_migrations
 
 
@@ -43,6 +43,16 @@ def test_startup_marks_orphaned_in_progress_logs_failed():
     assert row.is_completed is True
     assert row.response_status == 500
     assert error_info == "Request interrupted by server restart"
+
+
+def test_alias_target_foreign_key_has_stable_restrict_name():
+    foreign_keys = list(ModelMapping.__table__.foreign_key_constraints)
+    alias_fk = next(
+        fk for fk in foreign_keys if "alias_target_model" in fk.column_keys
+    )
+
+    assert alias_fk.name == "fk_model_mappings_alias_target"
+    assert alias_fk.ondelete == "RESTRICT"
 
 
 def test_startup_adds_alias_target_model_to_existing_model_table():
