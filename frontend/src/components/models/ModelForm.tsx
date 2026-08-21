@@ -390,7 +390,7 @@ export function ModelForm({
 
           {isAlias && (
             <div className="space-y-2">
-              <Label>
+              <Label htmlFor="alias_target_model">
                 {t('form.aliasTargetLabel')} <span className="text-destructive">*</span>
               </Label>
               <Controller
@@ -403,7 +403,13 @@ export function ModelForm({
                     onValueChange={field.onChange}
                     disabled={aliasTargetsLoading || aliasTargetsError}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger
+                      id="alias_target_model"
+                      aria-invalid={!!errors.alias_target_model}
+                      aria-describedby={
+                        errors.alias_target_model ? 'alias_target_model-error' : undefined
+                      }
+                    >
                       <SelectValue placeholder={t('form.aliasTargetPlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -417,7 +423,9 @@ export function ModelForm({
                 )}
               />
               {errors.alias_target_model && (
-                <p className="text-sm text-destructive">{errors.alias_target_model.message}</p>
+                <p id="alias_target_model-error" className="text-sm text-destructive">
+                  {errors.alias_target_model.message}
+                </p>
               )}
               {aliasTargetsLoading && (
                 <p className="text-sm text-muted-foreground">
