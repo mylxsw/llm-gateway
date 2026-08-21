@@ -146,7 +146,12 @@ class ModelMapping(Base):
     # Model type: chat / speech / transcription / embedding / images / alias
     model_type: Mapped[str] = mapped_column(String(50), default="chat")
     # Real requested model referenced when model_type == alias
-    alias_target_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    alias_target_model: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        ForeignKey("model_mappings.requested_model", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)

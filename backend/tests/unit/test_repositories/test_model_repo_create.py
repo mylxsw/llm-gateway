@@ -9,7 +9,9 @@ when creating a model mapping.
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import text
 
+from app.common.errors import ConflictError
 from app.domain.model import ModelMappingCreate, TokenTierPrice
 from app.repositories.sqlalchemy.model_repo import SQLAlchemyModelRepository
 
@@ -147,6 +149,9 @@ class TestCreateMappingPersistsPricingFields:
         assert result.per_image_price is None
 
     async def test_create_mapping_persists_alias_target(self, model_repo):
+        await model_repo.create_mapping(
+            ModelMappingCreate(requested_model="gpt-4o", model_type="chat")
+        )
         data = ModelMappingCreate(
             requested_model="gpt-latest",
             model_type="alias",
@@ -160,3 +165,25 @@ class TestCreateMappingPersistsPricingFields:
         assert result.alias_target_model == "gpt-4o"
         assert fetched is not None
         assert fetched.alias_target_model == "gpt-4o"
+
+    async def test_delete_mapping_translates_alias_reference_constraint(self, model_repo):
+        await model_repo.session.execute(text("PRAGMA foreign_keys=ON"))
+        await model_repo.create_mapping(
+            ModelMappingCreate(requested_model="constraint-real", model_type="chat")
+        )
+        await model_repo.create_mapping(
+            ModelMappingCreate(
+                requested_model="constraint-alias",
+                model_type="alias",
+                alias_target_model="constraint-real",
+            )
+        )
+
+        with pytest.raises(ConflictError) as exc_info:
+            await model_repo.delete_mapping("constraint-real")
+
+        assert exc_info.value.code == "model_referenced_by_alias"
+        assert await model_repo.get_mapping("constraint-real") is not None
+
+        await model_repo.delete_mapping("constraint-alias")
+        await model_repo.delete_mapping("constraint-real")

@@ -7,9 +7,11 @@ Provides concrete database operation implementation for Model Mappings and Model
 from typing import Optional
 
 from sqlalchemy import func, select, delete, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.errors import ConflictError, ValidationError
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import (
     ModelMapping as ModelMappingORM,
@@ -43,6 +45,28 @@ class SQLAlchemyModelRepository(ModelRepository):
             session: Async database session
         """
         self.session = session
+
+    async def _commit_with_alias_integrity(self, operation: str) -> None:
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            message = str(exc.orig)
+            if operation == "delete" or "model_referenced_by_alias" in message:
+                raise ConflictError(
+                    message="Model is referenced by one or more aliases",
+                    code="model_referenced_by_alias",
+                ) from exc
+            if (
+                "invalid_alias_target" in message
+                or "fk_model_mappings_alias_target" in message
+                or "FOREIGN KEY constraint failed" in message
+            ):
+                raise ValidationError(
+                    message="Alias target must be an existing non-alias model",
+                    code="invalid_alias_target",
+                ) from exc
+            raise
     
     def _mapping_to_domain(self, entity: ModelMappingORM) -> ModelMapping:
         """Convert Model Mapping ORM entity to domain model"""
@@ -137,7 +161,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             cache_creation_input_price=data.cache_creation_input_price,
         )
         self.session.add(entity)
-        await self.session.commit()
+        await self._commit_with_alias_integrity("create")
         await self.session.refresh(entity)
         return self._mapping_to_domain(entity)
     
@@ -238,7 +262,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         
         entity.updated_at = to_utc_naive(utc_now())
         
-        await self.session.commit()
+        await self._commit_with_alias_integrity("update")
         await self.session.refresh(entity)
         return self._mapping_to_domain(entity)
     
@@ -255,7 +279,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             return False
         
         await self.session.delete(entity)
-        await self.session.commit()
+        await self._commit_with_alias_integrity("delete")
         return True
 
     async def get_aliases_for_target(self, requested_model: str) -> list[ModelMapping]:

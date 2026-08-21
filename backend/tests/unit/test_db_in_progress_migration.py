@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
+import pytest
 from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import Base, RequestLog, RequestLogDetail
 from app.db.session import _run_migrations
@@ -61,3 +63,65 @@ def test_startup_adds_alias_target_model_to_existing_model_table():
 
     engine.dispose()
     assert "alias_target_model" in columns
+
+
+def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE model_mappings ("
+                "requested_model VARCHAR(100) PRIMARY KEY, "
+                "model_type VARCHAR(50), "
+                "alias_target_model VARCHAR(100)"
+                ")"
+            )
+        )
+        _run_migrations(connection)
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type) "
+                "VALUES ('real', 'chat')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type) "
+                "VALUES ('legacy-real', NULL)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type, alias_target_model) "
+                "VALUES ('legacy-alias', 'alias', 'legacy-real')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type, alias_target_model) "
+                "VALUES ('latest', 'alias', 'real')"
+            )
+        )
+
+        with pytest.raises(IntegrityError, match="model_referenced_by_alias"):
+            connection.execute(
+                text("DELETE FROM model_mappings WHERE requested_model = 'real'")
+            )
+
+        with pytest.raises(IntegrityError, match="model_referenced_by_alias"):
+            connection.execute(
+                text(
+                    "UPDATE model_mappings SET model_type = 'alias', "
+                    "alias_target_model = 'other' WHERE requested_model = 'real'"
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="invalid_alias_target"):
+            connection.execute(
+                text(
+                    "INSERT INTO model_mappings(requested_model, model_type, alias_target_model) "
+                    "VALUES ('broken', 'alias', 'missing')"
+                )
+            )
+
+    engine.dispose()

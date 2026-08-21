@@ -150,6 +150,123 @@ def _run_migrations(sync_conn) -> None:
             "cache_creation_input_price": "cache_creation_input_price NUMERIC(12,4)",
         },
     )
+    if "model_mappings" in table_names:
+        invalid_alias = sync_conn.execute(
+            text(
+                "SELECT alias.requested_model FROM model_mappings AS alias "
+                "LEFT JOIN model_mappings AS target "
+                "ON target.requested_model = alias.alias_target_model "
+                "WHERE alias.model_type = 'alias' AND "
+                "(alias.alias_target_model IS NULL OR target.requested_model IS NULL "
+                "OR target.model_type = 'alias') LIMIT 1"
+            )
+        ).scalar()
+        if invalid_alias:
+            raise RuntimeError(
+                f"Invalid model alias '{invalid_alias}' must be repaired before startup"
+            )
+
+        sync_conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_model_mappings_alias_target "
+                "ON model_mappings (alias_target_model)"
+            )
+        )
+
+        if sync_conn.dialect.name == "sqlite":
+            sync_conn.execute(text("""
+                CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_insert
+                BEFORE INSERT ON model_mappings
+                WHEN NEW.model_type = 'alias'
+                BEGIN
+                    SELECT CASE WHEN NEW.alias_target_model IS NULL OR NOT EXISTS (
+                        SELECT 1 FROM model_mappings AS target
+                        WHERE target.requested_model = NEW.alias_target_model
+                          AND (target.model_type IS NULL OR target.model_type <> 'alias')
+                    ) THEN RAISE(ABORT, 'invalid_alias_target') END;
+                END
+            """))
+            sync_conn.execute(text("""
+                CREATE TRIGGER IF NOT EXISTS trg_model_alias_validate_update
+                BEFORE UPDATE OF model_type, alias_target_model ON model_mappings
+                WHEN NEW.model_type = 'alias'
+                BEGIN
+                    SELECT CASE WHEN EXISTS (
+                        SELECT 1 FROM model_mappings AS alias
+                        WHERE alias.model_type = 'alias'
+                          AND alias.alias_target_model = OLD.requested_model
+                    ) THEN RAISE(ABORT, 'model_referenced_by_alias') END;
+                    SELECT CASE WHEN NEW.alias_target_model IS NULL OR NOT EXISTS (
+                        SELECT 1 FROM model_mappings AS target
+                        WHERE target.requested_model = NEW.alias_target_model
+                          AND (target.model_type IS NULL OR target.model_type <> 'alias')
+                    ) THEN RAISE(ABORT, 'invalid_alias_target') END;
+                END
+            """))
+            sync_conn.execute(text("""
+                CREATE TRIGGER IF NOT EXISTS trg_model_alias_restrict_delete
+                BEFORE DELETE ON model_mappings
+                WHEN EXISTS (
+                    SELECT 1 FROM model_mappings AS alias
+                    WHERE alias.model_type = 'alias'
+                      AND alias.alias_target_model = OLD.requested_model
+                )
+                BEGIN
+                    SELECT RAISE(ABORT, 'model_referenced_by_alias');
+                END
+            """))
+        elif sync_conn.dialect.name == "postgresql":
+            sync_conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'fk_model_mappings_alias_target'
+                    ) THEN
+                        ALTER TABLE model_mappings
+                        ADD CONSTRAINT fk_model_mappings_alias_target
+                        FOREIGN KEY (alias_target_model)
+                        REFERENCES model_mappings(requested_model)
+                        ON DELETE RESTRICT;
+                    END IF;
+                END $$
+            """))
+            sync_conn.execute(text("""
+                CREATE OR REPLACE FUNCTION enforce_model_alias_integrity()
+                RETURNS trigger AS $$
+                DECLARE
+                    target_type VARCHAR(50);
+                    target_found BOOLEAN := FALSE;
+                BEGIN
+                    IF NEW.model_type = 'alias' THEN
+                        IF TG_OP = 'UPDATE' AND EXISTS (
+                            SELECT 1 FROM model_mappings AS alias
+                            WHERE alias.model_type = 'alias'
+                              AND alias.alias_target_model = OLD.requested_model
+                        ) THEN
+                            RAISE EXCEPTION 'model_referenced_by_alias';
+                        END IF;
+                        SELECT TRUE, model_type INTO target_found, target_type
+                        FROM model_mappings
+                        WHERE requested_model = NEW.alias_target_model
+                        FOR KEY SHARE;
+                        IF NOT target_found OR target_type = 'alias' THEN
+                            RAISE EXCEPTION 'invalid_alias_target';
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql
+            """))
+            sync_conn.execute(text(
+                "DROP TRIGGER IF EXISTS trg_model_alias_integrity ON model_mappings"
+            ))
+            sync_conn.execute(text("""
+                CREATE TRIGGER trg_model_alias_integrity
+                BEFORE INSERT OR UPDATE OF model_type, alias_target_model
+                ON model_mappings
+                FOR EACH ROW EXECUTE FUNCTION enforce_model_alias_integrity()
+            """))
     ensure_columns(
         "model_mapping_providers",
         {
