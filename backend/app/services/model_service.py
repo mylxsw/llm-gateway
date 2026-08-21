@@ -30,6 +30,7 @@ from app.common.costs import (
 from app.rules.context import RuleContext, TokenUsage
 from app.rules.engine import RuleEngine
 from app.services.retry_handler import RetryHandler
+from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.strategy import CostFirstStrategy, PriorityStrategy, RoundRobinStrategy, SelectionStrategy
 
@@ -131,8 +132,12 @@ class ModelService:
                 code="model_disabled",
             )
 
+        routing_model, mapping = await resolve_alias_target(
+            self.model_repo, requested_model, mapping
+        )
+
         provider_mappings = await self.model_repo.get_provider_mappings(
-            requested_model=requested_model,
+            requested_model=routing_model,
             is_active=True,
         )
 
@@ -159,9 +164,9 @@ class ModelService:
             raise ServiceError(message="No available providers", code="no_available_provider")
 
         headers = self._normalize_headers(data.headers, data.api_key)
-        request_body = {"model": requested_model}
+        request_body = {"model": routing_model}
         context = RuleContext(
-            current_model=requested_model,
+            current_model=routing_model,
             headers=headers,
             request_body=request_body,
             token_usage=TokenUsage(input_tokens=data.input_tokens),

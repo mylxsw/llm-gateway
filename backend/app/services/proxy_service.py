@@ -41,6 +41,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.active_requests import active_requests
 from app.services.protocol_hooks import OPENAI_IMAGE_PATHS, ProtocolConversionHooks
@@ -539,6 +540,7 @@ class ProxyService:
         """
         request_protocol = (request_protocol or "openai").lower()
         async with self._repos() as (model_repo, provider_repo, _log_repo):
+            assert model_repo is not None
             model_mapping = await model_repo.get_mapping(requested_model)
             if not model_mapping:
                 raise NotFoundError(
@@ -552,27 +554,10 @@ class ProxyService:
                     code="model_disabled",
                 )
 
-            routing_model = requested_model
-            if model_mapping.model_type == "alias":
-                alias_target = model_mapping.alias_target_model
-                if not alias_target:
-                    raise ServiceError(
-                        message=f"Alias model '{requested_model}' has an invalid target",
-                        code="invalid_alias_target",
-                    )
-                target_mapping = await model_repo.get_mapping(alias_target)
-                if not target_mapping or target_mapping.model_type == "alias":
-                    raise ServiceError(
-                        message=f"Alias model '{requested_model}' has an invalid target",
-                        code="invalid_alias_target",
-                    )
-                if not target_mapping.is_active:
-                    raise ServiceError(
-                        message=f"Model '{alias_target}' is disabled",
-                        code="model_disabled",
-                    )
-                routing_model = alias_target
-                model_mapping = target_mapping
+            routing_model, model_mapping = await resolve_alias_target(
+                model_repo, requested_model, model_mapping
+            )
+            if routing_model != requested_model:
                 body["model"] = routing_model
                 logger.info(
                     "Model alias resolved: alias=%s target=%s trace_id=%s",
