@@ -434,6 +434,8 @@
       "aliasTargetPlaceholder": "选择对应的真实模型",
       "aliasTargetRequired": "请选择真实模型",
       "aliasTargetEmpty": "暂无可选的非别名模型。",
+      "aliasTargetLoading": "正在加载真实模型…",
+      "aliasTargetLoadError": "真实模型加载失败。",
       "pricingTitle": "价格（美元/每百万 tokens）",
       "inputPrice": "输入价格",
       "outputPrice": "输出价格",

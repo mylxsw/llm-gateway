@@ -434,6 +434,8 @@
       "aliasTargetPlaceholder": "Select the real model",
       "aliasTargetRequired": "Please select a real model",
       "aliasTargetEmpty": "No non-alias models are available.",
+      "aliasTargetLoading": "Loading real models...",
+      "aliasTargetLoadError": "Could not load real models.",
       "pricingTitle": "Pricing (USD / 1M tokens)",
       "inputPrice": "Input Price",
       "outputPrice": "Output Price",

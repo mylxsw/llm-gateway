@@ -48,6 +48,9 @@ interface ModelFormProps {
   model?: ModelMapping | null;
   /** Existing non-alias models that can be selected as alias targets */
   aliasTargets?: ModelAliasTarget[];
+  aliasTargetsLoading?: boolean;
+  aliasTargetsError?: boolean;
+  onRetryAliasTargets?: () => void;
   /** Submit callback */
   onSubmit: (data: ModelMappingCreate | ModelMappingUpdate) => void;
   /** Loading state */
@@ -81,6 +84,9 @@ export function ModelForm({
   onOpenChange,
   model,
   aliasTargets = [],
+  aliasTargetsLoading = false,
+  aliasTargetsError = false,
+  onRetryAliasTargets,
   onSubmit,
   loading = false,
 }: ModelFormProps) {
@@ -392,7 +398,11 @@ export function ModelForm({
                 control={control}
                 rules={{ required: t('form.aliasTargetRequired') }}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={aliasTargetsLoading || aliasTargetsError}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder={t('form.aliasTargetPlaceholder')} />
                     </SelectTrigger>
@@ -409,7 +419,26 @@ export function ModelForm({
               {errors.alias_target_model && (
                 <p className="text-sm text-destructive">{errors.alias_target_model.message}</p>
               )}
-              {aliasTargets.length === 0 && (
+              {aliasTargetsLoading && (
+                <p className="text-sm text-muted-foreground">
+                  {t('form.aliasTargetLoading')}
+                </p>
+              )}
+              {aliasTargetsError && (
+                <div className="flex items-center gap-2 text-sm text-destructive">
+                  <span>{t('form.aliasTargetLoadError')}</span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0"
+                    onClick={onRetryAliasTargets}
+                  >
+                    {tCommon('retry')}
+                  </Button>
+                </div>
+              )}
+              {!aliasTargetsLoading && !aliasTargetsError && aliasTargets.length === 0 && (
                 <p className="text-sm text-muted-foreground">{t('form.aliasTargetEmpty')}</p>
               )}
             </div>
@@ -594,7 +623,12 @@ export function ModelForm({
             >
               {tCommon('cancel')}
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button
+              type="submit"
+              disabled={
+                loading || (isAlias && (aliasTargetsLoading || aliasTargetsError))
+              }
+            >
               {loading ? tCommon('saving') : tCommon('save')}
             </Button>
           </DialogFooter>

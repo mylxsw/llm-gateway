@@ -161,7 +161,12 @@ function ModelsContent() {
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
     sort_by: sortBy,
   });
-  const { data: aliasTargets = [] } = useAliasTargets(formOpen);
+  const {
+    data: aliasTargets = [],
+    isLoading: aliasTargetsLoading,
+    isError: aliasTargetsError,
+    refetch: refetchAliasTargets,
+  } = useAliasTargets(formOpen);
   const { data: statsData } = useModelStats();
 
   // Mutations
@@ -404,6 +409,9 @@ function ModelsContent() {
         aliasTargets={aliasTargets.filter(
           (item) => item.requested_model !== editingModel?.requested_model
         )}
+        aliasTargetsLoading={aliasTargetsLoading}
+        aliasTargetsError={aliasTargetsError}
+        onRetryAliasTargets={() => void refetchAliasTargets()}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
       />
