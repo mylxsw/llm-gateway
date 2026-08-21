@@ -179,7 +179,8 @@ def _run_migrations(sync_conn) -> None:
                 BEFORE INSERT ON model_mappings
                 WHEN NEW.model_type = 'alias'
                 BEGIN
-                    SELECT CASE WHEN NEW.alias_target_model IS NULL OR NOT EXISTS (
+                    SELECT CASE WHEN NEW.alias_target_model IS NULL
+                        OR NEW.alias_target_model = NEW.requested_model OR NOT EXISTS (
                         SELECT 1 FROM model_mappings AS target
                         WHERE target.requested_model = NEW.alias_target_model
                           AND (target.model_type IS NULL OR target.model_type <> 'alias')
@@ -196,7 +197,8 @@ def _run_migrations(sync_conn) -> None:
                         WHERE alias.model_type = 'alias'
                           AND alias.alias_target_model = OLD.requested_model
                     ) THEN RAISE(ABORT, 'model_referenced_by_alias') END;
-                    SELECT CASE WHEN NEW.alias_target_model IS NULL OR NOT EXISTS (
+                    SELECT CASE WHEN NEW.alias_target_model IS NULL
+                        OR NEW.alias_target_model = NEW.requested_model OR NOT EXISTS (
                         SELECT 1 FROM model_mappings AS target
                         WHERE target.requested_model = NEW.alias_target_model
                           AND (target.model_type IS NULL OR target.model_type <> 'alias')
@@ -239,6 +241,10 @@ def _run_migrations(sync_conn) -> None:
                     target_found BOOLEAN := FALSE;
                 BEGIN
                     IF NEW.model_type = 'alias' THEN
+                        IF NEW.alias_target_model IS NULL
+                           OR NEW.alias_target_model = NEW.requested_model THEN
+                            RAISE EXCEPTION 'invalid_alias_target';
+                        END IF;
                         IF TG_OP = 'UPDATE' AND EXISTS (
                             SELECT 1 FROM model_mappings AS alias
                             WHERE alias.model_type = 'alias'

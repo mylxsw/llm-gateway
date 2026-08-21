@@ -97,6 +97,12 @@ def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
         connection.execute(
             text(
                 "INSERT INTO model_mappings(requested_model, model_type) "
+                "VALUES ('self-target', 'chat')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type) "
                 "VALUES ('legacy-real', NULL)"
             )
         )
@@ -131,6 +137,15 @@ def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
                 text(
                     "INSERT INTO model_mappings(requested_model, model_type, alias_target_model) "
                     "VALUES ('broken', 'alias', 'missing')"
+                )
+            )
+
+        with pytest.raises(IntegrityError, match="invalid_alias_target"):
+            connection.execute(
+                text(
+                    "UPDATE model_mappings SET model_type = 'alias', "
+                    "alias_target_model = 'self-target' "
+                    "WHERE requested_model = 'self-target'"
                 )
             )
 

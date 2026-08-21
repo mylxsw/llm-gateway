@@ -22,6 +22,10 @@ DECLARE
     target_found BOOLEAN := FALSE;
 BEGIN
     IF NEW.model_type = 'alias' THEN
+        IF NEW.alias_target_model IS NULL
+           OR NEW.alias_target_model = NEW.requested_model THEN
+            RAISE EXCEPTION 'invalid_alias_target';
+        END IF;
         IF TG_OP = 'UPDATE' AND EXISTS (
             SELECT 1 FROM model_mappings AS alias
             WHERE alias.model_type = 'alias'
