@@ -573,10 +573,11 @@ class OpenAIChatDecoder:
         return "application/octet-stream", data_url
 
     def _parse_json_safely(self, json_str: str) -> Dict[str, Any]:
-        """Safely parse JSON string."""
+        """Parse tool arguments, falling back when they are not a JSON object."""
         try:
-            return json.loads(json_str) if json_str else {}
-        except json.JSONDecodeError:
+            value = json.loads(json_str) if json_str else {}
+            return value if isinstance(value, dict) else {}
+        except (json.JSONDecodeError, TypeError):
             return {}
 
 

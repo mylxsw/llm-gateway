@@ -425,6 +425,31 @@ class TestOpenAIResponsesToAnthropicMessages:
 
         assert result["system"] == "You are a helpful assistant."
 
+    @pytest.mark.parametrize(
+        "arguments",
+        [json.dumps('{}{"command":"brew install omp"}'), "{invalid", ["invalid"]],
+    )
+    def test_request_with_invalid_tool_arguments_uses_empty_input(self, arguments):
+        """Anthropic tool_use.input must be an object even for invalid history."""
+        result = openai_responses_to_anthropic_messages_request(
+            {
+                "model": "gpt-4o",
+                "input": [
+                    {
+                        "type": "function_call",
+                        "call_id": "call_invalid",
+                        "name": "run_shell_command",
+                        "arguments": arguments,
+                    }
+                ],
+                "max_output_tokens": 100,
+            }
+        )
+
+        tool_use = result["messages"][0]["content"][0]
+        assert tool_use["type"] == "tool_use"
+        assert tool_use["input"] == {}
+
     def test_simple_response(self):
         """Test simple response conversion."""
         result = openai_responses_to_anthropic_messages_response(
@@ -855,6 +880,38 @@ class TestEdgeCases:
 
         tool_uses = [c for c in result["content"] if c["type"] == "tool_use"]
         assert len(tool_uses) == 2
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [json.dumps('{}{"command":"brew install omp"}'), "{invalid", ["invalid"]],
+    )
+    def test_openai_chat_invalid_tool_arguments_uses_empty_input(self, arguments):
+        """A JSON string value must not leak into Anthropic tool_use.input."""
+        request = {
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "call_invalid",
+                            "type": "function",
+                            "function": {
+                                "name": "run_shell_command",
+                                "arguments": arguments,
+                            },
+                        }
+                    ],
+                }
+            ],
+            "max_tokens": 100,
+        }
+
+        result = openai_chat_to_anthropic_messages_request(request)
+
+        tool_use = result["messages"][0]["content"][0]
+        assert tool_use["type"] == "tool_use"
+        assert tool_use["input"] == {}
 
     def test_base64_image_conversion(self):
         """Test conversion of base64 encoded images."""

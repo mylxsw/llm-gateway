@@ -475,6 +475,40 @@ async def test_convert_request_openai_to_anthropic_preserves_tool_calls_and_user
     assert tool_use_blocks[0].get("id") == "call_1"
 
 
+def test_convert_request_openai_to_anthropic_sanitizes_non_object_tool_input():
+    """Malformed tool history must still produce Anthropic-compatible input."""
+    _, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="anthropic",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": "tool_invalid",
+                            "type": "function",
+                            "function": {
+                                "name": "run_shell_command",
+                                "arguments": json.dumps(
+                                    '{}{"command":"brew install can1357/tap/omp"}'
+                                ),
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+        target_model="MiniMax-M3",
+    )
+
+    tool_use = out_body["messages"][0]["content"][0]
+    assert tool_use["type"] == "tool_use"
+    assert tool_use["input"] == {}
+
+
 @pytest.mark.asyncio
 async def test_convert_request_anthropic_to_openai_preserves_tools():
     path, out_body = convert_request_for_supplier(
