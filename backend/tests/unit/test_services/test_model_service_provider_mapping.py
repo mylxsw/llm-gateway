@@ -5,6 +5,7 @@ ModelService provider mapping unit tests
 import pytest
 from app.domain.model import (
     ModelMappingCreate,
+    ModelMatchRequest,
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
     ModelProviderBulkUpgradeRequest,
@@ -58,6 +59,49 @@ async def test_create_provider_mapping_allows_duplicates(db_session):
     assert created_second.requested_model == "gpt-4o-mini"
     assert created_second.provider_id == provider.id
     assert created_second.provider_name == "p1"
+
+
+@pytest.mark.asyncio
+async def test_match_providers_resolves_alias_to_real_model(db_session):
+    model_repo = SQLAlchemyModelRepository(db_session)
+    provider_repo = SQLAlchemyProviderRepository(db_session)
+    service = ModelService(model_repo, provider_repo)
+
+    await service.create_mapping(
+        ModelMappingCreate(requested_model="match-real", model_type="chat")
+    )
+    await service.create_mapping(
+        ModelMappingCreate(
+            requested_model="match-alias",
+            model_type="alias",
+            alias_target_model="match-real",
+        )
+    )
+    provider = await provider_repo.create(
+        ProviderCreate(
+            name="match-provider",
+            base_url="https://example.com",
+            protocol="openai",
+            api_type="chat",
+        )
+    )
+    await service.create_provider_mapping(
+        ModelMappingProviderCreate(
+            requested_model="match-real",
+            provider_id=provider.id,
+            target_model_name="upstream-real",
+            input_price=0.0,
+            output_price=0.0,
+        )
+    )
+
+    matches = await service.match_providers(
+        "match-alias", ModelMatchRequest(input_tokens=10)
+    )
+
+    assert len(matches) == 1
+    assert matches[0].provider_name == "match-provider"
+    assert matches[0].target_model_name == "upstream-real"
 
 
 @pytest.mark.asyncio

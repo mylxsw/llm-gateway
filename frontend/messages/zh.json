@@ -394,6 +394,7 @@
         "costFirst": "成本优先"
       },
       "viewDetails": "查看详情",
+      "goToAliasTarget": "跳转到真实模型",
       "testModel": "测试模型"
     },
     "filters": {
@@ -409,6 +410,7 @@
       "transcription": "转写",
       "embedding": "向量",
       "images": "图像",
+      "alias": "别名",
       "roundRobin": "轮询",
       "costFirst": "成本优先",
       "priority": "优先级",
@@ -428,6 +430,12 @@
       "requestedModelImmutable": "模型名称为主键不可修改",
       "modelTypeLabel": "模型类型",
       "modelTypePlaceholder": "选择模型类型",
+      "aliasTargetLabel": "真实模型",
+      "aliasTargetPlaceholder": "选择对应的真实模型",
+      "aliasTargetRequired": "请选择真实模型",
+      "aliasTargetEmpty": "暂无可选的非别名模型。",
+      "aliasTargetLoading": "正在加载真实模型…",
+      "aliasTargetLoadError": "真实模型加载失败。",
       "pricingTitle": "价格（美元/每百万 tokens）",
       "inputPrice": "输入价格",
       "outputPrice": "输出价格",

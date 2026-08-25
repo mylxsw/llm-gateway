@@ -19,6 +19,7 @@ from app.domain.model import (
     ModelProviderBulkUpgradeRequest,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelAliasTarget,
 )
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
@@ -30,6 +31,7 @@ from app.common.costs import (
 from app.rules.context import RuleContext, TokenUsage
 from app.rules.engine import RuleEngine
 from app.services.retry_handler import RetryHandler
+from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.strategy import CostFirstStrategy, PriorityStrategy, RoundRobinStrategy, SelectionStrategy
 
@@ -83,7 +85,8 @@ class ModelService:
                 message=f"Model '{data.requested_model}' already exists",
                 code="duplicate_model",
             )
-        
+
+        data = await self._normalize_alias_create(data)
         mapping = await self.model_repo.create_mapping(data)
         return await self._to_mapping_response(mapping)
     
@@ -109,6 +112,9 @@ class ModelService:
         
         return await self._to_mapping_response(mapping, include_providers=True)
 
+    async def get_alias_targets(self) -> list[ModelAliasTarget]:
+        return await self.model_repo.get_alias_targets()
+
     async def match_providers(
         self,
         requested_model: str,
@@ -130,8 +136,12 @@ class ModelService:
                 code="model_disabled",
             )
 
+        routing_model, mapping = await resolve_alias_target(
+            self.model_repo, requested_model, mapping
+        )
+
         provider_mappings = await self.model_repo.get_provider_mappings(
-            requested_model=requested_model,
+            requested_model=routing_model,
             is_active=True,
         )
 
@@ -158,9 +168,9 @@ class ModelService:
             raise ServiceError(message="No available providers", code="no_available_provider")
 
         headers = self._normalize_headers(data.headers, data.api_key)
-        request_body = {"model": requested_model}
+        request_body = {"model": routing_model}
         context = RuleContext(
-            current_model=requested_model,
+            current_model=routing_model,
             headers=headers,
             request_body=request_body,
             token_usage=TokenUsage(input_tokens=data.input_tokens),
@@ -305,7 +315,8 @@ class ModelService:
                 message=f"Model '{requested_model}' not found",
                 code="model_not_found",
             )
-        
+
+        data = await self._normalize_alias_update(requested_model, existing, data)
         mapping = await self.model_repo.update_mapping(requested_model, data)
         return await self._to_mapping_response(mapping)  # type: ignore
     
@@ -325,8 +336,100 @@ class ModelService:
                 message=f"Model '{requested_model}' not found",
                 code="model_not_found",
             )
-        
+
+        aliases = await self.model_repo.get_aliases_for_target(requested_model)
+        if aliases:
+            alias_names = ", ".join(alias.requested_model for alias in aliases)
+            raise ConflictError(
+                message=f"Model '{requested_model}' is referenced by aliases: {alias_names}",
+                code="model_referenced_by_alias",
+            )
+
         await self.model_repo.delete_mapping(requested_model)
+
+    async def _validate_alias_target(
+        self, requested_model: str, alias_target_model: Optional[str]
+    ) -> None:
+        if not alias_target_model or alias_target_model == requested_model:
+            raise ValidationError(
+                message="Alias target must be an existing non-alias model",
+                code="invalid_alias_target",
+            )
+        target = await self.model_repo.get_mapping(alias_target_model)
+        if not target or target.model_type == "alias":
+            raise ValidationError(
+                message="Alias target must be an existing non-alias model",
+                code="invalid_alias_target",
+            )
+
+    async def _normalize_alias_create(self, data: ModelMappingCreate) -> ModelMappingCreate:
+        if data.model_type != "alias":
+            return data.model_copy(update={"alias_target_model": None})
+        await self._validate_alias_target(data.requested_model, data.alias_target_model)
+        return data.model_copy(
+            update={
+                "strategy": "round_robin",
+                "matching_rules": None,
+                "capabilities": None,
+                "billing_mode": None,
+                "input_price": None,
+                "output_price": None,
+                "per_request_price": None,
+                "per_image_price": None,
+                "tiered_pricing": None,
+                "cache_billing_enabled": False,
+                "cached_input_price": None,
+                "cached_output_price": None,
+                "cache_creation_input_price": None,
+            }
+        )
+
+    async def _normalize_alias_update(
+        self,
+        requested_model: str,
+        existing: ModelMapping,
+        data: ModelMappingUpdate,
+    ) -> ModelMappingUpdate:
+        next_type = data.model_type or existing.model_type
+        next_target = (
+            data.alias_target_model
+            if "alias_target_model" in data.model_fields_set
+            else existing.alias_target_model
+        )
+        if next_type != "alias":
+            return data.model_copy(update={"alias_target_model": None})
+
+        if existing.model_type != "alias":
+            aliases = await self.model_repo.get_aliases_for_target(requested_model)
+            if aliases:
+                alias_names = ", ".join(alias.requested_model for alias in aliases)
+                raise ConflictError(
+                    message=(
+                        f"Model '{requested_model}' is referenced by aliases: {alias_names}"
+                    ),
+                    code="model_referenced_by_alias",
+                )
+
+        await self._validate_alias_target(requested_model, next_target)
+        return data.model_copy(
+            update={
+                "model_type": "alias",
+                "alias_target_model": next_target,
+                "strategy": "round_robin",
+                "matching_rules": None,
+                "capabilities": None,
+                "billing_mode": None,
+                "input_price": None,
+                "output_price": None,
+                "per_request_price": None,
+                "per_image_price": None,
+                "tiered_pricing": None,
+                "cache_billing_enabled": False,
+                "cached_input_price": None,
+                "cached_output_price": None,
+                "cache_creation_input_price": None,
+            }
+        )
 
     @staticmethod
     def _normalize_headers(
@@ -377,6 +480,11 @@ class ModelService:
             raise NotFoundError(
                 message=f"Model '{data.requested_model}' not found",
                 code="model_not_found",
+            )
+        if model.model_type == "alias":
+            raise ValidationError(
+                message="Provider configuration is not allowed for alias models",
+                code="alias_provider_not_allowed",
             )
         
         # Check if provider exists
@@ -697,6 +805,7 @@ class ModelService:
                     requested_model=m.requested_model,
                     strategy=m.strategy,
                     model_type=m.model_type,
+                    alias_target_model=m.alias_target_model,
                     capabilities=m.capabilities,
                     is_active=m.is_active,
                     input_price=m.input_price,
@@ -725,17 +834,30 @@ class ModelService:
         skipped = 0
         errors = []
         
-        for item in data:
+        # Import concrete models first so aliases can validate their targets even
+        # when the export file listed aliases before their real models.
+        ordered_data = sorted(data, key=lambda item: item.model_type == "alias")
+        for item in ordered_data:
             # Check if model already exists
             existing = await self.model_repo.get_mapping(item.requested_model)
             if existing:
                 skipped += 1
                 continue
-            
+
             # Create model mapping
             try:
-                await self.model_repo.create_mapping(item)
-                
+                normalized = await self._normalize_alias_create(
+                    ModelMappingCreate(
+                        **item.model_dump(exclude={"providers"})
+                    )
+                )
+                await self.model_repo.create_mapping(normalized)
+
+                # Alias models never own provider mappings.
+                if normalized.model_type == "alias":
+                    success += 1
+                    continue
+
                 # Create provider mappings
                 for p_item in item.providers:
                     provider = await self.provider_repo.get_by_name(p_item.provider_name)
@@ -828,6 +950,7 @@ class ModelService:
             requested_model=mapping.requested_model,
             strategy=mapping.strategy,
             model_type=mapping.model_type,
+            alias_target_model=mapping.alias_target_model,
             capabilities=mapping.capabilities,
             is_active=mapping.is_active,
             input_price=mapping.input_price,

@@ -248,11 +248,17 @@ export function LogDetail({ log }: LogDetailProps) {
 
   const modelMapping = useMemo(() => {
     const requestedModel = log?.requested_model;
+    const resolvedModel = log?.resolved_model;
     const targetModel = log?.target_model;
-    if (!requestedModel && !targetModel) return "-";
-    if (requestedModel === targetModel) return requestedModel || "-";
-    return `${requestedModel || "-"} → ${targetModel || "-"}`;
-  }, [log?.requested_model, log?.target_model]);
+    const route = [requestedModel, resolvedModel, targetModel].reduce<string[]>(
+      (models, model) => {
+        if (model && models[models.length - 1] !== model) models.push(model);
+        return models;
+      },
+      [],
+    );
+    return route.length > 0 ? route.join(" → ") : "-";
+  }, [log?.requested_model, log?.resolved_model, log?.target_model]);
 
   const originalRequestUrl = useMemo(
     () =>

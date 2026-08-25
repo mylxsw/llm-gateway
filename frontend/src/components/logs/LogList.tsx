@@ -158,7 +158,16 @@ export function LogList({ logs, onView }: LogListProps) {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 font-medium">
                       {log.requested_model}
-                      {log.requested_model !== log.target_model && (
+                      {log.resolved_model && log.resolved_model !== log.requested_model && (
+                        <>
+                          <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
+                          <span className="text-muted-foreground">
+                            {log.resolved_model}
+                          </span>
+                        </>
+                      )}
+                      {log.target_model &&
+                        log.target_model !== (log.resolved_model || log.requested_model) && (
                         <>
                           <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
                           <span className="text-muted-foreground">
@@ -313,7 +322,16 @@ export function LogList({ logs, onView }: LogListProps) {
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
                         {attempt.requested_model}
-                        {attempt.requested_model !== attempt.target_model && (
+                        {attempt.resolved_model &&
+                          attempt.resolved_model !== attempt.requested_model && (
+                          <>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
+                            <span className="text-muted-foreground">{attempt.resolved_model}</span>
+                          </>
+                        )}
+                        {attempt.target_model &&
+                          attempt.target_model !==
+                            (attempt.resolved_model || attempt.requested_model) && (
                           <>
                             <ArrowRight className="h-3 w-3 text-muted-foreground" suppressHydrationWarning />
                             <span className="text-muted-foreground">{attempt.target_model}</span>

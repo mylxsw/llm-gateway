@@ -20,6 +20,7 @@ import {
 import { Pagination, ConfirmDialog, LoadingSpinner, ErrorState, EmptyState } from '@/components/common';
 import {
   useModels,
+  useAliasTargets,
   useModelStats,
   useCreateModel,
   useUpdateModel,
@@ -36,6 +37,7 @@ import {
   SelectionStrategy,
 } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { parseNumberParam, parseStringParam, setParam } from '@/lib/utils';
 
 /**
@@ -53,6 +55,7 @@ function ModelsContent() {
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
 
   const parseSortByParam = useCallback(
@@ -160,6 +163,12 @@ function ModelsContent() {
     is_active: filters.is_active === 'all' ? undefined : filters.is_active === 'active',
     sort_by: sortBy,
   });
+  const {
+    data: aliasTargets = [],
+    isLoading: aliasTargetsLoading,
+    isError: aliasTargetsError,
+    refetch: refetchAliasTargets,
+  } = useAliasTargets(formOpen);
   const { data: statsData } = useModelStats();
 
   // Mutations
@@ -217,8 +226,12 @@ function ModelsContent() {
         await createMutation.mutateAsync(createData);
         const requestedModel = createData.requested_model;
         if (requestedModel) {
+          const detailModel =
+            createData.model_type === 'alias' && createData.alias_target_model
+              ? createData.alias_target_model
+              : requestedModel;
           router.push(
-            `/models/detail?model=${encodeURIComponent(requestedModel)}&returnTo=${encodeURIComponent(returnTo)}`
+            `/models/detail?model=${encodeURIComponent(detailModel)}&returnTo=${encodeURIComponent(returnTo)}`
           );
         }
       }
@@ -294,7 +307,7 @@ function ModelsContent() {
         );
       }
       
-      refetch();
+      await queryClient.invalidateQueries({ queryKey: ['models'] });
     } catch (error) {
       console.error('Import failed:', error);
       if (error instanceof Error) {
@@ -395,6 +408,12 @@ function ModelsContent() {
         open={formOpen}
         onOpenChange={setFormOpen}
         model={editingModel}
+        aliasTargets={aliasTargets.filter(
+          (item) => item.requested_model !== editingModel?.requested_model
+        )}
+        aliasTargetsLoading={aliasTargetsLoading}
+        aliasTargetsError={aliasTargetsError}
+        onRetryAliasTargets={() => void refetchAliasTargets()}
         onSubmit={handleSubmit}
         loading={createMutation.isPending || updateMutation.isPending}
       />

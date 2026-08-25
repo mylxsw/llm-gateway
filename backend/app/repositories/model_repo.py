@@ -15,6 +15,7 @@ from app.domain.model import (
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelAliasTarget,
 )
 
 
@@ -56,6 +57,16 @@ class ModelRepository(ABC):
     @abstractmethod
     async def delete_mapping(self, requested_model: str) -> bool:
         """Delete Model Mapping (Cascades delete associated provider mappings)"""
+        pass
+
+    @abstractmethod
+    async def get_aliases_for_target(self, requested_model: str) -> List[ModelMapping]:
+        """Get aliases that reference a concrete model."""
+        pass
+
+    @abstractmethod
+    async def get_alias_targets(self) -> List[ModelAliasTarget]:
+        """Get all concrete models as lightweight alias targets."""
         pass
     
     # ============ Model-Provider Mapping ============

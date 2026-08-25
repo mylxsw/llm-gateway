@@ -7,9 +7,11 @@ Provides concrete database operation implementation for Model Mappings and Model
 from typing import Optional
 
 from sqlalchemy import func, select, delete, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.errors import ConflictError, ValidationError
 from app.common.time import ensure_utc, to_utc_naive, utc_now
 from app.db.models import (
     ModelMapping as ModelMappingORM,
@@ -24,6 +26,7 @@ from app.domain.model import (
     ModelMappingProviderCreate,
     ModelMappingProviderUpdate,
     ModelMappingProviderResponse,
+    ModelAliasTarget,
 )
 from app.repositories.model_repo import ModelRepository
 
@@ -43,6 +46,28 @@ class SQLAlchemyModelRepository(ModelRepository):
             session: Async database session
         """
         self.session = session
+
+    async def _commit_with_alias_integrity(self, operation: str) -> None:
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            message = str(exc.orig)
+            if operation == "delete" or "model_referenced_by_alias" in message:
+                raise ConflictError(
+                    message="Model is referenced by one or more aliases",
+                    code="model_referenced_by_alias",
+                ) from exc
+            if (
+                "invalid_alias_target" in message
+                or "fk_model_mappings_alias_target" in message
+                or "FOREIGN KEY constraint failed" in message
+            ):
+                raise ValidationError(
+                    message="Alias target must be an existing non-alias model",
+                    code="invalid_alias_target",
+                ) from exc
+            raise
     
     def _mapping_to_domain(self, entity: ModelMappingORM) -> ModelMapping:
         """Convert Model Mapping ORM entity to domain model"""
@@ -50,6 +75,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             requested_model=entity.requested_model,
             strategy=entity.strategy,
             model_type=entity.model_type or "chat",
+            alias_target_model=entity.alias_target_model,
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
@@ -116,6 +142,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             requested_model=data.requested_model,
             strategy=data.strategy,
             model_type=data.model_type,
+            alias_target_model=data.alias_target_model,
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
@@ -135,7 +162,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             cache_creation_input_price=data.cache_creation_input_price,
         )
         self.session.add(entity)
-        await self.session.commit()
+        await self._commit_with_alias_integrity("create")
         await self.session.refresh(entity)
         return self._mapping_to_domain(entity)
     
@@ -236,7 +263,7 @@ class SQLAlchemyModelRepository(ModelRepository):
         
         entity.updated_at = to_utc_naive(utc_now())
         
-        await self.session.commit()
+        await self._commit_with_alias_integrity("update")
         await self.session.refresh(entity)
         return self._mapping_to_domain(entity)
     
@@ -253,8 +280,41 @@ class SQLAlchemyModelRepository(ModelRepository):
             return False
         
         await self.session.delete(entity)
-        await self.session.commit()
+        await self._commit_with_alias_integrity("delete")
         return True
+
+    async def get_aliases_for_target(self, requested_model: str) -> list[ModelMapping]:
+        result = await self.session.execute(
+            select(ModelMappingORM).where(
+                ModelMappingORM.model_type == "alias",
+                ModelMappingORM.alias_target_model == requested_model,
+            )
+        )
+        return [self._mapping_to_domain(entity) for entity in result.scalars().all()]
+
+    async def get_alias_targets(self) -> list[ModelAliasTarget]:
+        result = await self.session.execute(
+            select(
+                ModelMappingORM.requested_model,
+                ModelMappingORM.model_type,
+                ModelMappingORM.is_active,
+            )
+            .where(
+                or_(
+                    ModelMappingORM.model_type.is_(None),
+                    ModelMappingORM.model_type != "alias",
+                )
+            )
+            .order_by(ModelMappingORM.requested_model.asc())
+        )
+        return [
+            ModelAliasTarget(
+                requested_model=row.requested_model,
+                model_type=row.model_type or "chat",
+                is_active=row.is_active,
+            )
+            for row in result.all()
+        ]
     
     # ============ Model-Provider Mapping Operations ============
     

@@ -111,6 +111,7 @@ export function ModelFilters({ filters, onFilterChange }: ModelFiltersProps) {
                 <SelectItem value="transcription">{t('filters.transcription')}</SelectItem>
                 <SelectItem value="embedding">{t('filters.embedding')}</SelectItem>
                 <SelectItem value="images">{t('filters.images')}</SelectItem>
+                <SelectItem value="alias">{t('filters.alias')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

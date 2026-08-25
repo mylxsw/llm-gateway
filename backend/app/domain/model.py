@@ -13,7 +13,7 @@ from typing_extensions import Literal
 
 BillingMode = Literal["token_flat", "token_tiered", "per_request", "per_image", "inherit_model_default"]
 SelectionStrategyType = Literal["round_robin", "cost_first", "priority"]
-ModelType = Literal["chat", "speech", "transcription", "embedding", "images"]
+ModelType = Literal["chat", "speech", "transcription", "embedding", "images", "alias"]
 
 
 class TokenTierPrice(BaseModel):
@@ -44,6 +44,9 @@ class ModelMappingBase(BaseModel):
     strategy: SelectionStrategyType = Field("round_robin", description="Selection Strategy")
     # Model Type: chat / speech / transcription / embedding / images
     model_type: ModelType = Field("chat", description="Model Type")
+    alias_target_model: Optional[str] = Field(
+        None, min_length=1, max_length=100, description="Real model used by an alias"
+    )
     # Model-level matching rules (JSON format)
     matching_rules: Optional[dict[str, Any]] = Field(
         None, description="Model Level Matching Rules"
@@ -99,6 +102,7 @@ class ModelMappingUpdate(BaseModel):
 
     strategy: Optional[SelectionStrategyType] = None
     model_type: Optional[ModelType] = None
+    alias_target_model: Optional[str] = Field(None, min_length=1, max_length=100)
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
@@ -146,6 +150,14 @@ class ModelMappingResponse(ModelMapping):
     providers: Optional[list["ModelMappingProviderResponse"]] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class ModelAliasTarget(BaseModel):
+    """Lightweight concrete model option for alias selection."""
+
+    requested_model: str
+    model_type: ModelType
+    is_active: bool
 
 
 class ModelMatchRequest(BaseModel):

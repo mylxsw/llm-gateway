@@ -25,6 +25,8 @@ class RequestLogBase(BaseModel):
     user_id: Optional[str] = Field(None, description="User ID")
     # Requested Model Name
     requested_model: Optional[str] = Field(None, description="Requested Model Name")
+    # Model name after resolving an alias, before provider mapping
+    resolved_model: Optional[str] = Field(None, description="Resolved Model Name")
     # Target Model Name
     target_model: Optional[str] = Field(None, description="Target Model Name")
     # Provider ID
@@ -125,6 +127,7 @@ class RequestLogSummary(BaseModel):
     api_key_name: Optional[str] = Field(None, description="API Key Name")
     user_id: Optional[str] = Field(None, description="User ID")
     requested_model: Optional[str] = Field(None, description="Requested Model Name")
+    resolved_model: Optional[str] = Field(None, description="Resolved Model Name")
     target_model: Optional[str] = Field(None, description="Target Model Name")
     provider_id: Optional[int] = Field(None, description="Provider ID")
     provider_name: Optional[str] = Field(None, description="Provider Name")

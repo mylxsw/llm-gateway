@@ -104,3 +104,49 @@ async def test_model_import_missing_provider(model_service, model_repo, provider
     
     assert model_repo.create_mapping.call_count == 1
     assert model_repo.add_provider_mapping.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_model_import_validates_and_normalizes_aliases(
+    model_service, model_repo, provider_repo
+):
+    alias_export = ModelExport(
+        requested_model="latest-model",
+        model_type="alias",
+        alias_target_model="real-model",
+        strategy="cost_first",
+        matching_rules={"headers": {"x-tenant": "legacy"}},
+        providers=[
+            ModelProviderExport(
+                provider_name="p1",
+                target_model_name="must-not-be-imported",
+            )
+        ],
+    )
+    real_export = ModelExport(
+        requested_model="real-model",
+        model_type="chat",
+        providers=[],
+    )
+    stored = {}
+
+    async def get_mapping(name):
+        return stored.get(name)
+
+    async def create_mapping(data):
+        stored[data.requested_model] = data
+        return data
+
+    model_repo.get_mapping.side_effect = get_mapping
+    model_repo.create_mapping.side_effect = create_mapping
+    provider_repo.get_by_name.return_value = MagicMock(id=1, name="p1")
+
+    result = await model_service.import_data([alias_export, real_export])
+
+    assert result == {"success": 2, "skipped": 0, "errors": []}
+    assert list(stored) == ["real-model", "latest-model"]
+    imported_alias = stored["latest-model"]
+    assert imported_alias.strategy == "round_robin"
+    assert imported_alias.matching_rules is None
+    assert imported_alias.alias_target_model == "real-model"
+    model_repo.add_provider_mapping.assert_not_awaited()

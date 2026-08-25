@@ -41,6 +41,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.active_requests import active_requests
 from app.services.protocol_hooks import OPENAI_IMAGE_PATHS, ProtocolConversionHooks
@@ -385,7 +386,7 @@ class ProxyService:
     @staticmethod
     def _sanitize_request_body_for_log(body: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(body, dict) or "_files" not in body:
-            return body
+            return copy.deepcopy(body)
 
         safe_files = []
         for item in body.get("_files", []):
@@ -400,7 +401,7 @@ class ProxyService:
                     "size": len(data) if isinstance(data, (bytes, bytearray)) else None,
                 }
             )
-        sanitized = dict(body)
+        sanitized = copy.deepcopy(body)
         sanitized["_files"] = safe_files
         return sanitized
 
@@ -523,6 +524,7 @@ class ProxyService:
         request_protocol: str,
         headers: dict[str, str],
         body: dict[str, Any],
+        trace_id: Optional[str] = None,
     ) -> tuple[
         ModelMapping,
         list[CandidateProvider],
@@ -538,6 +540,7 @@ class ProxyService:
         """
         request_protocol = (request_protocol or "openai").lower()
         async with self._repos() as (model_repo, provider_repo, _log_repo):
+            assert model_repo is not None
             model_mapping = await model_repo.get_mapping(requested_model)
             if not model_mapping:
                 raise NotFoundError(
@@ -551,8 +554,20 @@ class ProxyService:
                     code="model_disabled",
                 )
 
+            routing_model, model_mapping = await resolve_alias_target(
+                model_repo, requested_model, model_mapping
+            )
+            if routing_model != requested_model:
+                body["model"] = routing_model
+                logger.info(
+                    "Model alias resolved: alias=%s target=%s trace_id=%s",
+                    requested_model,
+                    routing_model,
+                    trace_id or "",
+                )
+
             provider_mappings = await model_repo.get_provider_mappings(
-                requested_model=requested_model,
+                requested_model=routing_model,
                 is_active=True,
             )
 
@@ -591,10 +606,10 @@ class ProxyService:
         }
 
         token_counter = get_token_counter(request_protocol)
-        input_tokens = token_counter.count_request(body, requested_model)
+        input_tokens = token_counter.count_request(body, routing_model)
 
         context = RuleContext(
-            current_model=requested_model,
+            current_model=routing_model,
             headers=headers,
             request_body=body,
             token_usage=TokenUsage(input_tokens=input_tokens),
@@ -697,6 +712,7 @@ class ProxyService:
                 request_protocol=request_protocol,
                 headers=headers,
                 body=body,
+                trace_id=trace_id,
             )
         except Exception as exc:
             await self._finalize_initial_log_error(
@@ -808,6 +824,7 @@ class ProxyService:
                 api_key_name=api_key_name,
                 user_id=user_id,
                 requested_model=requested_model,
+                resolved_model=model_mapping.requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
                 provider_name=attempt.provider.provider_name,
@@ -1154,6 +1171,7 @@ class ProxyService:
             api_key_name=api_key_name,
             user_id=user_id,
             requested_model=requested_model,
+            resolved_model=model_mapping.requested_model,
             target_model=result.final_provider.target_model
             if result.final_provider
             else None,
@@ -1295,6 +1313,7 @@ class ProxyService:
                 request_protocol=request_protocol,
                 headers=headers,
                 body=body,
+                trace_id=trace_id,
             )
         except Exception as exc:
             await self._finalize_initial_log_error(
@@ -1646,6 +1665,7 @@ class ProxyService:
                 api_key_name=api_key_name,
                 user_id=user_id,
                 requested_model=requested_model,
+                resolved_model=model_mapping.requested_model,
                 target_model=attempt.provider.target_model,
                 provider_id=attempt.provider.provider_id,
                 provider_name=attempt.provider.provider_name,
@@ -1904,6 +1924,7 @@ class ProxyService:
                     api_key_name=api_key_name,
                     user_id=user_id,
                     requested_model=requested_model,
+                    resolved_model=model_mapping.requested_model,
                     target_model=final_provider.target_model
                     if final_provider
                     else None,

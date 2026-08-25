@@ -6,6 +6,7 @@
 import { get, post, put, del } from './client';
 import {
   ModelMapping,
+  ModelAliasTarget,
   ModelMappingCreate,
   ModelMappingUpdate,
   ModelMappingProvider,
@@ -41,6 +42,10 @@ export async function getModels(
   params?: ModelListParams
 ): Promise<PaginatedResponse<ModelMapping>> {
   return get<PaginatedResponse<ModelMapping>>(MODELS_URL, params as Record<string, unknown>);
+}
+
+export async function getAliasTargets(): Promise<ModelAliasTarget[]> {
+  return get<ModelAliasTarget[]>(`${MODELS_URL}/alias-targets`);
 }
 
 /**
