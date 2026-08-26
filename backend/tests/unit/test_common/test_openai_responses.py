@@ -46,7 +46,19 @@ def test_responses_request_to_chat_completions_content_blocks():
     assert chat["messages"][0]["content"] == "hi"
 
 
-def test_chat_completions_request_to_responses_system_and_user():
+def test_responses_request_developer_role_normalized_to_system():
+    chat = responses_request_to_chat_completions(
+        {
+            "model": "gpt-4o-mini",
+            "input": [
+                {"role": "developer", "content": "You are a coding assistant"},
+                {"role": "user", "content": "hello"},
+            ],
+        }
+    )
+    assert chat["messages"][0]["role"] == "system"
+    assert chat["messages"][0]["content"] == "You are a coding assistant"
+    assert chat["messages"][1]["role"] == "user"
     responses = chat_completions_request_to_responses(
         {
             "model": "gpt-4o-mini",
@@ -185,13 +197,33 @@ async def test_chat_completions_sse_to_responses_sse_text_delta():
     first = json.loads(payloads[0])
     assert first["type"] == "response.created"
 
-    delta1 = json.loads(payloads[1])
-    delta2 = json.loads(payloads[2])
+    item_added = json.loads(payloads[1])
+    assert item_added["type"] == "response.output_item.added"
+    assert item_added["item"]["type"] == "message"
+
+    content_part_added = json.loads(payloads[2])
+    assert content_part_added["type"] == "response.content_part.added"
+    assert content_part_added["part"]["type"] == "output_text"
+
+    delta1 = json.loads(payloads[3])
+    delta2 = json.loads(payloads[4])
     assert delta1["type"] == "response.output_text.delta"
     assert delta2["type"] == "response.output_text.delta"
     assert delta1["delta"] + delta2["delta"] == "Hello"
 
-    completed = json.loads(payloads[3])
+    text_done = json.loads(payloads[5])
+    assert text_done["type"] == "response.output_text.done"
+    assert text_done["text"] == "Hello"
+
+    content_part_done = json.loads(payloads[6])
+    assert content_part_done["type"] == "response.content_part.done"
+    assert content_part_done["part"]["text"] == "Hello"
+
+    output_item_done = json.loads(payloads[7])
+    assert output_item_done["type"] == "response.output_item.done"
+    assert output_item_done["item"]["content"][0]["text"] == "Hello"
+
+    completed = json.loads(payloads[8])
     assert completed["type"] == "response.completed"
     assert completed["response"]["output"][0]["content"][0]["text"] == "Hello"
 
