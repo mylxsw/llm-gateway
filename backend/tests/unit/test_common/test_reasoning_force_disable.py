@@ -102,9 +102,26 @@ def test_force_disable_gemini_3_flash_uses_minimal_level():
     }
 
 
+@pytest.mark.parametrize("model", ["gemini-1.5-flash", "gemini-2.0-flash"])
+def test_force_disable_non_thinking_legacy_gemini_removes_stale_control(model):
+    result = force_disable_reasoning_for_supplier(
+        {
+            "generationConfig": {
+                "temperature": 0.5,
+                "thinkingConfig": {"thinkingBudget": 1024},
+            }
+        },
+        supplier_protocol="gemini",
+        target_model=model,
+    )
+
+    assert result["generationConfig"] == {"temperature": 0.5}
+
+
 @pytest.mark.parametrize(
     "model",
     [
+        "gemini-2.0-flash-thinking-exp-01-21",
         "gemini-2.5-pro",
         "gemini-3-pro-preview",
         "gemini-3.7-flash",

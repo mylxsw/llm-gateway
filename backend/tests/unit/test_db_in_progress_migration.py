@@ -75,6 +75,42 @@ def test_startup_adds_alias_target_model_to_existing_model_table():
     assert "alias_target_model" in columns
 
 
+def test_startup_adds_disable_thinking_with_false_default_to_existing_models():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE model_mappings ("
+                "requested_model VARCHAR(100) PRIMARY KEY, "
+                "model_type VARCHAR(50)"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO model_mappings(requested_model, model_type) "
+                "VALUES ('legacy-model', 'chat')"
+            )
+        )
+
+        _run_migrations(connection)
+
+        columns = {
+            column["name"]: column
+            for column in inspect(connection).get_columns("model_mappings")
+        }
+        value = connection.execute(
+            text(
+                "SELECT disable_thinking FROM model_mappings "
+                "WHERE requested_model = 'legacy-model'"
+            )
+        ).scalar_one()
+
+    engine.dispose()
+    assert columns["disable_thinking"]["nullable"] is False
+    assert value in (False, 0)
+
+
 def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

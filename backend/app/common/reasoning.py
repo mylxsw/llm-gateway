@@ -243,8 +243,11 @@ def _force_disable_gemini_thinking(
     else:
         generation_config = copy.deepcopy(generation_config)
 
-    # Models before the 2.5 thinking family do not need an explicit control.
-    if model.startswith(("gemini-1.", "gemini-2.0")):
+    # Non-thinking models before the 2.5 family do not need an explicit
+    # control. Do not silently treat the old 2.0 Thinking experimental models
+    # as disabled: they have no documented off control, so they must fail
+    # closed like every other unsupported thinking model.
+    if model.startswith(("gemini-1.", "gemini-2.0")) and "thinking" not in model:
         generation_config.pop("thinkingConfig", None)
     elif model.startswith("gemini-2.5-flash"):
         generation_config["thinkingConfig"] = {
