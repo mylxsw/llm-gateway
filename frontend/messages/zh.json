@@ -348,7 +348,8 @@
         "label": "高级"
       },
       "status": {
-        "label": "启用状态"
+        "label": "启用状态",
+        "help": "控制该供应商是否可以接收请求。"
       },
       "actions": {
         "cancel": "取消",
@@ -455,6 +456,7 @@
       "strategyHint": "选择网关如何为该模型选择供应商",
       "advancedLabel": "高级",
       "enabledStatusLabel": "启用状态",
+      "enabledStatusHelp": "控制该模型是否可以接收请求。",
       "disableThinkingLabel": "关闭思考模式",
       "disableThinkingHelp": "开启后，网关会覆盖请求参数，并按实际供应商协议强制关闭思考模式。"
     },
