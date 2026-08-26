@@ -348,7 +348,8 @@
         "label": "Advanced"
       },
       "status": {
-        "label": "Enabled Status"
+        "label": "Enabled Status",
+        "help": "Controls whether this provider can receive requests."
       },
       "actions": {
         "cancel": "Cancel",
@@ -455,6 +456,7 @@
       "strategyHint": "Choose how the gateway selects providers for this model",
       "advancedLabel": "Advanced",
       "enabledStatusLabel": "Enabled Status",
+      "enabledStatusHelp": "Controls whether this model can receive requests.",
       "disableThinkingLabel": "Disable Thinking",
       "disableThinkingHelp": "When enabled, the gateway overrides request parameters and disables thinking using the selected provider protocol."
     },

@@ -8,7 +8,6 @@
 import React, { useEffect, useState } from 'react';
 import { useForm, Controller, useFieldArray, useWatch } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
-import { ChevronDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card } from '@/components/ui/card';
+import { AdvancedSection } from '@/components/ui/advanced-section';
 import {
   Select,
   SelectContent,
@@ -627,54 +627,46 @@ export function ModelForm({
           </div>}
 
           {!isAlias && (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setAdvancedOpen((value) => !value)}
-                className="flex w-full items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium hover:bg-muted"
-                aria-expanded={advancedOpen}
-              >
-                <span>{t('form.advancedLabel')}</span>
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 transition-transform',
-                    advancedOpen && 'rotate-180'
-                  )}
-                  suppressHydrationWarning
-                />
-              </button>
-
-              {advancedOpen && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="is_active">{t('form.enabledStatusLabel')}</Label>
-                    <Switch
-                      id="is_active"
-                      checked={isActive}
-                      onCheckedChange={(checked) => setValue('is_active', checked)}
-                    />
-                  </div>
-
-                  <div className="space-y-2 rounded-md border border-border p-3">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="disable_thinking">
-                        {t('form.disableThinkingLabel')}
-                      </Label>
-                      <Switch
-                        id="disable_thinking"
-                        checked={disableThinking}
-                        onCheckedChange={(checked) =>
-                          setValue('disable_thinking', checked)
-                        }
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {t('form.disableThinkingHelp')}
-                    </p>
-                  </div>
+            <AdvancedSection
+              label={t('form.advancedLabel')}
+              open={advancedOpen}
+              onOpenChange={setAdvancedOpen}
+              contentClassName="divide-y divide-border p-0"
+            >
+              <div className="flex items-start justify-between gap-6 px-4 py-4">
+                <div className="space-y-1">
+                  <Label htmlFor="is_active">{t('form.enabledStatusLabel')}</Label>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t('form.enabledStatusHelp')}
+                  </p>
                 </div>
-              )}
-            </div>
+                <Switch
+                  id="is_active"
+                  className="mt-0.5"
+                  checked={isActive}
+                  onCheckedChange={(checked) => setValue('is_active', checked)}
+                />
+              </div>
+
+              <div className="flex items-start justify-between gap-6 px-4 py-4">
+                <div className="space-y-1">
+                  <Label htmlFor="disable_thinking">
+                    {t('form.disableThinkingLabel')}
+                  </Label>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t('form.disableThinkingHelp')}
+                  </p>
+                </div>
+                <Switch
+                  id="disable_thinking"
+                  className="mt-0.5"
+                  checked={disableThinking}
+                  onCheckedChange={(checked) =>
+                    setValue('disable_thinking', checked)
+                  }
+                />
+              </div>
+            </AdvancedSection>
           )}
 
 

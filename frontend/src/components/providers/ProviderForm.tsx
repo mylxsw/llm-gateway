@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, CircleHelp, Plus, Trash2 } from 'lucide-react';
+import { CircleHelp, Plus, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { AdvancedSection } from '@/components/ui/advanced-section';
 import {
   Tooltip,
   TooltipContent,
@@ -35,7 +36,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Provider, ProviderCreate, ProviderUpdate, ProtocolType } from '@/types';
-import { isValidUrl, isNotEmpty, cn } from '@/lib/utils';
+import { isValidUrl, isNotEmpty } from '@/lib/utils';
 import {
   getProviderProtocolConfig,
   useProviderProtocolConfigs,
@@ -480,27 +481,14 @@ export function ProviderForm({
           </div>
 
           {/* Advanced (collapsed by default) */}
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => setAdvancedOpen((v) => !v)}
-              className="flex w-full items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium hover:bg-muted"
-              aria-expanded={advancedOpen}
-            >
-              <span>{t('form.advanced.label')}</span>
-              <ChevronDown
-                className={cn(
-                  'h-4 w-4 transition-transform',
-                  advancedOpen && 'rotate-180'
-                )}
-                suppressHydrationWarning
-              />
-            </button>
-
-            {advancedOpen && (
-              <div className="space-y-4">
-                {/* Extra Headers */}
-                <div className="space-y-2">
+          <AdvancedSection
+            label={t('form.advanced.label')}
+            open={advancedOpen}
+            onOpenChange={setAdvancedOpen}
+            contentClassName="space-y-4"
+          >
+            {/* Extra Headers */}
+            <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>{t('form.extraHeaders.label')}</Label>
                     <Button
@@ -681,18 +669,22 @@ export function ProviderForm({
                   )}
                 </div>
 
-                {/* Status */}
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="is_active">{t('form.status.label')}</Label>
-                  <Switch
-                    id="is_active"
-                    checked={isActive}
-                    onCheckedChange={(checked) => setValue('is_active', checked)}
-                  />
-                </div>
+            {/* Status */}
+            <div className="flex items-start justify-between gap-6 border-t border-border pt-4">
+              <div className="space-y-1">
+                <Label htmlFor="is_active">{t('form.status.label')}</Label>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {t('form.status.help')}
+                </p>
               </div>
-            )}
-          </div>
+              <Switch
+                id="is_active"
+                className="mt-0.5"
+                checked={isActive}
+                onCheckedChange={(checked) => setValue('is_active', checked)}
+              />
+            </div>
+          </AdvancedSection>
         </form>
 
         <DialogFooter>
