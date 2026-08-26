@@ -176,6 +176,11 @@ def _coerce_input_to_messages(input_value: Any) -> list[dict[str, Any]]:
                 else:
                     content = ""
 
+                # Normalize "developer" role to "system" for providers that
+                # don't support the developer role (e.g. DeepSeek).
+                if role == "developer":
+                    role = "system"
+
                 out_messages.append({"role": role, "content": content})
             return out_messages
 
@@ -498,6 +503,33 @@ async def chat_completions_sse_to_responses_sse(
         "utf-8"
     )
 
+    # Emit response.output_item.added so SDK state machines can attach deltas
+    item_added = {
+        "type": "response.output_item.added",
+        "output_index": 0,
+        "item": {
+            "id": msg_id,
+            "type": "message",
+            "role": "assistant",
+            "content": [],
+        },
+    }
+    yield f"event: response.output_item.added\ndata: {json.dumps(item_added, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
+
+    # Emit response.content_part.added
+    content_part_added = {
+        "type": "response.content_part.added",
+        "output_index": 0,
+        "content_index": 0,
+        "item_id": msg_id,
+        "part": {"type": "output_text", "text": ""},
+    }
+    yield f"event: response.content_part.added\ndata: {json.dumps(content_part_added, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
+
     text_parts: list[str] = []
 
     saw_done = False
@@ -559,6 +591,45 @@ async def chat_completions_sse_to_responses_sse(
             break
 
     final_text = "".join(text_parts)
+
+    # Emit response.output_text.done
+    text_done = {
+        "type": "response.output_text.done",
+        "output_index": 0,
+        "content_index": 0,
+        "item_id": msg_id,
+        "text": final_text,
+    }
+    yield f"event: response.output_text.done\ndata: {json.dumps(text_done, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
+
+    # Emit response.content_part.done
+    content_part_done = {
+        "type": "response.content_part.done",
+        "output_index": 0,
+        "content_index": 0,
+        "item_id": msg_id,
+        "part": {"type": "output_text", "text": final_text},
+    }
+    yield f"event: response.content_part.done\ndata: {json.dumps(content_part_done, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
+
+    # Emit response.output_item.done
+    output_item_done = {
+        "type": "response.output_item.done",
+        "output_index": 0,
+        "item": {
+            "id": msg_id,
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": final_text}],
+        },
+    }
+    yield f"event: response.output_item.done\ndata: {json.dumps(output_item_done, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
 
     # Calculate usage if not provided by upstream
 
