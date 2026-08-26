@@ -5,6 +5,9 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from app.common.errors import ServiceError
+from app.common.provider_protocols import normalize_frontend_protocol
+
 OPENAI_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
 ANTHROPIC_THINKING_TYPES = {"enabled", "disabled", "adaptive"}
 ANTHROPIC_EFFORTS = {"low", "medium", "high", "max"}
@@ -23,6 +26,13 @@ _ANTHROPIC_TO_OPENAI_EFFORT = {
     "high": "high",
     "max": "xhigh",
 }
+
+_GEMINI_MINIMAL_THINKING_PREFIXES = (
+    "gemini-3-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+)
 
 
 def _clean_openai_effort(value: Any) -> str | None:
@@ -203,4 +213,98 @@ def normalize_reasoning_for_dashscope(
     if thinking_enabled is not None:
         out["enable_thinking"] = thinking_enabled
 
+    return out
+
+
+def _remove_cross_protocol_reasoning_fields(out: dict[str, Any]) -> None:
+    """Remove controls that belong to a different upstream protocol."""
+    out.pop("reasoning", None)
+    out.pop("thinking", None)
+    out.pop("enable_thinking", None)
+    output_config = out.get("output_config")
+    if isinstance(output_config, dict):
+        output_config = copy.deepcopy(output_config)
+        output_config.pop("effort", None)
+        if output_config:
+            out["output_config"] = output_config
+        else:
+            out.pop("output_config", None)
+    else:
+        out.pop("output_config", None)
+
+
+def _force_disable_gemini_thinking(
+    out: dict[str, Any], target_model: str
+) -> dict[str, Any]:
+    model = (target_model or "").lower().removeprefix("models/")
+    generation_config = out.get("generationConfig")
+    if not isinstance(generation_config, dict):
+        generation_config = {}
+    else:
+        generation_config = copy.deepcopy(generation_config)
+
+    # Non-thinking models before the 2.5 family do not need an explicit
+    # control. Do not silently treat the old 2.0 Thinking experimental models
+    # as disabled: they have no documented off control, so they must fail
+    # closed like every other unsupported thinking model.
+    if model.startswith(("gemini-1.", "gemini-2.0")) and "thinking" not in model:
+        generation_config.pop("thinkingConfig", None)
+    elif model.startswith("gemini-2.5-flash"):
+        generation_config["thinkingConfig"] = {
+            "includeThoughts": False,
+            "thinkingBudget": 0,
+        }
+    elif model.startswith(_GEMINI_MINIMAL_THINKING_PREFIXES):
+        generation_config["thinkingConfig"] = {
+            "includeThoughts": False,
+            "thinkingLevel": "minimal",
+        }
+    else:
+        raise ServiceError(
+            message=(
+                f"Provider model '{target_model}' does not support disabling "
+                "Gemini thinking"
+            ),
+            code="thinking_disable_unsupported",
+        )
+
+    if generation_config:
+        out["generationConfig"] = generation_config
+    else:
+        out.pop("generationConfig", None)
+    return out
+
+
+def force_disable_reasoning_for_supplier(
+    body: dict[str, Any],
+    *,
+    supplier_protocol: str,
+    target_model: str,
+) -> dict[str, Any]:
+    """Apply the supplier's strongest supported no-thinking request control.
+
+    This is intentionally a final override. Callers must invoke it after normal
+    protocol conversion, provider defaults, and request-conversion hooks.
+    """
+    out = copy.deepcopy(body)
+    protocol = normalize_frontend_protocol(supplier_protocol)
+
+    if protocol == "gemini":
+        _remove_cross_protocol_reasoning_fields(out)
+        return _force_disable_gemini_thinking(out, target_model)
+
+    _remove_cross_protocol_reasoning_fields(out)
+    if protocol in {"deepseek", "zhipu", "moonshot", "ark"}:
+        out["thinking"] = {"type": "disabled"}
+    elif protocol == "aliyun":
+        out["enable_thinking"] = False
+    elif protocol == "anthropic":
+        out["thinking"] = {"type": "disabled"}
+    elif protocol in {"openai", "openai_responses"}:
+        out["reasoning"] = {"effort": "none"}
+    else:
+        raise ServiceError(
+            message=f"Provider protocol '{supplier_protocol}' cannot disable thinking",
+            code="thinking_disable_unsupported",
+        )
     return out

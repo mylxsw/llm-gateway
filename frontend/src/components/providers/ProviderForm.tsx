@@ -130,6 +130,13 @@ export function ProviderForm({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const userHasEditedBaseUrl = useRef(false);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setAdvancedOpen(false);
+    }
+    onOpenChange(nextOpen);
+  };
+
   // Add header
   const addHeader = () => {
     setExtraHeaders([...extraHeaders, { key: '', value: '' }]);
@@ -343,11 +350,12 @@ export function ProviderForm({
       submitData.proxy_url = data.proxy_url;
     }
     
+    setAdvancedOpen(false);
     onSubmit(submitData);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col gap-4">
         <DialogHeader>
           <DialogTitle>{isEdit ? t('form.title.edit') : t('form.title.new')}</DialogTitle>
@@ -672,18 +680,18 @@ export function ProviderForm({
                     </div>
                   )}
                 </div>
+
+                {/* Status */}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="is_active">{t('form.status.label')}</Label>
+                  <Switch
+                    id="is_active"
+                    checked={isActive}
+                    onCheckedChange={(checked) => setValue('is_active', checked)}
+                  />
+                </div>
               </div>
             )}
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="is_active">{t('form.status.label')}</Label>
-            <Switch
-              id="is_active"
-              checked={isActive}
-              onCheckedChange={(checked) => setValue('is_active', checked)}
-            />
           </div>
         </form>
 
@@ -691,7 +699,7 @@ export function ProviderForm({
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={loading}
           >
             {t('form.actions.cancel')}

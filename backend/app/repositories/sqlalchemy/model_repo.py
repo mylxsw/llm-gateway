@@ -6,7 +6,7 @@ Provides concrete database operation implementation for Model Mappings and Model
 
 from typing import Optional
 
-from sqlalchemy import func, select, delete, or_
+from sqlalchemy import and_, exists, func, select, delete, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -79,6 +79,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=entity.matching_rules,
             capabilities=entity.capabilities,
             is_active=entity.is_active,
+            disable_thinking=entity.disable_thinking,
             input_price=float(entity.input_price) if entity.input_price is not None else None,
             output_price=float(entity.output_price) if entity.output_price is not None else None,
             billing_mode=entity.billing_mode,
@@ -146,6 +147,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             matching_rules=data.matching_rules,
             capabilities=data.capabilities,
             is_active=data.is_active,
+            disable_thinking=data.disable_thinking,
             input_price=data.input_price,
             output_price=data.output_price,
             billing_mode=data.billing_mode,
@@ -194,7 +196,29 @@ class SQLAlchemyModelRepository(ModelRepository):
         conditions = []
         
         if is_active is not None:
-            conditions.append(ModelMappingORM.is_active == is_active)
+            target_mapping = ModelMappingORM.__table__.alias("alias_active_target")
+            alias_target_has_status = exists(
+                select(1).where(
+                    target_mapping.c.requested_model
+                    == ModelMappingORM.alias_target_model,
+                    target_mapping.c.is_active == is_active,
+                )
+            )
+            conditions.append(
+                or_(
+                    and_(
+                        or_(
+                            ModelMappingORM.model_type.is_(None),
+                            ModelMappingORM.model_type != "alias",
+                        ),
+                        ModelMappingORM.is_active == is_active,
+                    ),
+                    and_(
+                        ModelMappingORM.model_type == "alias",
+                        alias_target_has_status,
+                    ),
+                )
+            )
             
         if requested_model:
             conditions.append(ModelMappingORM.requested_model.ilike(f"%{requested_model}%"))

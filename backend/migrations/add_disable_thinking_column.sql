@@ -1,0 +1,2 @@
+ALTER TABLE model_mappings
+ADD COLUMN disable_thinking BOOLEAN NOT NULL DEFAULT FALSE;

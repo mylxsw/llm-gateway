@@ -24,6 +24,7 @@ from app.common.protocol_conversion import (
     normalize_protocol,
 )
 from app.common.provider_protocols import resolve_implementation_protocol
+from app.common.reasoning import force_disable_reasoning_for_supplier
 from app.common.proxy import build_proxy_config
 from app.common.sanitizer import sanitize_headers
 from app.common.stream_usage import StreamUsageAccumulator
@@ -548,15 +549,14 @@ class ProxyService:
                     code="model_not_found",
                 )
 
-            if not model_mapping.is_active:
-                raise ServiceError(
-                    message=f"Model '{requested_model}' is disabled",
-                    code="model_disabled",
-                )
-
             routing_model, model_mapping = await resolve_alias_target(
                 model_repo, requested_model, model_mapping
             )
+            if not model_mapping.is_active:
+                raise ServiceError(
+                    message=f"Model '{routing_model}' is disabled",
+                    code="model_disabled",
+                )
             if routing_model != requested_model:
                 body["model"] = routing_model
                 logger.info(
@@ -928,6 +928,12 @@ class ProxyService:
                     )
                     if hooked_image_supplier_body is not None:
                         supplier_body = hooked_image_supplier_body
+                if model_mapping.disable_thinking:
+                    supplier_body = force_disable_reasoning_for_supplier(
+                        supplier_body,
+                        supplier_protocol=candidate.protocol,
+                        target_model=candidate.target_model,
+                    )
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
@@ -957,7 +963,12 @@ class ProxyService:
                     response_timeout_seconds=candidate.response_timeout_seconds,
                 )
             except Exception as e:
-                error_msg = str(e)
+                error_msg = (
+                    f"{e.code}: {e.message}"
+                    if isinstance(e, ServiceError)
+                    and e.code == "thinking_disable_unsupported"
+                    else str(e)
+                )
                 logger.error(
                     "Error during request forwarding: provider_id=%s, provider_name=%s, "
                     "request_protocol=%s, supplier_protocol=%s, error=%s",
@@ -1035,7 +1046,12 @@ class ProxyService:
                         response_body = hooked_image_response_body
                 result.response.body = response_body
             except Exception as e:
-                error_msg = str(e)
+                error_msg = (
+                    f"{e.code}: {e.message}"
+                    if isinstance(e, ServiceError)
+                    and e.code == "thinking_disable_unsupported"
+                    else str(e)
+                )
                 logger.error(
                     "Error during response conversion: provider_id=%s, provider_name=%s, "
                     "request_protocol=%s, supplier_protocol=%s, error=%s",
@@ -1428,6 +1444,12 @@ class ProxyService:
                     )
                     if hooked_image_supplier_body is not None:
                         supplier_body = hooked_image_supplier_body
+                if model_mapping.disable_thinking:
+                    supplier_body = force_disable_reasoning_for_supplier(
+                        supplier_body,
+                        supplier_protocol=candidate.protocol,
+                        target_model=candidate.target_model,
+                    )
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body

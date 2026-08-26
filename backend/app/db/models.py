@@ -177,6 +177,10 @@ class ModelMapping(Base):
     )
     # Is Active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Force provider-specific thinking/reasoning controls off for this model.
+    disable_thinking: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     # Creation Time
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now_naive, nullable=False

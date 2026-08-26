@@ -130,15 +130,15 @@ class ModelService:
                 code="model_not_found",
             )
 
-        if not mapping.is_active:
-            raise ServiceError(
-                message=f"Model '{requested_model}' is disabled",
-                code="model_disabled",
-            )
-
         routing_model, mapping = await resolve_alias_target(
             self.model_repo, requested_model, mapping
         )
+
+        if not mapping.is_active:
+            raise ServiceError(
+                message=f"Model '{routing_model}' is disabled",
+                code="model_disabled",
+            )
 
         provider_mappings = await self.model_repo.get_provider_mappings(
             requested_model=routing_model,
@@ -381,6 +381,8 @@ class ModelService:
                 "cached_input_price": None,
                 "cached_output_price": None,
                 "cache_creation_input_price": None,
+                "is_active": True,
+                "disable_thinking": False,
             }
         )
 
@@ -428,6 +430,8 @@ class ModelService:
                 "cached_input_price": None,
                 "cached_output_price": None,
                 "cache_creation_input_price": None,
+                "is_active": True,
+                "disable_thinking": False,
             }
         )
 
@@ -808,6 +812,7 @@ class ModelService:
                     alias_target_model=m.alias_target_model,
                     capabilities=m.capabilities,
                     is_active=m.is_active,
+                    disable_thinking=m.disable_thinking,
                     input_price=m.input_price,
                     output_price=m.output_price,
                     billing_mode=m.billing_mode,
@@ -915,10 +920,18 @@ class ModelService:
         Returns:
             ModelMappingResponse: Response model
         """
+        effective_mapping = mapping
+        effective_requested_model = mapping.requested_model
+        if mapping.model_type == "alias" and mapping.alias_target_model:
+            target_mapping = await self.model_repo.get_mapping(mapping.alias_target_model)
+            if target_mapping is not None:
+                effective_mapping = target_mapping
+                effective_requested_model = target_mapping.requested_model
+
         providers = None
         if include_providers:
             providers = await self.model_repo.get_provider_mappings(
-                requested_model=mapping.requested_model
+                requested_model=effective_requested_model
             )
             if self._health_tracker is not None and providers:
                 health_by_mapping = await self._health_tracker.get_mapping_snapshots(
@@ -940,29 +953,30 @@ class ModelService:
             )
         else:
             provider_count = await self.model_repo.get_provider_count(
-                mapping.requested_model
+                effective_requested_model
             )
             active_provider_count = await self.model_repo.get_active_provider_count(
-                mapping.requested_model
+                effective_requested_model
             )
         
         return ModelMappingResponse(
             requested_model=mapping.requested_model,
-            strategy=mapping.strategy,
+            strategy=effective_mapping.strategy,
             model_type=mapping.model_type,
             alias_target_model=mapping.alias_target_model,
-            capabilities=mapping.capabilities,
-            is_active=mapping.is_active,
-            input_price=mapping.input_price,
-            output_price=mapping.output_price,
-            billing_mode=mapping.billing_mode,
-            per_request_price=mapping.per_request_price,
-            per_image_price=mapping.per_image_price,
-            tiered_pricing=mapping.tiered_pricing,
-            cache_billing_enabled=mapping.cache_billing_enabled,
-            cached_input_price=mapping.cached_input_price,
-            cached_output_price=mapping.cached_output_price,
-            cache_creation_input_price=mapping.cache_creation_input_price,
+            capabilities=effective_mapping.capabilities,
+            is_active=effective_mapping.is_active,
+            disable_thinking=effective_mapping.disable_thinking,
+            input_price=effective_mapping.input_price,
+            output_price=effective_mapping.output_price,
+            billing_mode=effective_mapping.billing_mode,
+            per_request_price=effective_mapping.per_request_price,
+            per_image_price=effective_mapping.per_image_price,
+            tiered_pricing=effective_mapping.tiered_pricing,
+            cache_billing_enabled=effective_mapping.cache_billing_enabled,
+            cached_input_price=effective_mapping.cached_input_price,
+            cached_output_price=effective_mapping.cached_output_price,
+            cache_creation_input_price=effective_mapping.cache_creation_input_price,
             created_at=mapping.created_at,
             updated_at=mapping.updated_at,
             provider_count=provider_count,

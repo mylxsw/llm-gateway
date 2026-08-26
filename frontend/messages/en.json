@@ -453,7 +453,10 @@
       "costFirstDescription": "Prioritize providers with the lowest estimated cost",
       "costFirstTag": "Cost Optimization",
       "strategyHint": "Choose how the gateway selects providers for this model",
-      "enabledStatusLabel": "Enabled Status"
+      "advancedLabel": "Advanced",
+      "enabledStatusLabel": "Enabled Status",
+      "disableThinkingLabel": "Disable Thinking",
+      "disableThinkingHelp": "When enabled, the gateway overrides request parameters and disables thinking using the selected provider protocol."
     },
     "detail": {
       "missingModelParam": "Missing model parameter",
