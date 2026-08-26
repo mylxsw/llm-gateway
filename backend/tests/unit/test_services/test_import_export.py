@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from app.common.time import utc_now
 from app.domain.provider import ProviderCreate, Provider
-from app.domain.model import ModelExport, ModelProviderExport
+from app.domain.model import ModelExport, ModelMapping, ModelProviderExport
 from app.services.provider_service import ProviderService
 from app.services.model_service import ModelService
 
@@ -53,6 +54,7 @@ async def test_model_import_success(model_service, model_repo, provider_repo):
     model_export = ModelExport(
         requested_model="model1",
         strategy="round_robin",
+        disable_thinking=True,
         providers=[provider_export]
     )
     data = [model_export]
@@ -71,6 +73,7 @@ async def test_model_import_success(model_service, model_repo, provider_repo):
     
     # Check calls
     assert model_repo.create_mapping.call_count == 1
+    assert model_repo.create_mapping.call_args.args[0].disable_thinking is True
     assert model_repo.add_provider_mapping.call_count == 1
     # Verify provider mapping creation uses correct provider_id
     call_args = model_repo.add_provider_mapping.call_args[0][0]
@@ -116,6 +119,8 @@ async def test_model_import_validates_and_normalizes_aliases(
         alias_target_model="real-model",
         strategy="cost_first",
         matching_rules={"headers": {"x-tenant": "legacy"}},
+        is_active=False,
+        disable_thinking=True,
         providers=[
             ModelProviderExport(
                 provider_name="p1",
@@ -149,4 +154,30 @@ async def test_model_import_validates_and_normalizes_aliases(
     assert imported_alias.strategy == "round_robin"
     assert imported_alias.matching_rules is None
     assert imported_alias.alias_target_model == "real-model"
+    assert imported_alias.is_active is True
+    assert imported_alias.disable_thinking is False
     model_repo.add_provider_mapping.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_model_export_includes_disable_thinking(
+    model_service, model_repo
+):
+    now = utc_now()
+    model_repo.get_all_mappings.return_value = (
+        [
+            ModelMapping(
+                requested_model="reasoning-model",
+                disable_thinking=True,
+                created_at=now,
+                updated_at=now,
+            )
+        ],
+        1,
+    )
+    model_repo.get_provider_mappings.return_value = []
+
+    exported = await model_service.export_data()
+
+    assert len(exported) == 1
+    assert exported[0].disable_thinking is True

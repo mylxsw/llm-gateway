@@ -17,7 +17,11 @@ class RecordingHooks(ProtocolConversionHooks):
         return {**body, "before": True}
 
     async def after_request_conversion(self, supplier_body, request_protocol, supplier_protocol):
-        return {**supplier_body, "after": True}
+        return {
+            **supplier_body,
+            "after": True,
+            "thinking": {"type": "enabled", "budget_tokens": 4096},
+        }
 
     async def before_response_conversion(self, supplier_body, request_protocol, supplier_protocol):
         return {"wrapped": supplier_body}
@@ -27,6 +31,9 @@ class RecordingHooks(ProtocolConversionHooks):
 
 
 class StreamHooks(ProtocolConversionHooks):
+    async def after_request_conversion(self, supplier_body, request_protocol, supplier_protocol):
+        return {**supplier_body, "thinking": {"type": "enabled"}}
+
     async def before_stream_chunk_conversion(self, chunk, request_protocol, supplier_protocol):
         return chunk.replace(b"message_start", b"message_start_hooked")
 
@@ -65,6 +72,7 @@ async def test_protocol_hooks_apply_to_non_stream_flow():
         matching_rules=None,
         capabilities=None,
         is_active=True,
+        disable_thinking=True,
         created_at=now,
         updated_at=now,
     )
@@ -91,6 +99,7 @@ async def test_protocol_hooks_apply_to_non_stream_flow():
 
     async def forward(*, body: dict, **kwargs):
         assert body["after"] is True
+        assert body["thinking"] == {"type": "disabled"}
         return ProviderResponse(
             status_code=200,
             headers={"content-type": "application/json"},
@@ -231,6 +240,7 @@ async def test_protocol_hooks_apply_to_stream_chunks():
         matching_rules=None,
         capabilities=None,
         is_active=True,
+        disable_thinking=True,
         created_at=now,
         updated_at=now,
     )
@@ -256,6 +266,8 @@ async def test_protocol_hooks_apply_to_stream_chunks():
     )  # type: ignore[method-assign]
 
     def forward_stream(**kwargs):
+        assert kwargs["body"]["thinking"] == {"type": "disabled"}
+
         async def gen():
             response = ProviderResponse(status_code=200, headers={})
             yield b'data: {"type":"message_start"}\n\n', response

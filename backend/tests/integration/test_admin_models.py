@@ -44,7 +44,11 @@ async def test_admin_creates_and_updates_alias_for_real_model(db_session, monkey
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         real_resp = await ac.post(
             "/api/admin/models",
-            json={"requested_model": "gpt-4o", "model_type": "chat"},
+            json={
+                "requested_model": "gpt-4o",
+                "model_type": "chat",
+                "disable_thinking": True,
+            },
         )
         assert real_resp.status_code == 201, real_resp.text
 
@@ -54,11 +58,14 @@ async def test_admin_creates_and_updates_alias_for_real_model(db_session, monkey
                 "requested_model": "gpt-latest",
                 "model_type": "alias",
                 "alias_target_model": "gpt-4o",
-                "is_active": True,
+                "is_active": False,
+                "disable_thinking": False,
             },
         )
         assert alias_resp.status_code == 201, alias_resp.text
         assert alias_resp.json()["alias_target_model"] == "gpt-4o"
+        assert alias_resp.json()["is_active"] is True
+        assert alias_resp.json()["disable_thinking"] is True
 
         fallback_resp = await ac.post(
             "/api/admin/models",
@@ -83,7 +90,26 @@ async def test_admin_creates_and_updates_alias_for_real_model(db_session, monkey
         assert update_resp.status_code == 200, update_resp.text
         assert update_resp.json()["model_type"] == "alias"
         assert update_resp.json()["alias_target_model"] == "gpt-4o"
-        assert update_resp.json()["is_active"] is False
+        assert update_resp.json()["is_active"] is True
+        assert update_resp.json()["disable_thinking"] is True
+
+        disable_target_resp = await ac.put(
+            "/api/admin/models/gpt-4o",
+            json={"is_active": False},
+        )
+        assert disable_target_resp.status_code == 200, disable_target_resp.text
+
+        alias_detail_resp = await ac.get("/api/admin/models/gpt-latest")
+        assert alias_detail_resp.status_code == 200, alias_detail_resp.text
+        assert alias_detail_resp.json()["is_active"] is False
+        assert alias_detail_resp.json()["disable_thinking"] is True
+
+        inactive_list_resp = await ac.get("/api/admin/models?is_active=false")
+        assert inactive_list_resp.status_code == 200, inactive_list_resp.text
+        inactive_names = {
+            item["requested_model"] for item in inactive_list_resp.json()["items"]
+        }
+        assert {"gpt-4o", "gpt-latest"} <= inactive_names
 
     app.dependency_overrides = {}
 

@@ -60,6 +60,8 @@ class ModelMappingCreate(ModelMappingBase):
     capabilities: Optional[dict[str, Any]] = Field(None, description="Model Capabilities")
     # Is Active
     is_active: bool = Field(True, description="Is Active")
+    # Force all requests routed through this model to disable reasoning/thinking.
+    disable_thinking: bool = Field(False, description="Force Disable Thinking")
     # Default pricing (USD per 1,000,000 tokens)
     input_price: Optional[float] = Field(None, description="Input price ($/1M tokens)")
     output_price: Optional[float] = Field(None, description="Output price ($/1M tokens)")
@@ -106,6 +108,7 @@ class ModelMappingUpdate(BaseModel):
     matching_rules: Optional[dict[str, Any]] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
+    disable_thinking: Optional[bool] = None
     input_price: Optional[float] = None
     output_price: Optional[float] = None
     billing_mode: Optional[BillingMode] = None
@@ -123,6 +126,7 @@ class ModelMapping(ModelMappingBase):
 
     capabilities: Optional[dict[str, Any]] = None
     is_active: bool = True
+    disable_thinking: bool = False
     input_price: Optional[float] = None
     output_price: Optional[float] = None
     billing_mode: Optional[BillingMode] = None

@@ -37,6 +37,19 @@ class TestCreateMappingPersistsPricingFields:
         assert result.input_price == 5.0
         assert result.output_price == 15.0
 
+    async def test_create_mapping_persists_disable_thinking(self, model_repo):
+        data = ModelMappingCreate(
+            requested_model="test-disable-thinking",
+            disable_thinking=True,
+        )
+
+        result = await model_repo.create_mapping(data)
+        fetched = await model_repo.get_mapping("test-disable-thinking")
+
+        assert result.disable_thinking is True
+        assert fetched is not None
+        assert fetched.disable_thinking is True
+
     async def test_create_mapping_persists_token_tiered(self, model_repo):
         data = ModelMappingCreate(
             requested_model="test-tiered",

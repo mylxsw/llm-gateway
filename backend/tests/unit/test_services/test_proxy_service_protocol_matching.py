@@ -147,7 +147,7 @@ async def test_resolve_candidates_rewrites_alias_to_real_model():
         requested_model="gpt-latest",
         model_type="alias",
         alias_target_model="gpt-4o",
-        is_active=True,
+        is_active=False,
         created_at=now,
         updated_at=now,
     )
@@ -155,6 +155,7 @@ async def test_resolve_candidates_rewrites_alias_to_real_model():
         requested_model="gpt-4o",
         model_type="chat",
         is_active=True,
+        disable_thinking=True,
         created_at=now,
         updated_at=now,
     )
@@ -198,6 +199,7 @@ async def test_resolve_candidates_rewrites_alias_to_real_model():
         )
 
     assert mapping.requested_model == "gpt-4o"
+    assert mapping.disable_thinking is True
     assert body["model"] == "gpt-4o"
     assert [candidate.target_model for candidate in candidates] == ["gpt-4o-2024-08-06"]
     log_info.assert_called_once_with(

@@ -453,7 +453,10 @@
       "costFirstDescription": "优先选择预计成本最低的供应商",
       "costFirstTag": "成本优化",
       "strategyHint": "选择网关如何为该模型选择供应商",
-      "enabledStatusLabel": "启用状态"
+      "advancedLabel": "高级",
+      "enabledStatusLabel": "启用状态",
+      "disableThinkingLabel": "关闭思考模式",
+      "disableThinkingHelp": "开启后，网关会覆盖请求参数，并按实际供应商协议强制关闭思考模式。"
     },
     "detail": {
       "missingModelParam": "缺少模型参数",
