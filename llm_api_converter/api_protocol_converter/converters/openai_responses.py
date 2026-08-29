@@ -32,6 +32,7 @@ from ..ir import (
     ToolChoiceType,
 )
 from .exceptions import ConversionError, ValidationError
+from .schema_utils import omit_null_required
 
 
 class OpenAIResponsesDecoder:
@@ -771,7 +772,7 @@ class OpenAIResponsesEncoder:
             if tool.description:
                 encoded["description"] = tool.description
             if tool.parameters:
-                encoded["parameters"] = tool.parameters
+                encoded["parameters"] = omit_null_required(tool.parameters)
             if tool.strict:
                 encoded["strict"] = True
             result.append(encoded)
