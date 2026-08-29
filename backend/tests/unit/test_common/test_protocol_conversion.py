@@ -527,6 +527,7 @@ async def test_convert_request_anthropic_to_openai_preserves_tools():
                     "input_schema": {
                         "type": "object",
                         "properties": {"city": {"type": "string"}},
+                        "required": None,
                     },
                 }
             ],
@@ -540,6 +541,7 @@ async def test_convert_request_anthropic_to_openai_preserves_tools():
     assert isinstance(out_body.get("tools"), list)
     assert out_body["tools"][0]["type"] == "function"
     assert out_body["tools"][0]["function"]["name"] == "get_weather"
+    assert "required" not in out_body["tools"][0]["function"]["parameters"]
     assert out_body.get("tool_choice") == {
         "type": "function",
         "function": {"name": "get_weather"},

@@ -497,6 +497,39 @@ class TestAnthropicMessagesToOpenAIChat:
         # parameters instead of input_schema
         assert "parameters" in tool["function"]
 
+    def test_request_omits_null_required_from_tool_schema(self):
+        """OpenAI-compatible APIs require ``required`` to be an array."""
+        request = {
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [
+                {
+                    "name": "get_artifacts_for_pull_request_description",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "options": {
+                                "type": "object",
+                                "properties": {"format": {"type": "string"}},
+                                "required": None,
+                            }
+                        },
+                        "required": None,
+                        "examples": [{"required": None}],
+                    },
+                }
+            ],
+        }
+
+        result = anthropic_messages_to_openai_chat_request(request)
+        schema = result["tools"][0]["function"]["parameters"]
+
+        assert "required" not in schema
+        assert "required" not in schema["properties"]["options"]
+        assert schema["examples"] == [{"required": None}]
+        assert request["tools"][0]["input_schema"]["required"] is None
+
     def test_multimodal_request(self):
         """Test multimodal (image) request conversion."""
         result = anthropic_messages_to_openai_chat_request(ANTHROPIC_MULTIMODAL_REQUEST)
@@ -543,6 +576,30 @@ class TestAnthropicMessagesToOpenAIResponses:
         assert result["max_output_tokens"] == 100
         # Simple single-message input may be simplified to a string
         assert "input" in result
+
+    def test_request_omits_null_required_from_tool_schema(self):
+        """Responses tool schemas receive the same null normalization."""
+        request = {
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": [
+                {
+                    "name": "get_artifacts_for_pull_request_description",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": None,
+                    },
+                }
+            ],
+        }
+
+        result = anthropic_messages_to_openai_responses_request(request)
+        schema = result["tools"][0]["parameters"]
+
+        assert "required" not in schema
+        assert request["tools"][0]["input_schema"]["required"] is None
 
     def test_multimodal_request_uses_correct_types(self):
         """Test that multimodal user messages use input_text and input_image types."""

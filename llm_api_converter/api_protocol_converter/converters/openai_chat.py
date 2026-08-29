@@ -32,6 +32,7 @@ from ..ir import (
     ToolChoiceType,
 )
 from .exceptions import ConversionError, ValidationError
+from .schema_utils import omit_null_required
 
 
 class OpenAIChatDecoder:
@@ -767,7 +768,9 @@ class OpenAIChatEncoder:
             if tool.description:
                 encoded["function"]["description"] = tool.description
             if tool.parameters:
-                encoded["function"]["parameters"] = tool.parameters
+                encoded["function"]["parameters"] = omit_null_required(
+                    tool.parameters
+                )
             if tool.strict:
                 encoded["function"]["strict"] = True
             result.append(encoded)
