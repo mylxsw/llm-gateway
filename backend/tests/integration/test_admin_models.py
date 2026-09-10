@@ -270,8 +270,13 @@ async def test_admin_bulk_upgrade_model_providers(db_session, monkeypatch):
                 "provider_id": provider_id,
                 "current_target_model_name": "old-model",
                 "new_target_model_name": "new-model",
-                "billing_mode": "per_request",
-                "per_request_price": 0.0021,
+                "billing_mode": "token_flat",
+                "input_price": 3,
+                "output_price": 4,
+                "cache_billing_enabled": True,
+                "cached_input_price": 0.3,
+                "cache_creation_input_price": 0.6,
+                "cached_output_price": 0.4,
             },
         )
         assert bulk_upgrade_resp.status_code == 200, bulk_upgrade_resp.text
@@ -283,8 +288,13 @@ async def test_admin_bulk_upgrade_model_providers(db_session, monkeypatch):
         assert len(items) == 2
         for item in items:
             assert item["target_model_name"] == "new-model"
-            assert item["billing_mode"] == "per_request"
-            assert item["per_request_price"] == 0.0021
+            assert item["billing_mode"] == "token_flat"
+            assert item["input_price"] == 3
+            assert item["output_price"] == 4
+            assert item["cache_billing_enabled"] is True
+            assert item["cached_input_price"] == 0.3
+            assert item["cache_creation_input_price"] == 0.6
+            assert item["cached_output_price"] == 0.4
 
     app.dependency_overrides = {}
 

@@ -707,6 +707,10 @@ class ModelService:
             per_request_price=data.per_request_price,
             per_image_price=data.per_image_price,
             tiered_pricing=data.tiered_pricing,
+            cache_billing_enabled=bool(data.cache_billing_enabled),
+            cached_input_price=data.cached_input_price,
+            cached_output_price=data.cached_output_price,
+            cache_creation_input_price=data.cache_creation_input_price,
         )
 
         # Validate merged billing config before writing.
@@ -727,6 +731,10 @@ class ModelService:
                 "per_request_price": existing.per_request_price,
                 "per_image_price": existing.per_image_price,
                 "tiered_pricing": existing.tiered_pricing,
+                "cache_billing_enabled": existing.cache_billing_enabled,
+                "cached_input_price": existing.cached_input_price,
+                "cached_output_price": existing.cached_output_price,
+                "cache_creation_input_price": existing.cache_creation_input_price,
             }
             merged.update(update_data.model_dump(exclude_unset=True))
             ModelMappingProviderCreate(**merged)
