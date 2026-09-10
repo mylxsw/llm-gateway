@@ -222,7 +222,6 @@ async def test_bulk_upgrade_provider_model_updates_all_matched_mappings(db_sessi
             output_price=2.5,
         )
     )
-
     updated_count = await service.bulk_upgrade_provider_model(
         ModelProviderBulkUpgradeRequest(
             provider_id=provider.id,
@@ -240,6 +239,88 @@ async def test_bulk_upgrade_provider_model_updates_all_matched_mappings(db_sessi
         assert mapping.target_model_name == "new-model"
         assert mapping.billing_mode == "per_request"
         assert mapping.per_request_price == 0.003
+
+
+@pytest.mark.asyncio
+async def test_bulk_upgrade_provider_model_updates_cache_pricing_only_for_matches(
+    db_session,
+):
+    model_repo = SQLAlchemyModelRepository(db_session)
+    provider_repo = SQLAlchemyProviderRepository(db_session)
+    service = ModelService(model_repo, provider_repo)
+
+    for requested_model in ("model-a", "model-b", "model-c"):
+        await model_repo.create_mapping(
+            ModelMappingCreate(requested_model=requested_model)
+        )
+
+    provider = await provider_repo.create(
+        ProviderCreate(
+            name="p-bulk-cache",
+            base_url="https://example.com",
+            protocol="openai",
+            api_type="chat",
+        )
+    )
+    for requested_model in ("model-a", "model-b"):
+        await service.create_provider_mapping(
+            ModelMappingProviderCreate(
+                requested_model=requested_model,
+                provider_id=provider.id,
+                target_model_name="old-model",
+                input_price=1.0,
+                output_price=2.0,
+            )
+        )
+    await service.create_provider_mapping(
+        ModelMappingProviderCreate(
+            requested_model="model-c",
+            provider_id=provider.id,
+            target_model_name="other-model",
+            input_price=7.0,
+            output_price=8.0,
+            cache_billing_enabled=False,
+        )
+    )
+
+    updated_count = await service.bulk_upgrade_provider_model(
+        ModelProviderBulkUpgradeRequest(
+            provider_id=provider.id,
+            current_target_model_name="old-model",
+            new_target_model_name="new-model",
+            billing_mode="token_flat",
+            input_price=3.0,
+            output_price=4.0,
+            cache_billing_enabled=True,
+            cached_input_price=0.3,
+            cache_creation_input_price=0.6,
+            cached_output_price=0.4,
+        )
+    )
+
+    assert updated_count == 2
+    mappings = await service.get_provider_mappings(provider_id=provider.id)
+    matched_mappings = [
+        mapping for mapping in mappings if mapping.requested_model != "model-c"
+    ]
+    assert len(matched_mappings) == 2
+    for mapping in matched_mappings:
+        assert mapping.target_model_name == "new-model"
+        assert mapping.billing_mode == "token_flat"
+        assert mapping.input_price == 3.0
+        assert mapping.output_price == 4.0
+        assert mapping.cache_billing_enabled is True
+        assert mapping.cached_input_price == 0.3
+        assert mapping.cache_creation_input_price == 0.6
+        assert mapping.cached_output_price == 0.4
+
+    unmatched = next(
+        mapping for mapping in mappings if mapping.requested_model == "model-c"
+    )
+    assert unmatched.target_model_name == "other-model"
+    assert unmatched.input_price == 7.0
+    assert unmatched.output_price == 8.0
+    assert unmatched.cache_billing_enabled is False
 
 
 @pytest.mark.asyncio
