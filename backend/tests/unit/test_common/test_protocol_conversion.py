@@ -934,6 +934,24 @@ def test_convert_request_identity_openai_normalizes_anthropic_reasoning_fields()
     assert out_body["reasoning"] == {"effort": "low"}
 
 
+def test_convert_request_identity_openai_maps_thinking_effort_to_reasoning_effort():
+    path, out_body = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol="openai",
+        path="/v1/chat/completions",
+        body={
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "thinking": {"effort": "medium"},
+        },
+        target_model="gpt-5-mini",
+    )
+
+    assert path == "/v1/chat/completions"
+    assert "thinking" not in out_body
+    assert out_body["reasoning"] == {"effort": "medium"}
+
+
 def test_convert_request_identity_anthropic_normalizes_openai_reasoning_fields():
     path, out_body = convert_request_for_supplier(
         request_protocol="anthropic",

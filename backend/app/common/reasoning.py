@@ -72,9 +72,16 @@ def _anthropic_thinking_type_from_body(body: dict[str, Any]) -> str | None:
 
 def _anthropic_effort_from_body(body: dict[str, Any]) -> str | None:
     output_config = body.get("output_config")
-    if not isinstance(output_config, dict):
-        return None
-    return _clean_anthropic_effort(output_config.get("effort"))
+    if isinstance(output_config, dict):
+        effort = _clean_anthropic_effort(output_config.get("effort"))
+        if effort is not None:
+            return effort
+
+    thinking = body.get("thinking")
+    if isinstance(thinking, dict):
+        return _clean_anthropic_effort(thinking.get("effort"))
+
+    return None
 
 
 def _dashscope_thinking_enabled_from_body(body: dict[str, Any]) -> bool | None:
