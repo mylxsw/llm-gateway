@@ -3,6 +3,7 @@
 # Required environment variables (must be set before deployment):
 #   - POSTGRES_PASSWORD: PostgreSQL password (REQUIRED)
 #   - REDIS_PASSWORD: Redis password (REQUIRED)
+#   - ENCRYPTION_KEY: Base64-encoded 32-byte encryption key (REQUIRED, must stay stable)
 #   - ADMIN_USERNAME: Admin login username (optional)
 #   - ADMIN_PASSWORD: Admin login password (required if ADMIN_USERNAME is set)
 #   - ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins (REQUIRED for web access)
@@ -10,6 +11,7 @@
 # Example .env file:
 #   POSTGRES_PASSWORD=your_secure_postgres_password_here
 #   REDIS_PASSWORD=your_secure_redis_password_here
+#   ENCRYPTION_KEY=your_generated_base64_32_byte_key
 #   ADMIN_USERNAME=admin
 #   ADMIN_PASSWORD=your_secure_admin_password_here
 #   ALLOWED_ORIGINS=https://your-domain.com,https://app.your-domain.com
@@ -63,6 +65,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-llm_gateway}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-llm_gateway}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       KV_STORE_TYPE: ${KV_STORE_TYPE:-redis}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required for production}
       ENABLE_VIEW_API_KEYS: ${ENABLE_VIEW_API_KEYS:-false}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
