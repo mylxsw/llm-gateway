@@ -54,9 +54,22 @@ def test_verify_token_expired():
 async def test_require_admin_auth_disabled_allows(monkeypatch):
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("ALLOW_UNAUTHENTICATED_ADMIN", "true")
     get_settings.cache_clear()
 
     await require_admin_auth(authorization=None, x_admin_token=None)
+
+
+@pytest.mark.asyncio
+async def test_require_admin_auth_disabled_fail_closed(monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("ALLOW_UNAUTHENTICATED_ADMIN", "false")
+    get_settings.cache_clear()
+
+    with pytest.raises(HTTPException) as excinfo:
+        await require_admin_auth(authorization=None, x_admin_token=None)
+    assert excinfo.value.status_code == 401
 
 
 @pytest.mark.asyncio

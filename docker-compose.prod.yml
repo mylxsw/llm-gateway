@@ -3,9 +3,9 @@
 # Required environment variables (must be set before deployment):
 #   - POSTGRES_PASSWORD: PostgreSQL password (REQUIRED)
 #   - REDIS_PASSWORD: Redis password (REQUIRED)
+#   - ADMIN_USERNAME: Admin login username (REQUIRED)
+#   - ADMIN_PASSWORD: Admin login password (REQUIRED)
 #   - ENCRYPTION_KEY: Base64-encoded 32-byte encryption key (REQUIRED, must stay stable)
-#   - ADMIN_USERNAME: Admin login username (optional)
-#   - ADMIN_PASSWORD: Admin login password (required if ADMIN_USERNAME is set)
 #   - ALLOWED_ORIGINS: Comma-separated list of allowed CORS origins (REQUIRED for web access)
 #
 # Example .env file:
@@ -67,8 +67,9 @@ services:
       KV_STORE_TYPE: ${KV_STORE_TYPE:-redis}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required for production}
       ENABLE_VIEW_API_KEYS: ${ENABLE_VIEW_API_KEYS:-false}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME is required for production}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required for production}
+      ALLOW_UNAUTHENTICATED_ADMIN: ${ALLOW_UNAUTHENTICATED_ADMIN:-false}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required for production}
     volumes:
       - ./data:/data

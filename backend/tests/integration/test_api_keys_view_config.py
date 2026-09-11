@@ -25,6 +25,27 @@ async def test_auth_status_returns_enable_view_api_keys_flag(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_auth_status_fail_closed_when_admin_credentials_missing(monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("ALLOW_UNAUTHENTICATED_ADMIN", "false")
+    get_settings.cache_clear()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/auth/status")
+        protected_resp = await ac.get("/api/admin/providers")
+
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["enabled"] is True
+    assert payload["authenticated"] is False
+    assert protected_resp.status_code == 401, protected_resp.text
+
+    get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_api_key_raw_endpoint_respects_enable_view_api_keys(db_session, monkeypatch):
     monkeypatch.setenv("ENABLE_VIEW_API_KEYS", "false")
     get_settings.cache_clear()
