@@ -164,11 +164,23 @@ async def require_admin_auth(
     """
     Admin API Authentication
 
-    Enables authentication when ADMIN_USERNAME and ADMIN_PASSWORD are set, otherwise allows access.
+    Enables authentication when ADMIN_USERNAME and ADMIN_PASSWORD are set.
+    If credentials are missing, unauthenticated access is controlled by ALLOW_UNAUTHENTICATED_ADMIN.
     """
     settings = get_settings()
-    if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):
+    auth_enabled = is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD)
+    if not auth_enabled and settings.ALLOW_UNAUTHENTICATED_ADMIN:
         return
+    if not auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "Admin authentication credentials are not configured. "
+                "Set ADMIN_USERNAME and ADMIN_PASSWORD, or explicitly set "
+                "ALLOW_UNAUTHENTICATED_ADMIN=true (not recommended)."
+            ),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     token = x_admin_token or _extract_bearer_token(authorization)
     if not token:

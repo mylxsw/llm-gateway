@@ -58,9 +58,11 @@ class Settings(BaseSettings):
     API_KEY_LENGTH: int = 32
 
     # Admin Login Authentication
-    # Enables login authentication when both ADMIN_USERNAME and ADMIN_PASSWORD are set; otherwise, login is not required.
+    # Enables login authentication when both ADMIN_USERNAME and ADMIN_PASSWORD are set.
+    # If credentials are not set, ALLOW_UNAUTHENTICATED_ADMIN controls whether admin APIs remain open.
     ADMIN_USERNAME: str | None = None
     ADMIN_PASSWORD: str | None = None
+    ALLOW_UNAUTHENTICATED_ADMIN: bool = True
     # Admin login token TTL (seconds)
     ADMIN_TOKEN_TTL_SECONDS: int = 86400
 

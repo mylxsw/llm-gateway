@@ -1,9 +1,9 @@
 """
 Authentication API
 
-Enables admin authentication when both ADMIN_USERNAME and ADMIN_PASSWORD are set:
-- POST /auth/login: Exchange username and password for a token
-- GET /auth/status: Check if enabled and authenticated
+Admin authentication is enabled when both ADMIN_USERNAME and ADMIN_PASSWORD are set.
+When credentials are missing, ALLOW_UNAUTHENTICATED_ADMIN controls whether admin APIs
+stay open or fail closed.
 """
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -48,6 +48,12 @@ async def auth_status(
 ):
     settings = get_settings()
     enabled = is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD)
+    if not enabled and not settings.ALLOW_UNAUTHENTICATED_ADMIN:
+        return AuthStatusResponse(
+            enabled=True,
+            authenticated=False,
+            enable_view_api_keys=settings.ENABLE_VIEW_API_KEYS,
+        )
     if not enabled:
         return AuthStatusResponse(
             enabled=False,
@@ -75,6 +81,14 @@ async def auth_status(
 async def login(data: LoginRequest):
     settings = get_settings()
     if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):
+        if not settings.ALLOW_UNAUTHENTICATED_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Admin authentication credentials are not configured. "
+                    "Set ADMIN_USERNAME and ADMIN_PASSWORD before login."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admin authentication is not enabled",

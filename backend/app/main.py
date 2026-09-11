@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.admin import api_keys_router, logs_router, models_router, providers_router
 from app.api.auth import router as auth_router
 from app.api.proxy import anthropic_router, openai_router
+from app.common.admin_auth import is_admin_auth_enabled
 from app.common.errors import AppError
 from app.common.mcp_auth import MCPAuthMiddleware
 from app.config import get_settings
@@ -56,6 +57,17 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     settings = get_settings()
+    if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):
+        if settings.ALLOW_UNAUTHENTICATED_ADMIN:
+            logger.warning(
+                "Admin authentication is disabled because ADMIN_USERNAME/ADMIN_PASSWORD are not set. "
+                "Admin APIs are currently accessible without authentication."
+            )
+        else:
+            logger.warning(
+                "Admin authentication credentials are not configured and "
+                "ALLOW_UNAUTHENTICATED_ADMIN=false; admin APIs will fail closed with 401."
+            )
     if settings.KV_STORE_TYPE == "redis":
         await init_redis()
     start_scheduler()

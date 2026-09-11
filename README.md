@@ -106,6 +106,9 @@ The fastest way to get started with PostgreSQL:
 # Clone the repository
 git clone https://github.com/mylxsw/llm-gateway.git
 cd llm-gateway
+# Set required production credentials
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD='change-me-now'
 # Start services
 docker compose -f docker-compose.prod.yml up -d
 ```
@@ -119,10 +122,15 @@ Run with SQLite for simple deployments:
 ```bash
 docker run -d \
   -p 8000:8000 \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD='change-me-now' \
   -v $(pwd)/data:/data \
   --name llm-gateway \
   ghcr.io/mylxsw/llm-gateway:latest
 ```
+
+> [!WARNING]
+> If `ADMIN_USERNAME`/`ADMIN_PASSWORD` are missing and `ALLOW_UNAUTHENTICATED_ADMIN=true`, admin APIs are publicly accessible. For non-local deployments, always configure admin credentials.
 
 ### Manual Installation
 
@@ -270,8 +278,9 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 | `ENCRYPTION_KEY` | - | Base64-encoded 32-byte key used to encrypt stored sensitive fields (must stay stable across restarts) |
 | `ENABLE_VIEW_API_KEYS` | false | Whether full API keys can be viewed/copied again on the API Keys page |
 | `RATE_LIMIT_ENABLED` | false | Enable/disable built-in rate limiting middleware |
-| `ADMIN_USERNAME` | - | Admin login username (optional) |
-| `ADMIN_PASSWORD` | - | Admin login password (optional) |
+| `ADMIN_USERNAME` | - | Admin login username (required for production) |
+| `ADMIN_PASSWORD` | - | Admin login password (required for production) |
+| `ALLOW_UNAUTHENTICATED_ADMIN` | true | Allow bypassing admin auth when credentials are missing (set `false` for fail-closed behavior) |
 | `ADMIN_TOKEN_TTL_SECONDS` | 86400 | Admin session TTL (24 hours) |
 | `LOG_RETENTION_DAYS` | 7 | Log retention period |
 | `LOG_DETAIL_RETENTION_DAYS` | 7 | Retention period for heavy request/response detail payloads; must be less than or equal to `LOG_RETENTION_DAYS` |
