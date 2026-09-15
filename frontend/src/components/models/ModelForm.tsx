@@ -36,7 +36,7 @@ import {
   ModelType,
   SelectionStrategy
 } from '@/types';
-import { cn, isValidModelName } from '@/lib/utils';
+import { isValidModelName } from '@/lib/utils';
 import { ModelProviderBillingFields } from '@/components/models/ModelProviderBillingFields';
 import type { BillingMode } from '@/components/models/ModelProviderBillingFields';
 
@@ -66,6 +66,13 @@ interface FormData {
   alias_target_model: string;
   is_active: boolean;
   disable_thinking: boolean;
+  latency_routing_enabled: boolean;
+  ttft_threshold_ms: string;
+  latency_min_samples: string;
+  latency_breach_count: string;
+  latency_penalty_weight_percent: string;
+  latency_cooldown_seconds: string;
+  latency_recovery_count: string;
   billing_mode: BillingMode;
   input_price: string;
   output_price: string;
@@ -114,6 +121,13 @@ export function ModelForm({
       alias_target_model: '',
       is_active: true,
       disable_thinking: false,
+      latency_routing_enabled: false,
+      ttft_threshold_ms: '3000',
+      latency_min_samples: '10',
+      latency_breach_count: '3',
+      latency_penalty_weight_percent: '30',
+      latency_cooldown_seconds: '60',
+      latency_recovery_count: '3',
       billing_mode: 'token_flat' as BillingMode,
       input_price: '',
       output_price: '',
@@ -134,6 +148,7 @@ export function ModelForm({
 
   const isActive = useWatch({ control, name: 'is_active' });
   const disableThinking = useWatch({ control, name: 'disable_thinking' });
+  const latencyRoutingEnabled = useWatch({ control, name: 'latency_routing_enabled' });
   const modelType = useWatch({ control, name: 'model_type' });
   const isAlias = modelType === 'alias';
   const strategy = useWatch({ control, name: 'strategy' });
@@ -166,6 +181,13 @@ export function ModelForm({
         alias_target_model: model.alias_target_model ?? '',
         is_active: model.is_active,
         disable_thinking: model.disable_thinking ?? false,
+        latency_routing_enabled: model.latency_routing?.enabled ?? false,
+        ttft_threshold_ms: String(model.latency_routing?.ttft_threshold_ms ?? 3000),
+        latency_min_samples: String(model.latency_routing?.min_samples ?? 10),
+        latency_breach_count: String(model.latency_routing?.breach_count ?? 3),
+        latency_penalty_weight_percent: String(model.latency_routing?.penalty_weight_percent ?? 30),
+        latency_cooldown_seconds: String(model.latency_routing?.cooldown_seconds ?? 60),
+        latency_recovery_count: String(model.latency_routing?.recovery_count ?? 3),
         billing_mode: mode,
         input_price:
           model.input_price === null || model.input_price === undefined
@@ -210,6 +232,13 @@ export function ModelForm({
         alias_target_model: '',
         is_active: true,
         disable_thinking: false,
+        latency_routing_enabled: false,
+        ttft_threshold_ms: '3000',
+        latency_min_samples: '10',
+        latency_breach_count: '3',
+        latency_penalty_weight_percent: '30',
+        latency_cooldown_seconds: '60',
+        latency_recovery_count: '3',
         billing_mode: 'token_flat' as BillingMode,
         input_price: '',
         output_price: '',
@@ -250,6 +279,15 @@ export function ModelForm({
       alias_target_model: null,
       is_active: data.is_active,
       disable_thinking: data.disable_thinking,
+      latency_routing: {
+        enabled: data.latency_routing_enabled,
+        ttft_threshold_ms: Number(data.ttft_threshold_ms),
+        min_samples: Number(data.latency_min_samples),
+        breach_count: Number(data.latency_breach_count),
+        penalty_weight_percent: Number(data.latency_penalty_weight_percent),
+        cooldown_seconds: Number(data.latency_cooldown_seconds),
+        recovery_count: Number(data.latency_recovery_count),
+      },
     };
 
     // requested_model required on creation
@@ -665,6 +703,55 @@ export function ModelForm({
                     setValue('disable_thinking', checked)
                   }
                 />
+              </div>
+
+              <div className="space-y-4 px-4 py-4">
+                <div className="flex items-start justify-between gap-6">
+                  <div className="space-y-1">
+                    <Label htmlFor="latency_routing_enabled">
+                      {t('form.latencyRoutingLabel')}
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {t('form.latencyRoutingHelp')}
+                    </p>
+                  </div>
+                  <Switch
+                    id="latency_routing_enabled"
+                    className="mt-0.5"
+                    checked={latencyRoutingEnabled}
+                    onCheckedChange={(checked) =>
+                      setValue('latency_routing_enabled', checked)
+                    }
+                  />
+                </div>
+
+                {latencyRoutingEnabled && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    {[
+                      ['ttft_threshold_ms', 'latencyThresholdLabel', 100, 300000],
+                      ['latency_min_samples', 'latencyMinSamplesLabel', 1, 10000],
+                      ['latency_breach_count', 'latencyBreachCountLabel', 1, 100],
+                      ['latency_penalty_weight_percent', 'latencyPenaltyLabel', 1, 100],
+                      ['latency_cooldown_seconds', 'latencyCooldownLabel', 1, 86400],
+                      ['latency_recovery_count', 'latencyRecoveryCountLabel', 1, 100],
+                    ].map(([name, label, min, max]) => (
+                      <div className="space-y-2" key={String(name)}>
+                        <Label htmlFor={String(name)}>{t(`form.${label}`)}</Label>
+                        <Input
+                          id={String(name)}
+                          type="number"
+                          min={Number(min)}
+                          max={Number(max)}
+                          {...register(name as keyof FormData, {
+                            required: true,
+                            min: Number(min),
+                            max: Number(max),
+                          })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </AdvancedSection>
           )}

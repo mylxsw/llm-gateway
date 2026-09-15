@@ -9,6 +9,7 @@ from app.services.api_key_service import ApiKeyService
 from app.services.log_service import LogService
 from app.services.retry_handler import RetryHandler
 from app.services.provider_health import ProviderHealthTracker
+from app.services.stream_latency import StreamLatencyTracker
 from app.services.strategy import SelectionStrategy, RoundRobinStrategy, CostFirstStrategy, PriorityStrategy
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "LogService",
     "RetryHandler",
     "ProviderHealthTracker",
+    "StreamLatencyTracker",
     "SelectionStrategy",
     "RoundRobinStrategy",
     "CostFirstStrategy",

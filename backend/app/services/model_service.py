@@ -33,6 +33,7 @@ from app.rules.engine import RuleEngine
 from app.services.retry_handler import RetryHandler
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
+from app.services.stream_latency import StreamLatencyTracker
 from app.services.strategy import CostFirstStrategy, PriorityStrategy, RoundRobinStrategy, SelectionStrategy
 
 
@@ -48,6 +49,7 @@ class ModelService:
         model_repo: ModelRepository,
         provider_repo: ProviderRepository,
         health_tracker: ProviderHealthTracker | None = None,
+        latency_tracker: StreamLatencyTracker | None = None,
     ):
         """
         Initialize Service
@@ -59,6 +61,7 @@ class ModelService:
         self.model_repo = model_repo
         self.provider_repo = provider_repo
         self._health_tracker = health_tracker
+        self._latency_tracker = latency_tracker
         self._round_robin_strategy = RoundRobinStrategy()
         self._cost_first_strategy = CostFirstStrategy()
         self._priority_strategy = PriorityStrategy()
@@ -190,7 +193,12 @@ class ModelService:
             )
 
         strategy = self._get_strategy(mapping.strategy)
-        retry_handler = RetryHandler(strategy, self._health_tracker)
+        retry_handler = RetryHandler(
+            strategy,
+            self._health_tracker,
+            self._latency_tracker,
+            mapping.latency_routing,
+        )
         ordered_candidates = await retry_handler.get_ordered_candidates(
             candidates,
             requested_model,
@@ -821,6 +829,7 @@ class ModelService:
                     capabilities=m.capabilities,
                     is_active=m.is_active,
                     disable_thinking=m.disable_thinking,
+                    latency_routing=m.latency_routing,
                     input_price=m.input_price,
                     output_price=m.output_price,
                     billing_mode=m.billing_mode,
@@ -973,6 +982,7 @@ class ModelService:
             model_type=mapping.model_type,
             alias_target_model=mapping.alias_target_model,
             capabilities=effective_mapping.capabilities,
+            latency_routing=effective_mapping.latency_routing,
             is_active=effective_mapping.is_active,
             disable_thinking=effective_mapping.disable_thinking,
             input_price=effective_mapping.input_price,

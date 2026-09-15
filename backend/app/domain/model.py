@@ -16,6 +16,24 @@ SelectionStrategyType = Literal["round_robin", "cost_first", "priority"]
 ModelType = Literal["chat", "speech", "transcription", "embedding", "images", "alias"]
 
 
+class LatencyRoutingConfig(BaseModel):
+    """Dynamic routing policy based on streaming time to first text."""
+
+    enabled: bool = False
+    ttft_threshold_ms: int = Field(3000, ge=100, le=300_000)
+    min_samples: int = Field(10, ge=1, le=10_000)
+    breach_count: int = Field(3, ge=1, le=100)
+    penalty_weight_percent: int = Field(30, ge=1, le=100)
+    cooldown_seconds: int = Field(60, ge=1, le=86_400)
+    recovery_count: int = Field(3, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def _validate_sample_counts(self) -> "LatencyRoutingConfig":
+        if self.breach_count > self.min_samples:
+            raise ValueError("breach_count must be <= min_samples")
+        return self
+
+
 class TokenTierPrice(BaseModel):
     """Tier price config (based on input token count)"""
 
@@ -50,6 +68,10 @@ class ModelMappingBase(BaseModel):
     # Model-level matching rules (JSON format)
     matching_rules: Optional[dict[str, Any]] = Field(
         None, description="Model Level Matching Rules"
+    )
+    latency_routing: LatencyRoutingConfig = Field(
+        default_factory=LatencyRoutingConfig,
+        description="Streaming TTFT routing optimization",
     )
 
 
@@ -106,6 +128,7 @@ class ModelMappingUpdate(BaseModel):
     model_type: Optional[ModelType] = None
     alias_target_model: Optional[str] = Field(None, min_length=1, max_length=100)
     matching_rules: Optional[dict[str, Any]] = None
+    latency_routing: Optional[LatencyRoutingConfig] = None
     capabilities: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
     disable_thinking: Optional[bool] = None

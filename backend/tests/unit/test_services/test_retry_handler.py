@@ -6,6 +6,9 @@ import pytest
 from unittest.mock import AsyncMock
 from app.services.retry_handler import RetryHandler
 from app.services.strategy import PriorityStrategy, RoundRobinStrategy
+from app.domain.model import LatencyRoutingConfig
+from app.services.provider_health import provider_health_key
+from app.services.stream_latency import StreamLatencyTracker, stream_chunk_has_text
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
 
@@ -158,6 +161,47 @@ class TestRetryHandler:
         
         assert result.success is False
         assert result.response.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_stream_records_only_first_meaningful_text_chunk(self):
+        tracker = StreamLatencyTracker()
+        policy = LatencyRoutingConfig(
+            enabled=True,
+            ttft_threshold_ms=300000,
+            min_samples=1,
+            breach_count=1,
+        )
+        handler = RetryHandler(
+            self.strategy,
+            latency_tracker=tracker,
+            latency_config=policy,
+        )
+        candidate = self.candidates[0]
+
+        def forward_stream_fn(_candidate):
+            async def stream():
+                response = ProviderResponse(status_code=200)
+                yield b'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n', response
+                yield b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n', response
+                yield b'data: {"choices":[{"delta":{"content":"again"}}]}\n\n', response
+
+            return stream()
+
+        chunks = [
+            item
+            async for item in handler.execute_with_retry_stream(
+                [candidate],
+                "test",
+                forward_stream_fn,
+                is_meaningful_chunk=stream_chunk_has_text,
+            )
+        ]
+        snapshot = (await tracker.get_snapshots([candidate], policy))[
+            provider_health_key(candidate)
+        ]
+
+        assert len(chunks) == 3
+        assert snapshot.sample_count == 1
 
     @pytest.mark.asyncio
     async def test_switch_between_same_provider_multiple_target_models(self):
@@ -406,4 +450,3 @@ async def test_paused_candidate_still_tried_when_active_fail():
     # Paused B is only reached after both active providers were tried.
     assert tried[-1] == 402
     assert set(tried[:-1]) == {401, 403}
-

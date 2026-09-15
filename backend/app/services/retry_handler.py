@@ -6,8 +6,10 @@ Implements logic for request retry and provider failover.
 
 import asyncio
 import logging
+import math
+import time
+from dataclasses import dataclass, replace
 from datetime import datetime
-from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional, Awaitable
 
 from app.config import get_settings
@@ -19,6 +21,8 @@ from app.services.provider_health import (
     provider_health_key,
 )
 from app.services.strategy import SelectionStrategy
+from app.domain.model import LatencyRoutingConfig
+from app.services.stream_latency import StreamLatencyTracker
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +74,8 @@ class RetryHandler:
         self,
         strategy: SelectionStrategy,
         health_tracker: ProviderHealthTracker | None = None,
+        latency_tracker: StreamLatencyTracker | None = None,
+        latency_config: LatencyRoutingConfig | None = None,
     ):
         """
         Initialize Handler
@@ -84,6 +90,8 @@ class RetryHandler:
         # Retry interval (ms)
         self.retry_delay_ms = settings.RETRY_DELAY_MS
         self.health_tracker = health_tracker
+        self.latency_tracker = latency_tracker
+        self.latency_config = latency_config or LatencyRoutingConfig()
 
     @staticmethod
     def _candidate_key(
@@ -149,13 +157,11 @@ class RetryHandler:
                 active_candidates.append(candidate)
 
         groups: list[tuple[str, list[CandidateProvider]]] = []
-        if self.health_tracker is None or not self.health_tracker.enabled:
-            if active_candidates:
-                groups.append((requested_model, active_candidates))
-        else:
+        healthy = active_candidates
+        degraded_groups: dict[float, list[CandidateProvider]] = {}
+        if self.health_tracker is not None and self.health_tracker.enabled:
             snapshots = await self.health_tracker.get_snapshots(active_candidates)
-            healthy: list[CandidateProvider] = []
-            degraded_groups: dict[float, list[CandidateProvider]] = {}
+            healthy = []
             for candidate in active_candidates:
                 snapshot = snapshots[provider_health_key(candidate)]
                 if not snapshot.degraded:
@@ -163,13 +169,41 @@ class RetryHandler:
                     continue
                 degraded_groups.setdefault(snapshot.failure_rate, []).append(candidate)
 
-            if healthy:
-                groups.append((requested_model, healthy))
-            for failure_rate in sorted(degraded_groups):
-                # Isolate round-robin counters for degraded fallback groups so
-                # their distribution does not disturb the healthy pool.
-                group_model_key = f"{requested_model}::degraded::{failure_rate:.6f}"
-                groups.append((group_model_key, degraded_groups[failure_rate]))
+        latency_degraded: list[CandidateProvider] = []
+        if healthy and self.latency_tracker is not None:
+            latency_snapshots = await self.latency_tracker.get_snapshots(
+                healthy, self.latency_config
+            )
+            if self.latency_config.enabled:
+                latency_healthy = []
+                for candidate in healthy:
+                    if latency_snapshots[provider_health_key(candidate)].degraded:
+                        latency_degraded.append(
+                            replace(
+                                candidate,
+                                weight=max(
+                                    1,
+                                    math.ceil(
+                                        candidate.weight
+                                        * self.latency_config.penalty_weight_percent
+                                        / 100
+                                    ),
+                                ),
+                            )
+                        )
+                    else:
+                        latency_healthy.append(candidate)
+                healthy = latency_healthy
+
+        if healthy:
+            groups.append((requested_model, healthy))
+        if latency_degraded:
+            groups.append((f"{requested_model}::latency-degraded", latency_degraded))
+        for failure_rate in sorted(degraded_groups):
+            # Isolate round-robin counters for degraded fallback groups so
+            # their distribution does not disturb the healthy pool.
+            group_model_key = f"{requested_model}::degraded::{failure_rate:.6f}"
+            groups.append((group_model_key, degraded_groups[failure_rate]))
 
         # Paused candidates come last, in their own isolated strategy group.
         if paused_candidates:
@@ -384,6 +418,7 @@ class RetryHandler:
         input_tokens: Optional[int] = None,
         image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
+        is_meaningful_chunk: Callable[[bytes], bool] | None = None,
     ) -> Any:
         """
         Execute Streaming Request with Retry
@@ -422,6 +457,8 @@ class RetryHandler:
             
             while same_provider_retries < self.max_retries:
                 try:
+                    attempt_started_at = time.monotonic()
+                    latency_recorded = False
                     # Get generator
                     attempt_time = utc_now()
                     result = forward_stream_fn(current_provider)
@@ -445,11 +482,28 @@ class RetryHandler:
 
                     if response.is_success:
                         # Success, yield subsequent data
+                        if is_meaningful_chunk is not None and is_meaningful_chunk(chunk):
+                            await self._record_stream_latency(
+                                current_provider,
+                                (time.monotonic() - attempt_started_at) * 1000,
+                            )
+                            latency_recorded = True
                         yield chunk, response, current_provider, total_retry_count
                         final_response = response
                         async for chunk, stream_response in generator:
                             final_response = stream_response
                             last_response = stream_response
+                            if (
+                                not latency_recorded
+                                and is_meaningful_chunk is not None
+                                and stream_response.is_success
+                                and is_meaningful_chunk(chunk)
+                            ):
+                                await self._record_stream_latency(
+                                    current_provider,
+                                    (time.monotonic() - attempt_started_at) * 1000,
+                                )
+                                latency_recorded = True
                             yield chunk, stream_response, current_provider, total_retry_count
                         await self._record_health(current_provider, final_response)
                         return
@@ -553,6 +607,24 @@ class RetryHandler:
             status_code=503,
             error="All providers failed",
         ), last_provider, total_retry_count
+
+    async def _record_stream_latency(
+        self,
+        provider: CandidateProvider,
+        ttft_ms: float,
+    ) -> None:
+        if self.latency_tracker is None or not self.latency_config.enabled:
+            return
+        try:
+            await self.latency_tracker.record_ttft(
+                provider, self.latency_config, ttft_ms
+            )
+        except Exception:
+            logger.exception(
+                "Failed to update provider stream latency: provider_id=%s target_model=%s",
+                provider.provider_id,
+                provider.target_model,
+            )
     
     async def _get_next_untried_provider(
         self,

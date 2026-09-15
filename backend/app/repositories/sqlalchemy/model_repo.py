@@ -19,6 +19,7 @@ from app.db.models import (
     ServiceProvider,
 )
 from app.domain.model import (
+    LatencyRoutingConfig,
     ModelMapping,
     ModelMappingCreate,
     ModelMappingUpdate,
@@ -77,6 +78,9 @@ class SQLAlchemyModelRepository(ModelRepository):
             model_type=entity.model_type or "chat",
             alias_target_model=entity.alias_target_model,
             matching_rules=entity.matching_rules,
+            latency_routing=LatencyRoutingConfig.model_validate(
+                entity.latency_routing or {}
+            ),
             capabilities=entity.capabilities,
             is_active=entity.is_active,
             disable_thinking=entity.disable_thinking,
@@ -145,6 +149,7 @@ class SQLAlchemyModelRepository(ModelRepository):
             model_type=data.model_type,
             alias_target_model=data.alias_target_model,
             matching_rules=data.matching_rules,
+            latency_routing=data.latency_routing.model_dump(),
             capabilities=data.capabilities,
             is_active=data.is_active,
             disable_thinking=data.disable_thinking,
@@ -282,6 +287,8 @@ class SQLAlchemyModelRepository(ModelRepository):
             return None
         
         update_data = data.model_dump(exclude_unset=True)
+        if "latency_routing" in update_data and update_data["latency_routing"] is not None:
+            update_data["latency_routing"] = data.latency_routing.model_dump()
         for key, value in update_data.items():
             setattr(entity, key, value)
         

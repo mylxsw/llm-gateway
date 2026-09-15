@@ -458,7 +458,15 @@
       "enabledStatusLabel": "启用状态",
       "enabledStatusHelp": "控制该模型是否可以接收请求。",
       "disableThinkingLabel": "关闭思考模式",
-      "disableThinkingHelp": "开启后，网关会覆盖请求参数，并按实际供应商协议强制关闭思考模式。"
+      "disableThinkingHelp": "开启后，网关会覆盖请求参数，并按实际供应商协议强制关闭思考模式。",
+      "latencyRoutingLabel": "首字符延迟优化",
+      "latencyRoutingHelp": "流式请求首段有效文本持续过慢时，临时降低该供应商的调度优先级。",
+      "latencyThresholdLabel": "TTFT 阈值（毫秒）",
+      "latencyMinSamplesLabel": "最少样本数",
+      "latencyBreachCountLabel": "连续超限次数",
+      "latencyPenaltyLabel": "降权后权重（%）",
+      "latencyCooldownLabel": "冷却时间（秒）",
+      "latencyRecoveryCountLabel": "恢复所需次数"
     },
     "detail": {
       "missingModelParam": "缺少模型参数",
