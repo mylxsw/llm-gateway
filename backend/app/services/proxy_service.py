@@ -44,6 +44,7 @@ from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
+from app.services.stream_latency import StreamLatencyTracker, stream_chunk_has_text
 from app.services.active_requests import active_requests
 from app.services.protocol_hooks import OPENAI_IMAGE_PATHS, ProtocolConversionHooks
 from app.services.strategy import (
@@ -152,6 +153,7 @@ class ProxyService:
         priority_strategy: Optional[SelectionStrategy] = None,
         protocol_hooks: Optional[ProtocolConversionHooks] = None,
         health_tracker: Optional[ProviderHealthTracker] = None,
+        latency_tracker: Optional[StreamLatencyTracker] = None,
     ):
         """
         Initialize Service
@@ -200,6 +202,7 @@ class ProxyService:
         self._priority_strategy = priority_strategy or PriorityStrategy()
         self._protocol_hooks = protocol_hooks or ProtocolConversionHooks()
         self._health_tracker = health_tracker
+        self._latency_tracker = latency_tracker
 
     @asynccontextmanager
     async def _repos(self):
@@ -761,7 +764,12 @@ class ProxyService:
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
-        retry_handler = RetryHandler(strategy, self._health_tracker)
+        retry_handler = RetryHandler(
+            strategy,
+            self._health_tracker,
+            self._latency_tracker,
+            model_mapping.latency_routing,
+        )
 
         # Track protocol conversion data for logging
         conversion_data: dict[str, Any] = {
@@ -1377,7 +1385,12 @@ class ProxyService:
 
         # Select strategy based on model configuration
         strategy = self._get_strategy(model_mapping.strategy)
-        retry_handler = RetryHandler(strategy, self._health_tracker)
+        retry_handler = RetryHandler(
+            strategy,
+            self._health_tracker,
+            self._latency_tracker,
+            model_mapping.latency_routing,
+        )
 
         # Track protocol conversion data for logging
         stream_conversion_data: dict[str, Any] = {
@@ -1738,6 +1751,7 @@ class ProxyService:
             input_tokens=input_tokens,
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
+            is_meaningful_chunk=stream_chunk_has_text,
         )
 
         # Get first chunk to determine status

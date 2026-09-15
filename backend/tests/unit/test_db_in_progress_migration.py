@@ -111,6 +111,26 @@ def test_startup_adds_disable_thinking_with_false_default_to_existing_models():
     assert value in (False, 0)
 
 
+def test_startup_adds_latency_routing_to_existing_model_table():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE model_mappings ("
+                "requested_model VARCHAR(100) PRIMARY KEY, "
+                "model_type VARCHAR(50)"
+                ")"
+            )
+        )
+
+        _run_migrations(connection)
+
+        columns = {column["name"] for column in inspect(connection).get_columns("model_mappings")}
+
+    engine.dispose()
+    assert "latency_routing" in columns
+
+
 def test_startup_enforces_alias_target_integrity_on_existing_sqlite_table():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as connection:

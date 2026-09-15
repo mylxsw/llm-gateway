@@ -157,6 +157,8 @@ class ModelMapping(Base):
     )
     # Model-level matching rules (JSON format)
     matching_rules: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
+    # Streaming time-to-first-text based routing policy.
+    latency_routing: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Model capabilities description (JSON format)
     capabilities: Mapped[Optional[dict]] = mapped_column(SQLiteJSON, nullable=True)
     # Default pricing (USD per 1,000,000 tokens)

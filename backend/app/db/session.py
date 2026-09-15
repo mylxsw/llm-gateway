@@ -149,6 +149,7 @@ def _run_migrations(sync_conn) -> None:
             "cached_output_price": "cached_output_price NUMERIC(12,4)",
             "cache_creation_input_price": "cache_creation_input_price NUMERIC(12,4)",
             "disable_thinking": "disable_thinking BOOLEAN NOT NULL DEFAULT FALSE",
+            "latency_routing": "latency_routing JSON",
         },
     )
     if "model_mappings" in table_names:

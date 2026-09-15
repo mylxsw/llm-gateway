@@ -12,7 +12,12 @@ import pytest_asyncio
 from sqlalchemy import text
 
 from app.common.errors import ConflictError
-from app.domain.model import ModelMappingCreate, TokenTierPrice
+from app.domain.model import (
+    LatencyRoutingConfig,
+    ModelMappingCreate,
+    ModelMappingUpdate,
+    TokenTierPrice,
+)
 from app.repositories.sqlalchemy.model_repo import SQLAlchemyModelRepository
 
 
@@ -49,6 +54,41 @@ class TestCreateMappingPersistsPricingFields:
         assert result.disable_thinking is True
         assert fetched is not None
         assert fetched.disable_thinking is True
+
+    async def test_create_and_update_latency_routing_roundtrip(self, model_repo):
+        data = ModelMappingCreate(
+            requested_model="test-latency-routing",
+            latency_routing=LatencyRoutingConfig(
+                enabled=True,
+                ttft_threshold_ms=2500,
+                min_samples=8,
+                breach_count=2,
+                penalty_weight_percent=25,
+                cooldown_seconds=90,
+                recovery_count=4,
+            ),
+        )
+
+        created = await model_repo.create_mapping(data)
+        fetched = await model_repo.get_mapping("test-latency-routing")
+
+        assert created.latency_routing.enabled is True
+        assert fetched is not None
+        assert fetched.latency_routing.ttft_threshold_ms == 2500
+        assert fetched.latency_routing.penalty_weight_percent == 25
+
+        updated = await model_repo.update_mapping(
+            "test-latency-routing",
+            ModelMappingUpdate(
+                latency_routing=LatencyRoutingConfig(
+                    enabled=False,
+                    ttft_threshold_ms=4000,
+                )
+            ),
+        )
+        assert updated is not None
+        assert updated.latency_routing.enabled is False
+        assert updated.latency_routing.ttft_threshold_ms == 4000
 
     async def test_create_mapping_persists_token_tiered(self, model_repo):
         data = ModelMappingCreate(

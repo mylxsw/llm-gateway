@@ -458,7 +458,15 @@
       "enabledStatusLabel": "Enabled Status",
       "enabledStatusHelp": "Controls whether this model can receive requests.",
       "disableThinkingLabel": "Disable Thinking",
-      "disableThinkingHelp": "When enabled, the gateway overrides request parameters and disables thinking using the selected provider protocol."
+      "disableThinkingHelp": "When enabled, the gateway overrides request parameters and disables thinking using the selected provider protocol.",
+      "latencyRoutingLabel": "First-text latency optimization",
+      "latencyRoutingHelp": "Temporarily deprioritizes a provider when streaming time to first meaningful text stays high.",
+      "latencyThresholdLabel": "TTFT threshold (ms)",
+      "latencyMinSamplesLabel": "Minimum samples",
+      "latencyBreachCountLabel": "Consecutive breaches",
+      "latencyPenaltyLabel": "Degraded weight (%)",
+      "latencyCooldownLabel": "Cooldown (seconds)",
+      "latencyRecoveryCountLabel": "Healthy probes to recover"
     },
     "detail": {
       "missingModelParam": "Missing model parameter",

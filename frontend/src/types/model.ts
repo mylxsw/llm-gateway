@@ -11,6 +11,16 @@ export type SelectionStrategy = 'round_robin' | 'cost_first' | 'priority';
 export type ModelType = 'chat' | 'speech' | 'transcription' | 'embedding' | 'images' | 'alias';
 export type ModelListSortBy = 'requested_model_asc' | 'requested_model_desc';
 
+export interface LatencyRoutingConfig {
+  enabled: boolean;
+  ttft_threshold_ms: number;
+  min_samples: number;
+  breach_count: number;
+  penalty_weight_percent: number;
+  cooldown_seconds: number;
+  recovery_count: number;
+}
+
 export interface ModelAliasTarget {
   requested_model: string;
   model_type: Exclude<ModelType, 'alias'>;
@@ -26,6 +36,7 @@ export interface ModelMapping {
   capabilities?: Record<string, unknown>; // Capabilities description
   is_active: boolean;
   disable_thinking: boolean;
+  latency_routing: LatencyRoutingConfig;
   // Pricing (USD per 1,000,000 tokens)
   input_price?: number | null;
   output_price?: number | null;
@@ -123,6 +134,7 @@ export interface ModelMappingCreate {
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   disable_thinking?: boolean;
+  latency_routing?: LatencyRoutingConfig;
   input_price?: number | null;
   output_price?: number | null;
   billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;
@@ -150,6 +162,7 @@ export interface ModelMappingUpdate {
   capabilities?: Record<string, unknown>;
   is_active?: boolean;
   disable_thinking?: boolean;
+  latency_routing?: LatencyRoutingConfig;
   input_price?: number | null;
   output_price?: number | null;
   billing_mode?: 'token_flat' | 'token_tiered' | 'per_request' | 'per_image' | null;

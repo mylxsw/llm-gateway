@@ -34,6 +34,47 @@ async def test_admin_create_model_allows_missing_matching_rules(db_session, monk
 
 
 @pytest.mark.asyncio
+async def test_admin_model_latency_routing_roundtrip_and_validation(db_session, monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        created = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "latency-routing-admin-test",
+                "latency_routing": {
+                    "enabled": True,
+                    "ttft_threshold_ms": 2500,
+                    "min_samples": 8,
+                    "breach_count": 2,
+                    "penalty_weight_percent": 25,
+                    "cooldown_seconds": 90,
+                    "recovery_count": 4,
+                },
+            },
+        )
+        invalid = await ac.put(
+            "/api/admin/models/latency-routing-admin-test",
+            json={
+                "latency_routing": {
+                    "enabled": True,
+                    "min_samples": 2,
+                    "breach_count": 3,
+                }
+            },
+        )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["latency_routing"]["ttft_threshold_ms"] == 2500
+    assert invalid.status_code == 422, invalid.text
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
 async def test_admin_creates_and_updates_alias_for_real_model(db_session, monkeypatch):
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
