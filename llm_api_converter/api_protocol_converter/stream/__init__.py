@@ -240,6 +240,13 @@ def convert_stream_sync(
             )
             yield from target_events
 
+    finish = getattr(decoder, "finish_stream", None)
+    if finish is not None:
+        for ir_event in finish():
+            yield from encoder.encode_stream_event(
+                ir_event, options={"output_format": output_format}
+            )
+
 
 class StreamConverter:
     """
@@ -311,6 +318,14 @@ class StreamConverter:
             converted = self.convert_event(event)
             yield from converted
 
+        finish = getattr(self._decoder, "finish_stream", None)
+        if finish is not None:
+            for ir_event in finish():
+                self.accumulator.process_event(ir_event)
+                yield from self._encoder.encode_stream_event(
+                    ir_event, options={"output_format": self.output_format}
+                )
+
     def get_accumulated_content(self) -> str:
         """Get accumulated text content."""
         return self.accumulator.get_text_content()
@@ -322,6 +337,9 @@ class StreamConverter:
     def reset(self) -> None:
         """Reset converter state."""
         self.accumulator.reset()
+        from ..converters import _DECODER_CLASSES
+
+        self._decoder = _DECODER_CLASSES[self.source_protocol]()
 
 
 __all__ = [

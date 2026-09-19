@@ -123,6 +123,15 @@ for event in anthropic_events:
     print(event)
 ```
 
+OpenAI Chat tool streams are matched by tool index, or by a non-empty ID when
+the index is absent. Empty text and metadata placeholders do not start new
+blocks. The first tool streams incrementally; later tools and following text
+are buffered until finish or iterator exhaustion because OpenAI has no per-tool
+end marker. Each tool is emitted as one sequential content block. Missing
+identity at completion or an ambiguous continuation raises `StreamConversionError`
+instead of emitting an empty tool block. Call `reset()` before reusing a
+`StreamConverter` for a new response.
+
 ### Tool Calling
 
 ```python
