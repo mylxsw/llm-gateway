@@ -66,7 +66,8 @@ class RetryHandler:
     
     Implements the following retry logic:
     - Status code >= 500: Retry on the same provider, max 3 times, 1000ms interval
-    - Status code < 500: Switch directly to the next provider
+    - Optional request repair: One corrective attempt per candidate
+    - Other status codes < 500: Switch directly to the next provider
     - All providers failed: Return the last failed response
     """
     
@@ -274,6 +275,7 @@ class RetryHandler:
         input_tokens: Optional[int] = None,
         image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
+        repair_request: Callable[[CandidateProvider, ProviderResponse], bool] | None = None,
     ) -> RetryResult:
         """
         Execute Request with Retry
@@ -316,6 +318,7 @@ class RetryHandler:
             
             # Same provider retry count
             same_provider_retries = 0
+            repair_attempted = False
             
             while same_provider_retries < self.max_retries:
                 # Execute request
@@ -365,6 +368,13 @@ class RetryHandler:
                     same_provider_retries + 1,
                     self.max_retries,
                 )
+
+                # Allow one corrective request before ordinary retry/failover.
+                if not repair_attempted and repair_request is not None:
+                    if repair_request(current_provider, response):
+                        repair_attempted = True
+                        total_retry_count += 1
+                        continue
 
                 # Status code >= 500: Retry on same provider
                 if response.is_server_error:
@@ -419,6 +429,7 @@ class RetryHandler:
         image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
         is_meaningful_chunk: Callable[[bytes], bool] | None = None,
+        repair_request: Callable[[CandidateProvider, ProviderResponse], bool] | None = None,
     ) -> Any:
         """
         Execute Streaming Request with Retry
@@ -444,6 +455,7 @@ class RetryHandler:
         last_response: Optional[ProviderResponse] = None
         last_provider: Optional[CandidateProvider] = None
         attempt_index = 0
+        response_started = False
 
         async for current_provider in self._iter_ordered_candidates(
             candidates,
@@ -453,6 +465,7 @@ class RetryHandler:
         ):
             last_provider = current_provider
             same_provider_retries = 0
+            repair_attempted = False
             provider_response: Optional[ProviderResponse] = None
             
             while same_provider_retries < self.max_retries:
@@ -488,6 +501,7 @@ class RetryHandler:
                                 (time.monotonic() - attempt_started_at) * 1000,
                             )
                             latency_recorded = True
+                        response_started = True
                         yield chunk, response, current_provider, total_retry_count
                         final_response = response
                         async for chunk, stream_response in generator:
@@ -531,6 +545,21 @@ class RetryHandler:
                         self.max_retries,
                     )
 
+                    # The first response failed; nothing has been sent downstream.
+                    # Close its generator before opening a replacement connection.
+                    if hasattr(generator, "aclose"):
+                        try:
+                            await generator.aclose()
+                        except Exception:
+                            # Cleanup must not turn a known HTTP error into a 502
+                            # and accidentally change its retry/failover policy.
+                            logger.exception("Failed to close unsuccessful upstream stream")
+                    if not repair_attempted and repair_request is not None:
+                        if repair_request(current_provider, response):
+                            repair_attempted = True
+                            total_retry_count += 1
+                            continue
+
                     # Failure logic
                     if response.is_server_error:
                         same_provider_retries += 1
@@ -556,6 +585,9 @@ class RetryHandler:
                         break
 
                 except Exception as e:
+                    # Replaying after a successful response starts would duplicate output.
+                    if response_started:
+                        raise
                     # Network or other exceptions
                     attempt_time = utc_now()
                     attempt_record = AttemptRecord(
