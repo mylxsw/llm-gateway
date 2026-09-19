@@ -17,6 +17,7 @@ Main entry points:
 from __future__ import annotations
 
 import logging
+from contextlib import aclosing
 from typing import Any, AsyncGenerator, Optional
 
 from app.common.errors import ServiceError
@@ -294,16 +295,19 @@ async def convert_stream_for_user(
 
         # Use new conversion module
         # Note: For stream conversion, we convert FROM supplier TO user request protocol
-        async for chunk in _convert_stream(
-            source_protocol=supplier_protocol,
-            target_protocol=request_protocol,
-            upstream=upstream,
-            model=model,
-            options={"input_tokens": input_tokens}
-            if input_tokens is not None
-            else None,
-        ):
-            yield chunk
+        async with aclosing(
+            _convert_stream(
+                source_protocol=supplier_protocol,
+                target_protocol=request_protocol,
+                upstream=upstream,
+                model=model,
+                options=(
+                    {"input_tokens": input_tokens} if input_tokens is not None else None
+                ),
+            )
+        ) as converted:
+            async for chunk in converted:
+                yield chunk
 
     except UnsupportedConversionError as e:
         raise ServiceError(

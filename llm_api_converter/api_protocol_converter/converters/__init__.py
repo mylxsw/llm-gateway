@@ -207,6 +207,11 @@ def convert_stream(
             target_events = encoder.encode_stream_event(ir_event, options=options)
             yield from target_events
 
+    finish = getattr(decoder, "finish_stream", None)
+    if finish is not None:
+        for ir_event in finish():
+            yield from encoder.encode_stream_event(ir_event, options=options)
+
 
 # =============================================================================
 # OpenAI Classic to Others

@@ -32,6 +32,7 @@ from ..ir import (
     ToolChoiceType,
 )
 from .exceptions import ConversionError, ValidationError
+from .openai_chat_stream import OpenAIChatStreamBlocks
 from .schema_utils import omit_null_required
 
 
@@ -43,50 +44,8 @@ class OpenAIChatDecoder:
 
     def _reset_stream_state(self):
         """Reset per-stream state. Called at init and can be called between streams."""
-        # Mapping from tool call ID to assigned content block index
-        self._stream_tool_id_to_index: Dict[str, int] = {}
-        # Next available content block index
-        self._stream_next_block_index: int = 0
-        # Currently active content block index (for emitting CONTENT_BLOCK_STOP)
-        self._stream_active_block_index: Optional[int] = None
-        # Whether a text content block has been started
-        self._stream_text_block_started: bool = False
-        # Whether MESSAGE_START has been emitted
-        self._stream_message_started: bool = False
-
-    def _resolve_tool_call_index(self, tc: Dict[str, Any]) -> int:
-        """Resolve the correct content block index for a streaming tool call.
-
-        Handles the case where some providers (e.g. Google Gemini's OpenAI-compatible
-        endpoint) don't include an ``index`` field in tool_call objects. When ``index``
-        is missing, the tool call ID is used to track and assign unique indices.
-        """
-        # If index is explicitly provided, use it and track
-        if "index" in tc:
-            index = tc["index"]
-            if "id" in tc:
-                self._stream_tool_id_to_index[tc["id"]] = index
-            # Ensure next_block_index stays ahead
-            self._stream_next_block_index = max(
-                self._stream_next_block_index, index + 1
-            )
-            return index
-
-        # No index field — resolve from tool call ID
-        if "id" in tc:
-            tc_id = tc["id"]
-            if tc_id in self._stream_tool_id_to_index:
-                return self._stream_tool_id_to_index[tc_id]
-            # New tool call without index — assign next available
-            index = self._stream_next_block_index
-            self._stream_tool_id_to_index[tc_id] = index
-            self._stream_next_block_index = index + 1
-            return index
-
-        # No index and no id — continuation of the active block
-        if self._stream_active_block_index is not None:
-            return self._stream_active_block_index
-        return 0
+        self._stream_blocks = OpenAIChatStreamBlocks()
+        self._stream_message_started = False
 
     def decode_request(self, payload: Dict[str, Any]) -> IRRequest:
         """Decode an OpenAI Chat request to IR."""
@@ -406,7 +365,7 @@ class OpenAIChatDecoder:
 
         # Handle [DONE] marker
         if event == "[DONE]":
-            return [IRStreamEvent(type=StreamEventType.DONE)]
+            return self.finish_stream() + [IRStreamEvent(type=StreamEventType.DONE)]
 
         ir_events = []
 
@@ -445,79 +404,11 @@ class OpenAIChatDecoder:
                 )
             )
 
-        # Content delta
-        if "content" in delta and delta["content"]:
-            # Track text block to offset tool call indices correctly
-            if not self._stream_text_block_started:
-                self._stream_text_block_started = True
-                text_index = self._stream_next_block_index
-                self._stream_next_block_index = text_index + 1
-                self._stream_active_block_index = text_index
-            ir_events.append(
-                IRStreamEvent(
-                    type=StreamEventType.CONTENT_BLOCK_DELTA,
-                    index=self._stream_active_block_index
-                    if self._stream_text_block_started
-                    else 0,
-                    delta_type="text",
-                    delta_text=delta["content"],
-                )
-            )
+        ir_events.extend(self._stream_blocks.feed(delta))
 
-        # Tool calls delta
-        if "tool_calls" in delta:
-            for tc in delta["tool_calls"]:
-                index = self._resolve_tool_call_index(tc)
-                func = tc.get("function", {})
-
-                # Tool call start (has id and name)
-                if "id" in tc:
-                    # Close previous active content block if switching to a new one
-                    if (
-                        self._stream_active_block_index is not None
-                        and self._stream_active_block_index != index
-                    ):
-                        ir_events.append(
-                            IRStreamEvent(
-                                type=StreamEventType.CONTENT_BLOCK_STOP,
-                                index=self._stream_active_block_index,
-                            )
-                        )
-
-                    self._stream_active_block_index = index
-                    ir_events.append(
-                        IRStreamEvent(
-                            type=StreamEventType.CONTENT_BLOCK_START,
-                            index=index,
-                            content_block=IRToolUseBlock(
-                                id=tc["id"],
-                                name=func.get("name", ""),
-                            ),
-                        )
-                    )
-
-                # Arguments delta
-                if "arguments" in func:
-                    ir_events.append(
-                        IRStreamEvent(
-                            type=StreamEventType.CONTENT_BLOCK_DELTA,
-                            index=index,
-                            delta_type="input_json",
-                            delta_json=func["arguments"],
-                        )
-                    )
-
-        # Finish reason
+        # Finish reason closes all queued content before the message delta.
         if finish_reason:
-            # Close any active content block before message delta
-            if self._stream_active_block_index is not None:
-                ir_events.append(
-                    IRStreamEvent(
-                        type=StreamEventType.CONTENT_BLOCK_STOP,
-                        index=self._stream_active_block_index,
-                    )
-                )
-                self._stream_active_block_index = None
+            ir_events.extend(self.finish_stream())
 
             ir_events.append(
                 IRStreamEvent(
@@ -527,6 +418,10 @@ class OpenAIChatDecoder:
             )
 
         return ir_events
+
+    def finish_stream(self) -> List[IRStreamEvent]:
+        """Flush buffered content on EOF, including streams without a finish chunk."""
+        return self._stream_blocks.finish()
 
     def _parse_sse_line(self, line: str) -> Optional[Union[Dict[str, Any], str]]:
         """Parse an SSE data line."""

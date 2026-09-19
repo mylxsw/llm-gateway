@@ -123,6 +123,28 @@ for event in anthropic_events:
     print(event)
 ```
 
+OpenAI Chat tool streams are matched by tool index, or by a non-empty ID when
+the index is absent. Empty text and metadata placeholders do not start new
+blocks. The first tool streams incrementally; later tools and following text
+are buffered until finish or iterator exhaustion because OpenAI has no per-tool
+end marker. Each tool is emitted as one sequential content block. Missing
+identity at completion or an ambiguous continuation raises `StreamConversionError`
+instead of emitting an empty tool block. Call `reset()` before reusing a
+`StreamConverter` for a new response.
+
+The shared OpenAI Chat block tracker limits retained UTF-8 payload (arguments,
+text and tool identities) to 8 MiB, queued fragments to 65,536, and content blocks
+per response to 1,024. Exceeding a limit raises `StreamConversionError`; data is
+never silently truncated. Flushed fragments release their byte/fragment budget.
+These are conversion-buffer limits, not a limit on all gateway memory usage.
+
+The gateway sends an Anthropic `ping` after 15 seconds without a converted event,
+including while later tools are buffered. The timer does not cancel or restart
+upstream reads. Disconnects cancel and collect the pending read and close the
+upstream stream. Heartbeats mitigate downstream idle timeouts; they do not extend
+upstream read timeouts or a client's absolute request deadline. The standalone
+synchronous SDK does not generate timed heartbeats.
+
 ### Tool Calling
 
 ```python

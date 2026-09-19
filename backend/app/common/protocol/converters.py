@@ -12,13 +12,18 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from contextlib import aclosing
+
+from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional, Union
+
+import anyio
 
 from app.common.reasoning import (
     normalize_reasoning_for_anthropic,
     normalize_reasoning_for_openai,
 )
 from app.common.usage_extractor import extract_usage_details
+from app.common.stream_heartbeat import with_heartbeat
 
 from .base import (
     ConversionResult,
@@ -66,6 +71,7 @@ try:
         StreamEventType,
     )
     from api_protocol_converter.stream import SSEFormatter, SSEParser
+    from api_protocol_converter.converters.openai_chat_stream import OpenAIChatStreamBlocks
 
     _HAS_SDK = True
 except ImportError as e:
@@ -73,6 +79,8 @@ except ImportError as e:
     _SDK_IMPORT_ERROR = str(e)
 
 logger = logging.getLogger(__name__)
+
+ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS = 15.0
 
 _OPENAI_CHAT_PATH = "/v1/chat/completions"
 _OPENAI_COMPLETIONS_PATH = "/v1/completions"
@@ -1761,6 +1769,39 @@ class SDKStreamConverter(IStreamConverter):
         *,
         options: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[bytes, None]:
+        try:
+            # Close the owned input even when the consumer stops at a yielded event.
+            async with aclosing(
+                self._convert(upstream, model, options=options)
+            ) as converted:
+                if (
+                    self._target == Protocol.ANTHROPIC
+                    and self._source != Protocol.ANTHROPIC
+                ):
+                    async with aclosing(
+                        with_heartbeat(
+                            converted,
+                            interval=ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS,
+                            heartbeat=_encode_sse_json({"type": "ping"}, event="ping"),
+                        )
+                    ) as alive:
+                        async for chunk in alive:
+                            yield chunk
+                else:
+                    async for chunk in converted:
+                        yield chunk
+
+        finally:
+            with anyio.CancelScope(shield=True):
+                await upstream.aclose()
+
+    async def _convert(
+        self,
+        upstream: AsyncGenerator[bytes, None],
+        model: str,
+        *,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> AsyncGenerator[bytes, None]:
         """Convert stream using SDK."""
         if not _HAS_SDK:
             raise ProtocolConversionError(
@@ -2049,12 +2090,14 @@ class SDKStreamConverter(IStreamConverter):
         sent_message_start = False
         sent_message_stop = False
 
-        # State tracking
-        current_block_index = 0
-        # current_block_type: "text" | "tool_use" | None
-        current_block_type: Optional[str] = None
-        # Track current tool call by id (more reliable than index which may be missing)
-        current_tool_call_id: Optional[str] = None
+        blocks = OpenAIChatStreamBlocks()
+        encoder = AnthropicMessagesEncoder()
+
+        def encode_blocks(events: List[IRStreamEvent]) -> Iterator[bytes]:
+            for event in events:
+                for encoded in encoder.encode_stream_event(event):
+                    yield _encode_sse_json(encoded, event=encoded["type"])
+
         # Usage + stop_reason are emitted in the trailing flush, because OpenAI
         # streams deliver the real usage in a final chunk with empty `choices`
         # (often AFTER the finish_reason chunk). Capture them as we go.
@@ -2107,119 +2150,12 @@ class SDKStreamConverter(IStreamConverter):
                 delta = choice.get("delta", {})
                 finish_reason = choice.get("finish_reason")
 
-                # Handle Text Content
-                content = delta.get("content")
-                if content is not None:
-                    # If we were in a tool block or this is the first block, start text block
-                    if current_block_type != "text":
-                        if current_block_type is not None:
-                            # Close previous block
-                            yield _encode_sse_json(
-                                {
-                                    "type": "content_block_stop",
-                                    "index": current_block_index,
-                                },
-                                event="content_block_stop",
-                            )
-                            current_block_index += 1
+                for encoded in encode_blocks(blocks.feed(delta)):
+                    yield encoded
 
-                        # Start new text block
-                        yield _encode_sse_json(
-                            {
-                                "type": "content_block_start",
-                                "index": current_block_index,
-                                "content_block": {"type": "text", "text": ""},
-                            },
-                            event="content_block_start",
-                        )
-                        current_block_type = "text"
-                        current_tool_call_id = None
-
-                    yield _encode_sse_json(
-                        {
-                            "type": "content_block_delta",
-                            "index": current_block_index,
-                            "delta": {"type": "text_delta", "text": content},
-                        },
-                        event="content_block_delta",
-                    )
-
-                # Handle Tool Calls
-                tool_calls = delta.get("tool_calls")
-                if tool_calls:
-                    for tool_call in tool_calls:
-                        t_id = tool_call.get("id")
-                        t_name = tool_call.get("function", {}).get("name", "")
-
-                        # Detect if this is a new tool call:
-                        # 1. If we're not currently in a tool_use block, it's new
-                        # 2. If the tool_call has an id and it differs from current, it's new
-                        # Note: Some providers (like Gemini) don't provide index field
-                        is_new_tool_call = False
-                        if current_block_type != "tool_use":
-                            is_new_tool_call = True
-                        elif t_id is not None and t_id != current_tool_call_id:
-                            is_new_tool_call = True
-
-                        if is_new_tool_call:
-                            if current_block_type is not None:
-                                # Close previous block
-                                yield _encode_sse_json(
-                                    {
-                                        "type": "content_block_stop",
-                                        "index": current_block_index,
-                                    },
-                                    event="content_block_stop",
-                                )
-                                current_block_index += 1
-
-                            # Start new tool block
-                            yield _encode_sse_json(
-                                {
-                                    "type": "content_block_start",
-                                    "index": current_block_index,
-                                    "content_block": {
-                                        "type": "tool_use",
-                                        "id": t_id or "",
-                                        "name": t_name,
-                                        "input": {},  # Empty input for now
-                                    },
-                                },
-                                event="content_block_start",
-                            )
-                            current_block_type = "tool_use"
-                            current_tool_call_id = t_id
-
-                        # Handle arguments
-                        args = tool_call.get("function", {}).get("arguments")
-                        if args:
-                            yield _encode_sse_json(
-                                {
-                                    "type": "content_block_delta",
-                                    "index": current_block_index,
-                                    "delta": {
-                                        "type": "input_json_delta",
-                                        "partial_json": args,
-                                    },
-                                },
-                                event="content_block_delta",
-                            )
-
-                # Handle Finish Reason
                 if finish_reason:
-                    # Close any open block now, but defer the terminal
-                    # message_delta/message_stop to the trailing flush so the
-                    # final usage chunk (which arrives after finish_reason with
-                    # empty choices) is included in the usage we emit.
-                    if current_block_type is not None:
-                        yield _encode_sse_json(
-                            {
-                                "type": "content_block_stop",
-                                "index": current_block_index,
-                            },
-                            event="content_block_stop",
-                        )
-                        current_block_type = None
+                    for encoded in encode_blocks(blocks.finish()):
+                        yield encoded
 
                     pending_stop_reason = _map_openai_to_anthropic_finish_reason(
                         finish_reason
@@ -2228,15 +2164,8 @@ class SDKStreamConverter(IStreamConverter):
         # Trailing flush: emit the terminal message_delta (carrying real usage)
         # and message_stop once the upstream stream is fully drained.
         if not sent_message_stop:
-            if current_block_type is not None:
-                yield _encode_sse_json(
-                    {
-                        "type": "content_block_stop",
-                        "index": current_block_index,
-                    },
-                    event="content_block_stop",
-                )
-                current_block_type = None
+            for encoded in encode_blocks(blocks.finish()):
+                yield encoded
 
             # Emit the terminal message_delta only when we have something real to
             # report — a finish_reason or upstream usage — and a message was started.
@@ -2352,7 +2281,7 @@ class SDKStreamConverter(IStreamConverter):
                                 args = fc.get("args")
                                 if not isinstance(args, str):
                                     args = json.dumps(args or {}, ensure_ascii=False)
-                                
+
                                 tool_call: Dict[str, Any] = {
                                     "index": tool_call_index,
                                     "id": fc.get("id") or f"call_{uuid.uuid4().hex}",
@@ -2366,7 +2295,7 @@ class SDKStreamConverter(IStreamConverter):
                                 ts = part.get("thoughtSignature") or part.get("thought_signature")
                                 if ts:
                                     tool_call["extra_content"] = {"google": {"thought_signature": ts}}
-                                
+
                                 delta = {
                                     "tool_calls": [tool_call]
                                 }

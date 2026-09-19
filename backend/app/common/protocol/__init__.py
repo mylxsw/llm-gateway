@@ -47,6 +47,7 @@ Example usage:
 from __future__ import annotations
 
 import logging
+from contextlib import aclosing
 from typing import Any, AsyncGenerator, Dict, Optional
 
 from .base import (
@@ -366,14 +367,17 @@ async def convert_stream(
     target = normalize_protocol(target_protocol)
 
     manager = _get_manager()
-    async for chunk in manager.convert_stream(
-        source_protocol=source,
-        target_protocol=target,
-        upstream=upstream,
-        model=model,
-        options=options,
-    ):
-        yield chunk
+    async with aclosing(
+        manager.convert_stream(
+            source_protocol=source,
+            target_protocol=target,
+            upstream=upstream,
+            model=model,
+            options=options,
+        )
+    ) as converted:
+        async for chunk in converted:
+            yield chunk
 
 
 def reset_registry() -> None:
