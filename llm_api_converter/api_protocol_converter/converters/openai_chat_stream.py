@@ -27,7 +27,20 @@ class OpenAIChatStreamBlocks:
     Empty metadata is a placeholder, never a new identity.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        max_buffer_bytes: int = 8 * 1024 * 1024,
+        max_buffer_fragments: int = 65536,
+        max_blocks: int = 1024,
+    ):
+        if min(max_buffer_bytes, max_buffer_fragments, max_blocks) <= 0:
+            raise ValueError("Stream buffer limits must be positive")
+        self._max_buffer_bytes = max_buffer_bytes
+        self._max_buffer_fragments = max_buffer_fragments
+        self._max_blocks = max_blocks
+        self._buffer_bytes = 0
+        self._buffer_fragments = 0
         self._pending: Deque[_Block] = deque()
         self._tools: List[_Block] = []
         self._by_index: Dict[int, _Block] = {}
@@ -36,12 +49,27 @@ class OpenAIChatStreamBlocks:
         self._finished = False
 
     def _new_block(self, tool: bool = False) -> _Block:
+        if self._next_index >= self._max_blocks:
+            raise StreamConversionError("Stream content block limit exceeded")
         block = _Block(index=self._next_index, tool=tool)
         self._next_index += 1
         self._pending.append(block)
         if tool:
             self._tools.append(block)
         return block
+
+    def _reserve_bytes(self, value: str) -> None:
+        size = len(value.encode("utf-8"))
+        if self._buffer_bytes + size > self._max_buffer_bytes:
+            raise StreamConversionError("Stream buffer byte limit exceeded")
+        self._buffer_bytes += size
+
+    def _append_fragment(self, block: _Block, value: str) -> None:
+        if self._buffer_fragments >= self._max_buffer_fragments:
+            raise StreamConversionError("Stream buffer fragment limit exceeded")
+        self._reserve_bytes(value)
+        self._buffer_fragments += 1
+        block.fragments.append(value)
 
     def _tool_block(self, call: Dict[str, Any]) -> _Block:
         source_index = call.get("index")
@@ -81,6 +109,8 @@ class OpenAIChatStreamBlocks:
         if tool_id:
             if block.id and block.id != tool_id:
                 raise StreamConversionError("Tool call ID changed within an index")
+            if not block.id:
+                self._reserve_bytes(tool_id)
             block.id = tool_id
             self._by_id[tool_id] = block
         name = (call.get("function") or {}).get("name") or ""
@@ -89,6 +119,8 @@ class OpenAIChatStreamBlocks:
         if name:
             if block.name and block.name != name:
                 raise StreamConversionError("Tool call name changed within a call")
+            if not block.name:
+                self._reserve_bytes(name)
             block.name = name
         return block
 
@@ -102,14 +134,14 @@ class OpenAIChatStreamBlocks:
         if content:
             if not self._pending or self._pending[-1].tool:
                 self._new_block()
-            self._pending[-1].fragments.append(content)
+            self._append_fragment(self._pending[-1], content)
         for call in calls:
             block = self._tool_block(call)
             arguments = (call.get("function") or {}).get("arguments")
             if arguments:
                 if not isinstance(arguments, str):
                     raise StreamConversionError("Tool arguments delta must be a string")
-                block.fragments.append(arguments)
+                self._append_fragment(block, arguments)
         return self._flush(final=False)
 
     def finish(self) -> List[IRStreamEvent]:
@@ -151,6 +183,8 @@ class OpenAIChatStreamBlocks:
                         delta_text=None if block.tool else fragment,
                     )
                 )
+                self._buffer_bytes -= len(fragment.encode("utf-8"))
+                self._buffer_fragments -= 1
             block.fragments.clear()
             if not final and (block.tool or len(self._pending) == 1):
                 break

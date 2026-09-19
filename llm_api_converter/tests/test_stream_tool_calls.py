@@ -8,6 +8,7 @@ import pytest
 from api_protocol_converter import Protocol, convert_stream
 from api_protocol_converter.converters import OpenAIChatDecoder
 from api_protocol_converter.converters.exceptions import StreamConversionError
+from api_protocol_converter.converters.openai_chat_stream import OpenAIChatStreamBlocks
 from api_protocol_converter.stream import StreamConverter, convert_stream_sync
 
 
@@ -355,3 +356,55 @@ def test_other_sdk_targets_keep_interleaved_tool_arguments(target):
         0: {"a": 1},
         1: {"b": 2},
     }
+
+
+def test_buffer_byte_limit_counts_utf8_and_all_pending_tools():
+    blocks = OpenAIChatStreamBlocks(max_buffer_bytes=10)
+    blocks.feed({"tool_calls": [tool("{}", id="a", name="A")]})
+    # Two retained identities (4 bytes) plus two CJK characters (6 bytes).
+    blocks.feed({"tool_calls": [tool("中文", 1, id="b", name="B")]})
+    with pytest.raises(StreamConversionError, match="byte limit"):
+        blocks.feed({"tool_calls": [tool("x", 1)]})
+
+
+def test_delayed_identity_and_following_text_share_the_buffer_limit():
+    blocks = OpenAIChatStreamBlocks(max_buffer_bytes=5)
+    blocks.feed({"tool_calls": [tool("123")]})
+    blocks.feed({"content": "45"})
+    with pytest.raises(StreamConversionError, match="byte limit"):
+        blocks.feed({"tool_calls": [tool("", id="a", name="A")]})
+
+
+def test_metadata_alone_is_bounded():
+    blocks = OpenAIChatStreamBlocks(max_buffer_bytes=4)
+    with pytest.raises(StreamConversionError, match="byte limit"):
+        blocks.feed({"tool_calls": [tool("", id="long-id", name="A")]})
+
+
+def test_flushed_fragments_release_budget_and_repeated_identity_is_not_charged_twice():
+    blocks = OpenAIChatStreamBlocks(max_buffer_bytes=4, max_buffer_fragments=1)
+    for _ in range(10):
+        events = blocks.feed({"tool_calls": [tool("xx", id="a", name="A")]})
+        assert events[-1].delta_json == "xx"
+    blocks.finish()
+
+
+def test_tiny_fragments_and_empty_blocks_cannot_bypass_limits():
+    blocks = OpenAIChatStreamBlocks(max_buffer_fragments=2)
+    blocks.feed({"tool_calls": [tool("", id="a", name="A")]})
+    for _ in range(2):
+        blocks.feed({"tool_calls": [tool("x", 1)]})
+    with pytest.raises(StreamConversionError, match="fragment limit"):
+        blocks.feed({"tool_calls": [tool("x", 1)]})
+    blocks = OpenAIChatStreamBlocks(max_blocks=2)
+    blocks.feed({"tool_calls": [tool("", 0), tool("", 1)]})
+    with pytest.raises(StreamConversionError, match="block limit"):
+        blocks.feed({"tool_calls": [tool("", 2)]})
+
+
+@pytest.mark.parametrize(
+    "limit", ["max_buffer_bytes", "max_buffer_fragments", "max_blocks"]
+)
+def test_buffer_limits_must_be_positive(limit):
+    with pytest.raises(ValueError, match="positive"):
+        OpenAIChatStreamBlocks(**{limit: 0})

@@ -7,7 +7,7 @@ import copy
 import json
 import logging
 import time
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncGenerator, Callable, Optional
 
@@ -1600,23 +1600,24 @@ class ProxyService:
                                 hooked_chunk = chunk
                             yield hooked_chunk, first_resp
                     else:
-                        async for out_chunk in convert_stream_for_user(
-                            request_protocol=request_protocol,
-                            supplier_protocol=supplier_protocol,
-                            upstream=upstream_bytes(),
-                            model=candidate.target_model,
-                            input_tokens=input_tokens,
-                        ):
-                            hooked_out_chunk = (
-                                await self._protocol_hooks.after_stream_chunk_conversion(
+                        async with aclosing(
+                            convert_stream_for_user(
+                                request_protocol=request_protocol,
+                                supplier_protocol=supplier_protocol,
+                                upstream=upstream_bytes(),
+                                model=candidate.target_model,
+                                input_tokens=input_tokens,
+                            )
+                        ) as converted:
+                            async for out_chunk in converted:
+                                hooked_out_chunk = await self._protocol_hooks.after_stream_chunk_conversion(
                                     out_chunk,
                                     request_protocol,
                                     supplier_protocol,
                                 )
-                            )
-                            if hooked_out_chunk is None:
-                                hooked_out_chunk = out_chunk
-                            yield hooked_out_chunk, first_resp
+                                if hooked_out_chunk is None:
+                                    hooked_out_chunk = out_chunk
+                                yield hooked_out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
                     if first_resp.is_success:
@@ -1653,6 +1654,10 @@ class ProxyService:
                         )
                         yield (b"data: [DONE]\n\n", first_resp)
                     return
+
+                finally:
+                    with anyio.CancelScope(shield=True):
+                        await upstream_gen.aclose()
 
             return wrapped()
 
@@ -1852,6 +1857,8 @@ class ProxyService:
                 stream_error = str(e)
                 return
             finally:
+                with anyio.CancelScope(shield=True):
+                    await stream_gen.aclose()
                 usage_result = usage_acc.finalize()
                 usage_details = usage_result.usage_details
                 if usage_result.input_tokens:

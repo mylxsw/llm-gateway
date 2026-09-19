@@ -7,6 +7,8 @@ import pytest
 
 from app.common.protocol_conversion import convert_stream_for_user
 from app.common.errors import ServiceError
+from app.common.protocol import converters
+from starlette.responses import StreamingResponse
 
 
 async def convert(deltas, *, ending="finish", usage=False, split_bytes=False):
@@ -254,3 +256,170 @@ async def test_simultaneous_requests_do_not_share_tool_state():
         blocks = assemble(events)
         assert len(blocks) == 1
         assert blocks[0]["id"] == f"call_{i}" and blocks[0]["input"] == {"value": i}
+
+
+def sse(delta, finish=None):
+    return (
+        "data: "
+        + json.dumps({"choices": [{"delta": delta, "finish_reason": finish}]})
+        + "\n\n"
+    ).encode()
+
+
+async def test_buffered_tool_sends_heartbeats_without_changing_content(monkeypatch):
+    monkeypatch.setattr(converters, "ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS", 0.005)
+    release, buffered, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    async def upstream():
+        try:
+            yield sse({"tool_calls": [tool("{}", id="a", name="A")]})
+            yield sse({"tool_calls": [tool("{", 1, id="b", name="B")]})
+            yield sse({"tool_calls": [tool('"value":1', 1)]})
+            buffered.set()
+            await release.wait()
+            yield sse({"tool_calls": [tool("}", 1)]}, "tool_calls")
+            yield b'data: {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 5}}\n\n'
+        finally:
+            closed.set()
+
+    stream = convert_stream_for_user(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        upstream=upstream(),
+        model="test",
+    )
+    events = []
+    try:
+        for _ in range(10):
+            event_bytes = await asyncio.wait_for(anext(stream), 1)
+            event = json.loads(
+                next(
+                    line[6:]
+                    for line in event_bytes.decode().splitlines()
+                    if line.startswith("data: ")
+                )
+            )
+            events.append(event)
+            if event["type"] == "ping":
+                break
+        assert events[-1] == {"type": "ping"} and buffered.is_set()
+        assert sum(event["type"] == "content_block_start" for event in events) == 1
+        assert b"event: ping" in await asyncio.wait_for(anext(stream), 1)
+        assert not closed.is_set()
+        release.set()
+        async for data in stream:
+            events.append(
+                json.loads(
+                    next(
+                        line[6:]
+                        for line in data.decode().splitlines()
+                        if line.startswith("data: ")
+                    )
+                )
+            )
+        assert [block["input"] for block in assemble(events)] == [{}, {"value": 1}]
+        assert events[-2]["usage"] == {"input_tokens": 10, "output_tokens": 5}
+        assert events[-2]["delta"]["stop_reason"] == "tool_use"
+        assert closed.is_set()
+    finally:
+        await stream.aclose()
+
+
+@pytest.mark.parametrize("supplier", ["openai", "openai_responses", "gemini"])
+@pytest.mark.parametrize("cancel_read", [False, True])
+async def test_public_stream_disconnect_closes_upstream(
+    monkeypatch, supplier, cancel_read
+):
+    monkeypatch.setattr(
+        converters, "ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS", 60 if cancel_read else 0.005
+    )
+    reading, closed = asyncio.Event(), asyncio.Event()
+
+    async def upstream():
+        try:
+            reading.set()
+            await asyncio.Event().wait()
+            yield b"unreachable"
+        finally:
+            closed.set()
+
+    stream = convert_stream_for_user(
+        request_protocol="anthropic",
+        supplier_protocol=supplier,
+        upstream=upstream(),
+        model="test",
+    )
+    if cancel_read:
+        consumer = asyncio.create_task(anext(stream))
+        await asyncio.wait_for(reading.wait(), 1)
+        consumer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await consumer
+    else:
+        assert b"event: ping" in await asyncio.wait_for(anext(stream), 1)
+        await stream.aclose()
+    assert closed.is_set()
+
+
+async def test_buffer_overflow_closes_upstream_and_returns_conversion_error(
+    monkeypatch,
+):
+    original = converters.OpenAIChatStreamBlocks
+    monkeypatch.setattr(
+        converters, "OpenAIChatStreamBlocks", lambda: original(max_buffer_bytes=8)
+    )
+    closed = asyncio.Event()
+
+    async def upstream():
+        try:
+            yield sse({"tool_calls": [tool("{}", id="a", name="A")]})
+            yield sse({"tool_calls": [tool("x" * 9, 1, id="b", name="B")]})
+            pytest.fail("Overflow must stop reading upstream")
+        finally:
+            closed.set()
+
+    with pytest.raises(ServiceError, match="byte limit"):
+        async for _ in convert_stream_for_user(
+            request_protocol="anthropic",
+            supplier_protocol="openai",
+            upstream=upstream(),
+            model="test",
+        ):
+            pass
+    assert closed.is_set()
+
+
+async def test_http_disconnect_during_ping_waits_for_async_upstream_cleanup(
+    monkeypatch,
+):
+    monkeypatch.setattr(converters, "ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS", 0.005)
+    disconnected, closed = asyncio.Event(), asyncio.Event()
+
+    async def upstream():
+        try:
+            await asyncio.Event().wait()
+            yield b"unreachable"
+        finally:
+            # Network clients can suspend while releasing their connection.
+            await asyncio.sleep(0.01)
+            closed.set()
+
+    async def receive():
+        await disconnected.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if b"event: ping" in message.get("body", b""):
+            disconnected.set()
+
+    stream = convert_stream_for_user(
+        request_protocol="anthropic",
+        supplier_protocol="openai",
+        upstream=upstream(),
+        model="test",
+    )
+    response = StreamingResponse(stream, media_type="text/event-stream")
+    await asyncio.wait_for(
+        response({"type": "http", "asgi": {"spec_version": "2.0"}}, receive, send), 1
+    )
+    assert closed.is_set()

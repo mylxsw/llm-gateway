@@ -12,13 +12,18 @@ import json
 import logging
 import time
 import uuid
+from contextlib import aclosing
+
 from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional, Union
+
+import anyio
 
 from app.common.reasoning import (
     normalize_reasoning_for_anthropic,
     normalize_reasoning_for_openai,
 )
 from app.common.usage_extractor import extract_usage_details
+from app.common.stream_heartbeat import with_heartbeat
 
 from .base import (
     ConversionResult,
@@ -74,6 +79,8 @@ except ImportError as e:
     _SDK_IMPORT_ERROR = str(e)
 
 logger = logging.getLogger(__name__)
+
+ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS = 15.0
 
 _OPENAI_CHAT_PATH = "/v1/chat/completions"
 _OPENAI_COMPLETIONS_PATH = "/v1/completions"
@@ -1762,6 +1769,39 @@ class SDKStreamConverter(IStreamConverter):
         *,
         options: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[bytes, None]:
+        try:
+            # Close the owned input even when the consumer stops at a yielded event.
+            async with aclosing(
+                self._convert(upstream, model, options=options)
+            ) as converted:
+                if (
+                    self._target == Protocol.ANTHROPIC
+                    and self._source != Protocol.ANTHROPIC
+                ):
+                    async with aclosing(
+                        with_heartbeat(
+                            converted,
+                            interval=ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS,
+                            heartbeat=_encode_sse_json({"type": "ping"}, event="ping"),
+                        )
+                    ) as alive:
+                        async for chunk in alive:
+                            yield chunk
+                else:
+                    async for chunk in converted:
+                        yield chunk
+
+        finally:
+            with anyio.CancelScope(shield=True):
+                await upstream.aclose()
+
+    async def _convert(
+        self,
+        upstream: AsyncGenerator[bytes, None],
+        model: str,
+        *,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> AsyncGenerator[bytes, None]:
         """Convert stream using SDK."""
         if not _HAS_SDK:
             raise ProtocolConversionError(
@@ -2241,7 +2281,7 @@ class SDKStreamConverter(IStreamConverter):
                                 args = fc.get("args")
                                 if not isinstance(args, str):
                                     args = json.dumps(args or {}, ensure_ascii=False)
-                                
+
                                 tool_call: Dict[str, Any] = {
                                     "index": tool_call_index,
                                     "id": fc.get("id") or f"call_{uuid.uuid4().hex}",
@@ -2255,7 +2295,7 @@ class SDKStreamConverter(IStreamConverter):
                                 ts = part.get("thoughtSignature") or part.get("thought_signature")
                                 if ts:
                                     tool_call["extra_content"] = {"google": {"thought_signature": ts}}
-                                
+
                                 delta = {
                                     "tool_calls": [tool_call]
                                 }

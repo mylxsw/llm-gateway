@@ -8,6 +8,7 @@ Implements a factory pattern for converter instantiation.
 from __future__ import annotations
 
 import logging
+from contextlib import aclosing
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple, Type
 
 from app.common.reasoning import (
@@ -326,8 +327,11 @@ class ProtocolConverterManager:
                 target_protocol=target_protocol.value,
             )
 
-        async for chunk in converter.convert(upstream, model, options=options):
-            yield chunk
+        async with aclosing(
+            converter.convert(upstream, model, options=options)
+        ) as converted:
+            async for chunk in converted:
+                yield chunk
 
     def _identity_request_conversion(
         self,

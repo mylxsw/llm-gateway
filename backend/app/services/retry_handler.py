@@ -8,9 +8,12 @@ import asyncio
 import logging
 import math
 import time
+
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, AsyncIterator, Callable, Optional, Awaitable
+
+import anyio
 
 from app.config import get_settings
 from app.common.time import ensure_utc, utc_now
@@ -502,23 +505,28 @@ class RetryHandler:
                             )
                             latency_recorded = True
                         response_started = True
-                        yield chunk, response, current_provider, total_retry_count
-                        final_response = response
-                        async for chunk, stream_response in generator:
-                            final_response = stream_response
-                            last_response = stream_response
-                            if (
-                                not latency_recorded
-                                and is_meaningful_chunk is not None
-                                and stream_response.is_success
-                                and is_meaningful_chunk(chunk)
-                            ):
-                                await self._record_stream_latency(
-                                    current_provider,
-                                    (time.monotonic() - attempt_started_at) * 1000,
-                                )
-                                latency_recorded = True
-                            yield chunk, stream_response, current_provider, total_retry_count
+                        try:
+                            yield chunk, response, current_provider, total_retry_count
+                            final_response = response
+                            async for chunk, stream_response in generator:
+                                final_response = stream_response
+                                last_response = stream_response
+                                if (
+                                    not latency_recorded
+                                    and is_meaningful_chunk is not None
+                                    and stream_response.is_success
+                                    and is_meaningful_chunk(chunk)
+                                ):
+                                    await self._record_stream_latency(
+                                        current_provider,
+                                        (time.monotonic() - attempt_started_at) * 1000,
+                                    )
+                                    latency_recorded = True
+                                yield chunk, stream_response, current_provider, total_retry_count
+                        finally:
+                            if hasattr(generator, "aclose"):
+                                with anyio.CancelScope(shield=True):
+                                    await generator.aclose()
                         await self._record_health(current_provider, final_response)
                         return
 
