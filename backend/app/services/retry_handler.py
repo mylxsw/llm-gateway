@@ -548,7 +548,12 @@ class RetryHandler:
                     # The first response failed; nothing has been sent downstream.
                     # Close its generator before opening a replacement connection.
                     if hasattr(generator, "aclose"):
-                        await generator.aclose()
+                        try:
+                            await generator.aclose()
+                        except Exception:
+                            # Cleanup must not turn a known HTTP error into a 502
+                            # and accidentally change its retry/failover policy.
+                            logger.exception("Failed to close unsuccessful upstream stream")
                     if not repair_attempted and repair_request is not None:
                         if repair_request(current_provider, response):
                             repair_attempted = True

@@ -3,8 +3,10 @@ import json
 from dataclasses import replace
 
 import pytest
+import httpx
 
 from app.providers.base import ProviderResponse
+from app.providers.openai_client import OpenAIClient
 from app.rules.models import CandidateProvider
 from app.services.model_turn_repair import (
     ModelTurnRepair,
@@ -292,3 +294,186 @@ async def test_stream_exception_after_output_never_replays():
     with pytest.raises(RuntimeError, match="stream interrupted"):
         await anext(output)
     assert calls == [1]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"role": "assistant", "tool_call_id": "lookup", "content": "Not a tool result"},
+        {"role": "function", "name": "lookup", "content": "Wrong call format"},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "lookup"}]},
+    ],
+)
+def test_tool_result_must_match_role_and_call_format(result):
+    body = {
+        "messages": [
+            {"role": "assistant", "tool_calls": [{"id": "lookup"}]},
+            result,
+            {"role": "assistant", "content": "Continue"},
+        ]
+    }
+    assert append_user_turn(body) is None
+
+
+def test_anthropic_tool_result_in_assistant_turn_does_not_resolve_call():
+    body = {
+        "messages": [
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "c1"}]},
+            {
+                "role": "assistant",
+                "content": [{"type": "tool_result", "tool_use_id": "c1"}],
+            },
+        ]
+    }
+    assert append_user_turn(body) is None
+
+
+@pytest.mark.parametrize(
+    "result_ids,repairable", [(["a", "b"], True), (["a", "a"], False)]
+)
+def test_native_parallel_calls_match_ids_not_just_names(result_ids, repairable):
+    body = {
+        "contents": [
+            {
+                "role": "model",
+                "parts": [
+                    {"functionCall": {"id": identifier, "name": "lookup"}}
+                    for identifier in ["a", "b"]
+                ],
+            },
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "functionResponse": {
+                            "id": identifier,
+                            "name": "lookup",
+                            "response": {},
+                        }
+                    }
+                    for identifier in result_ids
+                ],
+            },
+            {"role": "model", "parts": [{"text": "Continue"}]},
+        ]
+    }
+    assert (append_user_turn(body) is not None) == repairable
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("repair_enabled", [False, True])
+async def test_stream_cleanup_error_preserves_upstream_error_and_retry_policy(
+    repair_enabled,
+):
+    handler = RetryHandler(PriorityStrategy())
+    handler.retry_delay_ms = 0
+    state = ModelTurnRepair()
+    calls, failures = [], []
+
+    async def forward(provider):
+        body = state.prepare(
+            provider, {"messages": [{"role": "assistant", "content": "partial"}]}
+        )
+        calls.append((provider.provider_id, len(body["messages"])))
+        response = ProviderResponse(status_code=400, body={"error": {"message": ERROR}})
+        try:
+            yield b"original error", response
+        finally:
+            raise RuntimeError("connection close failed")
+
+    async def log_failure(attempt):
+        failures.append(attempt.response.status_code)
+
+    results = [
+        item
+        async for item in handler.execute_with_retry_stream(
+            [candidate()],
+            "writer",
+            forward,
+            on_failure_attempt=log_failure,
+            repair_request=state.try_repair if repair_enabled else None,
+        )
+    ]
+    assert calls == ([(1, 1), (1, 2)] if repair_enabled else [(1, 1)])
+    assert failures == ([400, 400] if repair_enabled else [400])
+    assert results[-1][1].status_code == 400
+    assert results[-1][0] == b"original error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_real_openai_client_recovers_openrouter_error(monkeypatch, stream):
+    """Exercise actual HTTP error decoding and SSE forwarding, not a fake client."""
+    requests = []
+
+    def transport(request):
+        body = json.loads(request.content)
+        requests.append(body)
+        if len(requests) == 1:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "message": "Provider returned error",
+                        "metadata": {
+                            "raw": json.dumps({"error": {"message": ERROR}}),
+                        },
+                    }
+                },
+            )
+        assert body["messages"][-1] == {"role": "user", "content": "Please continue."}
+        if stream:
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                content=b'data: {"choices":[]}\n\ndata: [DONE]\n\n',
+            )
+        return httpx.Response(200, json={"choices": []})
+
+    async_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(
+            transport=httpx.MockTransport(transport), **kwargs
+        ),
+    )
+    client = OpenAIClient()
+    state = ModelTurnRepair()
+    handler = RetryHandler(PriorityStrategy())
+    original = {
+        "messages": [{"role": "assistant", "content": None, "reasoning": "thinking"}],
+        "stream": stream,
+    }
+
+    def forward(provider):
+        kwargs = dict(
+            base_url=provider.base_url,
+            api_key=provider.api_key,
+            path="/v1/chat/completions",
+            method="POST",
+            headers={},
+            target_model=provider.target_model,
+            body=state.prepare(provider, original),
+        )
+        if stream:
+            return client.forward_stream(**kwargs)
+        return client.forward(**kwargs, response_mode="raw")
+
+    if stream:
+        result = [
+            item
+            async for item in handler.execute_with_retry_stream(
+                [candidate()], "writer", forward, repair_request=state.try_repair
+            )
+        ]
+        assert all(item[1].status_code == 200 for item in result)
+        assert b"[DONE]" in b"".join(item[0] for item in result)
+    else:
+        result = await handler.execute_with_retry(
+            [candidate()], "writer", forward, repair_request=state.try_repair
+        )
+        assert result.success
+        assert json.loads(result.response.body) == {"choices": []}
+    assert len(requests) == 2
+    assert len(original["messages"]) == 1

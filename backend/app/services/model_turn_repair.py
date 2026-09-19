@@ -55,26 +55,34 @@ def append_user_turn(body: dict[str, Any]) -> dict[str, Any] | None:
     if messages[-1].get("role") != ("model" if native else "assistant"):
         return None
 
-    pending: list[Any] = []
+    # Keep call formats separate: an OpenAI call ID is not a legacy function name.
+    pending: list[tuple[str, str, str]] = []
     for message in messages:
+        role = message.get("role")
         # OpenAI tool calls (including the legacy function-call format).
         calls = message.get("tool_calls") or []
         if not isinstance(calls, list):
             return None
         for call in calls:
-            if not isinstance(call, dict) or not call.get("id"):
+            if role != "assistant" or not isinstance(call, dict):
                 return None
-            pending.append(call["id"])
+            if not isinstance(call.get("id"), str) or not call["id"]:
+                return None
+            pending.append(("openai", call["id"], ""))
         if message.get("function_call"):
             call = message["function_call"]
-            if not isinstance(call, dict) or not call.get("name"):
+            if role != "assistant" or not isinstance(call, dict):
                 return None
-            pending.append(call["name"])
-        result_id = message.get("tool_call_id")
-        if message.get("role") == "function":
-            result_id = message.get("name")
-        if result_id in pending:
-            pending.remove(result_id)
+            if not isinstance(call.get("name"), str) or not call["name"]:
+                return None
+            pending.append(("legacy", call["name"], ""))
+        result_key = None
+        if role == "tool":
+            result_key = ("openai", message.get("tool_call_id"), "")
+        elif role == "function":
+            result_key = ("legacy", message.get("name"), "")
+        if result_key in pending:
+            pending.remove(result_key)
 
         # Gemini parts and Anthropic content blocks use different tool shapes.
         parts = message.get("parts" if native else "content")
@@ -85,19 +93,31 @@ def append_user_turn(body: dict[str, Any]) -> dict[str, Any] | None:
                 return None
             if "functionCall" in part:
                 call = part["functionCall"]
-                if not isinstance(call, dict) or not call.get("name"):
+                if not isinstance(call, dict):
                     return None
-                pending.append(call["name"])
+                if not isinstance(call.get("name"), str) or not call["name"]:
+                    return None
+                if not isinstance(call.get("id", ""), str):
+                    return None
+                pending.append(("gemini", call["name"], call.get("id", "")))
             if part.get("type") == "tool_use":
-                if not part.get("id"):
+                if (
+                    role != "assistant"
+                    or not isinstance(part.get("id"), str)
+                    or not part["id"]
+                ):
                     return None
-                pending.append(part["id"])
+                pending.append(("anthropic", part["id"], ""))
             result = part.get("functionResponse")
-            result_id = result.get("name") if isinstance(result, dict) else None
-            if part.get("type") == "tool_result":
-                result_id = part.get("tool_use_id")
-            if result_id in pending:
-                pending.remove(result_id)
+            result_key = (
+                ("gemini", result.get("name"), result.get("id", ""))
+                if isinstance(result, dict)
+                else None
+            )
+            if role == "user" and part.get("type") == "tool_result":
+                result_key = ("anthropic", part.get("tool_use_id"), "")
+            if result_key in pending:
+                pending.remove(result_key)
     if pending:
         return None
 
