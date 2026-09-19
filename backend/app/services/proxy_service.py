@@ -42,6 +42,7 @@ from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
+from app.services.model_turn_repair import ModelTurnRepair
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.stream_latency import StreamLatencyTracker, stream_chunk_has_text
@@ -881,6 +882,8 @@ class ProxyService:
                 )
 
         # 8. Execute request (with retry)
+        model_turn_repair = ModelTurnRepair()
+
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             supplier_protocol: Optional[str] = None
             try:
@@ -942,6 +945,7 @@ class ProxyService:
                         supplier_protocol=candidate.protocol,
                         target_model=candidate.target_model,
                     )
+                supplier_body = model_turn_repair.prepare(candidate, supplier_body)
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
@@ -995,6 +999,7 @@ class ProxyService:
             input_tokens=input_tokens,
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
+            repair_request=model_turn_repair.try_repair,
         )
 
         if result.response.body is not None and result.final_provider is not None:
@@ -1401,6 +1406,8 @@ class ProxyService:
         }
 
         # 8. Execute streaming request
+        model_turn_repair = ModelTurnRepair()
+
         async def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
                 yield b"", ProviderResponse(status_code=400, error=msg)
@@ -1463,6 +1470,7 @@ class ProxyService:
                         supplier_protocol=candidate.protocol,
                         target_model=candidate.target_model,
                     )
+                supplier_body = model_turn_repair.prepare(candidate, supplier_body)
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
@@ -1506,9 +1514,10 @@ class ProxyService:
                     return
 
                 if not first_resp.is_success:
-                    yield first_chunk, first_resp
-                    async for chunk, resp in upstream_gen:
-                        yield chunk, resp
+                    try:
+                        yield first_chunk, first_resp
+                    finally:
+                        await upstream_gen.aclose()
                     return
 
                 async def upstream_bytes() -> AsyncGenerator[bytes, None]:
@@ -1752,6 +1761,7 @@ class ProxyService:
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
             is_meaningful_chunk=stream_chunk_has_text,
+            repair_request=model_turn_repair.try_repair,
         )
 
         # Get first chunk to determine status
