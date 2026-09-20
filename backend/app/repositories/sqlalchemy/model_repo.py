@@ -490,6 +490,10 @@ class SQLAlchemyModelRepository(ModelRepository):
         
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
+            # Match creation: the stored cache flag is non-nullable even when
+            # inherited pricing clears the provider's local billing settings.
+            if key == "cache_billing_enabled" and value is None:
+                value = False
             # paused_until is stored as a naive UTC datetime; normalize any
             # tz-aware input so comparisons at schedule time stay consistent.
             if key == "paused_until" and value is not None:
@@ -529,6 +533,9 @@ class SQLAlchemyModelRepository(ModelRepository):
         now = to_utc_naive(utc_now())
         for entity in entities:
             for key, value in update_data.items():
+                # Apply the same null normalization as single-mapping updates.
+                if key == "cache_billing_enabled" and value is None:
+                    value = False
                 # Keep paused_until as naive UTC, mirroring update_provider_mapping.
                 if key == "paused_until" and value is not None:
                     value = to_utc_naive(value)
