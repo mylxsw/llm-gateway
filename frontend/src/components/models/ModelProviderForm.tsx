@@ -431,7 +431,7 @@ export function ModelProviderForm({
           submitData.per_request_price = null;
           submitData.per_image_price = null;
           submitData.tiered_pricing = null;
-          submitData.cache_billing_enabled = null;
+          submitData.cache_billing_enabled = false;
           submitData.cached_input_price = null;
           submitData.cache_creation_input_price = null;
           submitData.cached_output_price = null;
@@ -502,7 +502,7 @@ export function ModelProviderForm({
           submitData.per_request_price = null;
           submitData.per_image_price = null;
           submitData.tiered_pricing = null;
-          submitData.cache_billing_enabled = null;
+          submitData.cache_billing_enabled = false;
           submitData.cached_input_price = null;
           submitData.cache_creation_input_price = null;
           submitData.cached_output_price = null;
