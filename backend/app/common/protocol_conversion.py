@@ -160,6 +160,18 @@ def convert_request_for_supplier(
 
         _apply_image_defaults(result.path, converted_body)
 
+        # GPT-5 chat completions reject the legacy token limit, including
+        # limits injected by provider defaults during identity conversion.
+        if (
+            supplier_protocol == OPENAI_PROTOCOL
+            and result.path == "/v1/chat/completions"
+            and (target_model == "gpt-5" or target_model.startswith(("gpt-5-", "gpt-5.")))
+            and "max_tokens" in converted_body
+        ):
+            legacy_limit = converted_body.pop("max_tokens")
+            if converted_body.get("max_completion_tokens") is None:
+                converted_body["max_completion_tokens"] = legacy_limit
+
         return result.path, converted_body
 
     except UnsupportedConversionError as e:
