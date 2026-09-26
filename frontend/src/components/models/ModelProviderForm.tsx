@@ -45,6 +45,7 @@ import { getModelProviderPricingHistory } from '@/lib/api';
 import { getPriceHistoryFormValues } from '@/lib/modelProviderPricingHistory';
 import { useProviderModels } from '@/lib/hooks';
 import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
+import { filterProvidersForModelType } from '@/lib/modelProtocol';
 import {
   ModelMappingProvider,
   ModelMappingProviderCreate,
@@ -118,6 +119,27 @@ export function ModelProviderForm({
   const t = useTranslations('models');
   const tCommon = useTranslations('common');
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
+  // Only providers whose protocol can serve this model type may be bound.
+  // A Jev model requires a Jev provider and vice versa; the backend rejects
+  // any other pairing, so never offer it here.
+  const compatibleProviders = useMemo(
+    () => filterProvidersForModelType(providers, modelType),
+    [providers, modelType],
+  );
+  const hasIncompatibleProviders = providers.length > compatibleProviders.length;
+  // In edit mode the provider is fixed and the select is disabled, so always
+  // keep the bound provider in the list — otherwise a legacy binding created
+  // before this rule existed would render as an empty field.
+  const selectableProviders = useMemo(() => {
+    if (!mapping) {
+      return compatibleProviders;
+    }
+    if (compatibleProviders.some((provider) => provider.id === mapping.provider_id)) {
+      return compatibleProviders;
+    }
+    const bound = providers.find((provider) => provider.id === mapping.provider_id);
+    return bound ? [bound, ...compatibleProviders] : compatibleProviders;
+  }, [compatibleProviders, mapping, providers]);
   // Check if edit mode
   const isEdit = !!mapping;
   
@@ -582,15 +604,24 @@ export function ModelProviderForm({
             <Label>
               {t('providerForm.provider')} <span className="text-destructive">*</span>
             </Label>
-            {providers.length === 0 && !isEdit ? (
+            {selectableProviders.length === 0 && !isEdit ? (
               <div className="text-sm text-muted-foreground p-2 border rounded-md bg-muted/50">
-                {t.rich('providerForm.noProviders', {
-                  link: (chunks) => (
-                    <Link href="/providers" className="text-primary hover:underline mx-1">
-                      {chunks}
-                    </Link>
-                  ),
-                })}
+                {hasIncompatibleProviders
+                  ? t.rich('providerForm.noCompatibleProviders', {
+                      modelType,
+                      link: (chunks) => (
+                        <Link href="/providers" className="text-primary hover:underline mx-1">
+                          {chunks}
+                        </Link>
+                      ),
+                    })
+                  : t.rich('providerForm.noProviders', {
+                      link: (chunks) => (
+                        <Link href="/providers" className="text-primary hover:underline mx-1">
+                          {chunks}
+                        </Link>
+                      ),
+                    })}
               </div>
             ) : (
               <Select
@@ -602,7 +633,7 @@ export function ModelProviderForm({
                   <SelectValue placeholder={t('providerForm.selectProvider')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {providers.map((provider) => (
+                  {selectableProviders.map((provider) => (
                     <SelectItem key={provider.id} value={String(provider.id)}>
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate">
@@ -619,7 +650,7 @@ export function ModelProviderForm({
                 </SelectContent>
               </Select>
             )}
-            {!providerId && !isEdit && providers.length > 0 && (
+            {!providerId && !isEdit && selectableProviders.length > 0 && (
               <p className="text-sm text-destructive">
                 {t('providerForm.selectProviderError')}
               </p>

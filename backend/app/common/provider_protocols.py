@@ -138,3 +138,56 @@ def uses_dashscope_thinking(protocol: str | None) -> bool:
 
 def list_frontend_protocol_configs() -> list[ProtocolConfig]:
     return list(FRONTEND_PROTOCOL_CONFIGS.values())
+
+
+# Model type that must be served by the Jev protocol. The model type and the
+# protocol deliberately share the name: a Jev model is exactly a model served
+# over the Jev protocol.
+JEV_MODEL_TYPE = JEV_PROTOCOL
+
+
+def normalize_model_type(model_type: str | None) -> str:
+    return (model_type or "chat").lower().strip()
+
+
+def is_model_type_protocol_compatible(
+    model_type: str | None, protocol: str | None
+) -> bool:
+    """Whether a model of ``model_type`` may be served by a ``protocol`` provider.
+
+    Jev has no conversion path to or from the chat-oriented protocols, so a Jev
+    model must be bound to a Jev provider and a Jev provider must only serve Jev
+    models. Every other combination stays unconstrained, matching the gateway's
+    existing freedom to serve e.g. an embedding model over any chat protocol.
+    """
+    try:
+        implementation = resolve_implementation_protocol(protocol)
+    except ServiceError:
+        # An unknown protocol cannot be a Jev provider; report the mismatch
+        # rather than raising, so callers get the clearer validation error.
+        implementation = normalize_frontend_protocol(protocol)
+
+    is_jev_model = normalize_model_type(model_type) == JEV_MODEL_TYPE
+    is_jev_protocol = implementation == JEV_PROTOCOL
+    return is_jev_model == is_jev_protocol
+
+
+def model_type_protocol_mismatch_message(
+    model_type: str | None, protocol: str | None, provider_name: str | None = None
+) -> str:
+    """Human-readable explanation for an incompatible model/provider pairing."""
+    normalized_type = normalize_model_type(model_type)
+    normalized_protocol = normalize_frontend_protocol(protocol)
+    provider_label = f"provider '{provider_name}'" if provider_name else "the provider"
+
+    if normalized_type == JEV_MODEL_TYPE:
+        return (
+            f"Model type '{JEV_MODEL_TYPE}' requires a provider using the "
+            f"'{JEV_PROTOCOL}' protocol, but {provider_label} uses "
+            f"'{normalized_protocol}'"
+        )
+    return (
+        f"The selected {provider_label} uses the '{normalized_protocol}' "
+        f"protocol, which can only serve models of type '{JEV_MODEL_TYPE}' "
+        f"(this model is '{normalized_type}')"
+    )

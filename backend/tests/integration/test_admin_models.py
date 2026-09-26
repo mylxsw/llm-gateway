@@ -474,3 +474,106 @@ async def test_admin_match_model_includes_multiple_mappings_for_same_provider(
         }
 
     app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_admin_rejects_jev_model_bound_to_non_jev_provider(
+    db_session, monkeypatch
+):
+    """A Jev model may only be bound to a Jev provider (GUL-123)."""
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        provider = await ac.post(
+            "/api/admin/providers",
+            json={
+                "name": "openai-for-jev-test",
+                "base_url": "https://api.openai.com/v1",
+                "protocol": "openai",
+                "api_type": "chat",
+                "api_key": "sk-test",
+            },
+        )
+        assert provider.status_code in (200, 201), provider.text
+        provider_id = provider.json()["id"]
+
+        model = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "jev-admin-test",
+                "model_type": "jev",
+                "is_active": True,
+            },
+        )
+        assert model.status_code == 201, model.text
+
+        bound = await ac.post(
+            "/api/admin/model-providers",
+            json={
+                "requested_model": "jev-admin-test",
+                "provider_id": provider_id,
+                "target_model_name": "gpt-4o-mini",
+                "input_price": 0.0,
+                "output_price": 0.0,
+            },
+        )
+
+    assert bound.status_code == 422, bound.text
+    body = bound.json()
+    assert body["error"]["code"] == "model_protocol_mismatch"
+    assert "openai-for-jev-test" in body["error"]["message"]
+
+    app.dependency_overrides = {}
+
+
+@pytest.mark.asyncio
+async def test_admin_accepts_jev_model_bound_to_jev_provider(db_session, monkeypatch):
+    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        provider = await ac.post(
+            "/api/admin/providers",
+            json={
+                "name": "typesafe-admin-test",
+                "base_url": "https://api.typesafe.ai/v1",
+                "protocol": "jev",
+                "api_type": "chat",
+                "api_key": "sk-test",
+            },
+        )
+        assert provider.status_code in (200, 201), provider.text
+        provider_id = provider.json()["id"]
+
+        model = await ac.post(
+            "/api/admin/models",
+            json={
+                "requested_model": "jev-admin-ok",
+                "model_type": "jev",
+                "is_active": True,
+            },
+        )
+        assert model.status_code == 201, model.text
+
+        bound = await ac.post(
+            "/api/admin/model-providers",
+            json={
+                "requested_model": "jev-admin-ok",
+                "provider_id": provider_id,
+                "target_model_name": "jev-1.13.0",
+                "input_price": 0.042,
+                "output_price": 0.0,
+            },
+        )
+
+    assert bound.status_code in (200, 201), bound.text
+    assert bound.json()["target_model_name"] == "jev-1.13.0"
+
+    app.dependency_overrides = {}

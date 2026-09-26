@@ -87,7 +87,9 @@ def get_log_repo(db: DbSession) -> SQLAlchemyLogRepository:
 def get_provider_service(db: DbSession) -> ProviderService:
     """Get Provider Service"""
     repo = SQLAlchemyProviderRepository(db)
-    return ProviderService(repo)
+    # The model repo lets the service reject a protocol change that would
+    # orphan models already bound to this provider.
+    return ProviderService(repo, SQLAlchemyModelRepository(db))
 
 
 def get_model_service(db: DbSession) -> ModelService:

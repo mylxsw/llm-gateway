@@ -160,3 +160,11 @@ describe('buildBillingSubmitData', () => {
     expect(result.per_image_price).toBe(0);
   });
 });
+
+describe('getBillingModesForModelType (jev)', () => {
+  it('offers the token-based modes and never per_image', () => {
+    const modes = getBillingModesForModelType('jev');
+    expect(modes).toEqual(['per_request', 'token_flat', 'token_tiered']);
+    expect(modes).not.toContain('per_image');
+  });
+});

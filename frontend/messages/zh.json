@@ -530,6 +530,7 @@
       "requestedModel": "请求模型名称",
       "provider": "供应商",
       "noProviders": "没有可用供应商，请先<link>创建供应商</link>。",
+      "noCompatibleProviders": "没有与「{modelType}」模型类型匹配的供应商，请先<link>创建供应商</link>并选择兼容的协议。",
       "createProvider": "创建供应商",
       "selectProvider": "选择供应商",
       "providerDisabled": "已禁用",

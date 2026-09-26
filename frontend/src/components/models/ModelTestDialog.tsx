@@ -30,6 +30,7 @@ import { useModel, useTestModel } from '@/lib/hooks';
 import { getApiErrorMessage } from '@/lib/api/error';
 import { formatDuration } from '@/lib/utils';
 import { getProviderProtocolLabel, useProviderProtocolConfigs } from '@/lib/providerProtocols';
+import { isModelTypeProtocolCompatible } from '@/lib/modelProtocol';
 import { ModelTestResponse, ProtocolType } from '@/types';
 
 interface ModelTestDialogProps {
@@ -54,6 +55,10 @@ export function ModelTestDialog({
   const { configs: protocolConfigs } = useProviderProtocolConfigs();
   const testMutation = useTestModel();
 
+  const modelType = model?.model_type;
+  // Jev has no streaming mode, so the toggle is meaningless for it.
+  const supportsStream = modelType !== 'jev';
+
   const availableProtocols = useMemo(() => {
     const hasProviders = (model?.providers?.length ?? 0) > 0;
     if (!hasProviders) {
@@ -66,12 +71,17 @@ export function ModelTestDialog({
       'gemini',
       'jev',
     ];
+    // Only protocols that can actually serve this model type: testing a Jev
+    // model over a chat protocol would build a payload its provider rejects.
+    const compatible = supported.filter((protocol) =>
+      isModelTypeProtocolCompatible(modelType, protocol),
+    );
     if (protocolConfigs.length === 0) {
-      return supported;
+      return compatible;
     }
     const configured = new Set(protocolConfigs.map((config) => config.protocol));
-    return supported.filter((protocol) => configured.has(protocol));
-  }, [model?.providers, protocolConfigs]);
+    return compatible.filter((protocol) => configured.has(protocol));
+  }, [model?.providers, modelType, protocolConfigs]);
 
   useEffect(() => {
     if (open) {
@@ -108,7 +118,7 @@ export function ModelTestDialog({
         requestedModel,
         data: {
           protocol,
-          stream,
+          stream: supportsStream && stream,
         },
       });
       setResult(response);
@@ -161,21 +171,23 @@ export function ModelTestDialog({
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <div>
-              <Label htmlFor="model-test-stream" className="text-sm">
-                {t('testDialog.stream')}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {t('testDialog.streamHint')}
-              </p>
+          {supportsStream && (
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div>
+                <Label htmlFor="model-test-stream" className="text-sm">
+                  {t('testDialog.stream')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('testDialog.streamHint')}
+                </p>
+              </div>
+              <Switch
+                id="model-test-stream"
+                checked={stream}
+                onCheckedChange={setStream}
+              />
             </div>
-            <Switch
-              id="model-test-stream"
-              checked={stream}
-              onCheckedChange={setStream}
-            />
-          </div>
+          )}
         </div>
 
         {error ? (

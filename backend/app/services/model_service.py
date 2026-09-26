@@ -21,6 +21,10 @@ from app.domain.model import (
     ModelMappingProviderResponse,
     ModelAliasTarget,
 )
+from app.common.provider_protocols import (
+    is_model_type_protocol_compatible,
+    model_type_protocol_mismatch_message,
+)
 from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 from app.common.costs import (
@@ -325,8 +329,44 @@ class ModelService:
             )
 
         data = await self._normalize_alias_update(requested_model, existing, data)
+        await self._validate_model_type_against_providers(requested_model, existing, data)
         mapping = await self.model_repo.update_mapping(requested_model, data)
         return await self._to_mapping_response(mapping)  # type: ignore
+
+    async def _validate_model_type_against_providers(
+        self,
+        requested_model: str,
+        existing: ModelMapping,
+        data: ModelMappingUpdate,
+    ) -> None:
+        """Reject a model_type change that would orphan bound providers.
+
+        Changing a model to or from ``jev`` while providers of the other
+        protocol family are still attached would leave a configuration whose
+        requests can only fail at forward time.
+        """
+        new_type = data.model_type
+        if new_type is None or new_type == existing.model_type:
+            return
+
+        mappings = await self.model_repo.get_all_provider_mappings(
+            requested_model=requested_model
+        )
+        for item in mappings:
+            provider = await self.provider_repo.get_by_id(item.provider_id)
+            if not provider:
+                continue
+            if not is_model_type_protocol_compatible(new_type, provider.protocol):
+                raise ValidationError(
+                    message=(
+                        f"Cannot change model type to '{new_type}': "
+                        + model_type_protocol_mismatch_message(
+                            new_type, provider.protocol, provider.name
+                        )
+                        + ". Remove or repoint the incompatible provider first."
+                    ),
+                    code="model_protocol_mismatch",
+                )
     
     async def delete_mapping(self, requested_model: str) -> None:
         """
@@ -506,7 +546,17 @@ class ModelService:
                 message=f"Provider with id {data.provider_id} not found",
                 code="provider_not_found",
             )
-        
+
+        # A Jev model can only be served by a Jev provider and vice versa;
+        # there is no conversion between Jev and the chat protocols.
+        if not is_model_type_protocol_compatible(model.model_type, provider.protocol):
+            raise ValidationError(
+                message=model_type_protocol_mismatch_message(
+                    model.model_type, provider.protocol, provider.name
+                ),
+                code="model_protocol_mismatch",
+            )
+
         return await self.model_repo.add_provider_mapping(data)
     
     async def get_provider_mappings(
@@ -889,6 +939,20 @@ class ModelService:
                         )
                         continue
                     
+                    if not is_model_type_protocol_compatible(
+                        normalized.model_type, provider.protocol
+                    ):
+                        errors.append(
+                            f"Model '{item.requested_model}': "
+                            + model_type_protocol_mismatch_message(
+                                normalized.model_type,
+                                provider.protocol,
+                                provider.name,
+                            )
+                            + ". Mapping skipped."
+                        )
+                        continue
+
                     from app.domain.model import ModelMappingProviderCreate
                     billing_mode = p_item.billing_mode or "token_flat"
                     input_price = p_item.input_price

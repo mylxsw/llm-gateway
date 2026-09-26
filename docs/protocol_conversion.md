@@ -80,7 +80,10 @@ converters = {
    Jev 就是这样处理的——上游对未知字段返回 422。
 5. 新增对应的 `ProviderClient` 实现与 `app/providers/factory.py` 注册；
    若协议不支持流式，`forward_stream` 应产出一个明确的错误响应而不是抛异常。
-6. 若请求体结构与 chat 不同（没有 `messages` / `input` / `prompt`），
+6. 若该协议与其他协议不可互转，应在配置保存时就拒绝错配，而不是留到请求时报错：
+   参考 `is_model_type_protocol_compatible`，在 `create_provider_mapping`、
+   模型类型变更、供应商协议变更与导入这四条路径上校验，并在前端过滤可选供应商列表。
+7. 若请求体结构与 chat 不同（没有 `messages` / `input` / `prompt`），
    需要新增对应的 `TokenCounter` 并在 `get_token_counter` 中注册，
    否则路由前的 token 预估恒为 0，`cost_first` 策略与阶梯计价选档会失效。
    最终计费仍以上游返回的 `usage` 为准。

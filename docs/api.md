@@ -257,6 +257,13 @@ Jev-protocol provider unchanged apart from the `model` field, and returns the
 upstream response verbatim. There is no streaming mode and no conversion to or
 from other protocols — a Jev model must be bound to a Jev provider.
 
+This pairing is enforced when the configuration is saved, not at request time:
+the admin API rejects binding a `jev` model to a non-Jev provider (and a
+non-Jev model to a Jev provider) with `422 model_protocol_mismatch`. The same
+check guards changing a model's type, changing a provider's protocol, and
+importing model definitions. The dashboard only offers protocol-compatible
+providers in the picker.
+
 **Request Headers**
 ```
 Authorization: Bearer <api_key>
