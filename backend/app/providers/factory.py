@@ -8,6 +8,7 @@ from app.providers.base import ProviderClient
 from app.providers.openai_client import OpenAIClient
 from app.providers.anthropic_client import AnthropicClient
 from app.providers.gemini_client import GeminiClient
+from app.providers.jev_client import JevClient
 
 
 # Client cache
@@ -21,7 +22,8 @@ def get_provider_client(protocol: str) -> ProviderClient:
     Uses caching to avoid repeated client instantiation.
     
     Args:
-        protocol: Protocol type, "openai", "openai_responses", or "anthropic"
+        protocol: Protocol type, "openai", "openai_responses", "anthropic",
+            "gemini", or "jev"
     
     Returns:
         ProviderClient: Corresponding client instance
@@ -38,6 +40,8 @@ def get_provider_client(protocol: str) -> ProviderClient:
             _clients[protocol] = AnthropicClient()
         elif protocol == "gemini":
             _clients[protocol] = GeminiClient()
+        elif protocol == "jev":
+            _clients[protocol] = JevClient()
         else:
             raise ValueError(f"Unsupported protocol: {protocol}")
     

@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import api_keys_router, logs_router, models_router, providers_router
 from app.api.auth import router as auth_router
-from app.api.proxy import anthropic_router, openai_router
+from app.api.proxy import anthropic_router, jev_router, openai_router
 from app.common.admin_auth import is_admin_auth_enabled
 from app.common.errors import AppError
 from app.common.mcp_auth import MCPAuthMiddleware
@@ -223,6 +223,7 @@ async def root():
 # Register Proxy Routers
 app.include_router(openai_router)
 app.include_router(anthropic_router)
+app.include_router(jev_router)
 
 # Admin/Auth API (prefixed) — keep proxy endpoints (/v1/...) unchanged.
 api_router = APIRouter(prefix="/api")

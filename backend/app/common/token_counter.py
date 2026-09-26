@@ -409,19 +409,143 @@ class AnthropicTokenCounter(TokenCounter):
         return total
 
 
+class JevTokenCounter(TokenCounter):
+    """
+    Jev Token Counter
+
+    Jev requests carry a ``state`` plus a map of typed ``questions`` instead of
+    chat messages, so the generic message/prompt walk does not apply. The
+    upstream reports authoritative usage in its response, so this counter only
+    needs to produce a reasonable pre-flight estimate for routing decisions
+    (cost-first selection, tiered-price tier selection, token-based rules).
+    """
+
+    DEFAULT_ENCODING = "cl100k_base"
+
+    def __init__(self):
+        self._encodings: dict[str, Any] = {}
+
+    def _get_encoding(self, model: str) -> Any:
+        if not TIKTOKEN_AVAILABLE:
+            return None
+        if self.DEFAULT_ENCODING not in self._encodings:
+            try:
+                self._encodings[self.DEFAULT_ENCODING] = tiktoken.get_encoding(
+                    self.DEFAULT_ENCODING
+                )
+            except Exception:
+                return None
+        return self._encodings[self.DEFAULT_ENCODING]
+
+    def count_tokens(self, text: str, model: str = "") -> int:
+        if not text:
+            return 0
+        encoding = self._get_encoding(model)
+        if encoding is None:
+            return max(1, len(text) // 4)
+        try:
+            return len(_encode_plain_text(encoding, text))
+        except Exception:
+            return max(1, len(text) // 4)
+
+    def count_messages(self, messages: list[dict[str, Any]], model: str = "") -> int:
+        # Jev has no message list; fall back to counting any text it carries.
+        return self.count_tokens(_json_text(messages), model)
+
+    def count_request(self, body: dict[str, Any], model: str = "") -> int:
+        """
+        Estimate input tokens for a Jev evaluation request.
+
+        Jev ingests the ``state`` once and evaluates every question against it,
+        so the billable input is approximately the state plus every question's
+        instructions and criteria.
+        """
+        if not isinstance(body, dict):
+            return 0
+
+        total = self.count_tokens(_json_text(body.get("state")), model)
+
+        questions = body.get("questions")
+        if isinstance(questions, dict):
+            for question in questions.values():
+                total += self._count_question(question, model)
+        elif questions is not None:
+            total += self.count_tokens(_json_text(questions), model)
+
+        return total
+
+    def _count_question(self, question: Any, model: str = "") -> int:
+        if not isinstance(question, dict):
+            return self.count_tokens(_json_text(question), model)
+
+        total = 0
+        for key in ("instructions", "criteria"):
+            value = question.get(key)
+            if value is not None:
+                total += self.count_tokens(_json_text(value), model)
+        return total
+
+    def count_output_body(self, body: Any, model: str = "") -> int:
+        """
+        Estimate output tokens from a Jev response when usage is missing.
+
+        Answers are small structured objects; counting their serialized form is
+        the closest available proxy.
+        """
+        if not body:
+            return 0
+        if isinstance(body, (bytes, bytearray)):
+            try:
+                body = json.loads(body.decode("utf-8"))
+            except Exception:
+                return 0
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except Exception:
+                return self.count_tokens(body, model)
+
+        if isinstance(body, dict):
+            answers = body.get("answers")
+            if answers is not None:
+                return self.count_tokens(_json_text(answers), model)
+
+        return 0
+
+
 def get_token_counter(protocol: str) -> TokenCounter:
     """
     Get Token Counter for specified protocol
 
     Args:
-        protocol: Protocol type, "openai", "openai_responses", or "anthropic"
+        protocol: Protocol type, "openai", "openai_responses", "anthropic", or "jev"
 
     Returns:
         TokenCounter: Corresponding counter instance
     """
-    if protocol.lower() == "anthropic":
+    normalized = protocol.lower()
+    if normalized == "anthropic":
         return AnthropicTokenCounter()
+    if normalized == "jev":
+        return JevTokenCounter()
     return OpenAITokenCounter()
+
+
+def _json_text(value: Any) -> str:
+    """
+    Render an arbitrary Jev payload fragment as text for token estimation.
+
+    Strings pass through unchanged; structured values are serialized so nested
+    instructions/criteria objects still contribute their text content.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
+        return str(value)
 
 
 def _extract_text_from_content(content: Any) -> str:

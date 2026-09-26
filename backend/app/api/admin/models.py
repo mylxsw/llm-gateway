@@ -22,6 +22,7 @@ from app.common.errors import AppError
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
     GEMINI_PROTOCOL,
+    JEV_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
     resolve_implementation_protocol,
 )
@@ -142,6 +143,23 @@ def _build_test_payload(
             implementation,
         )
 
+    if implementation == JEV_PROTOCOL:
+        # Jev has no streaming mode; the stream flag is intentionally ignored.
+        return (
+            "/v1/systemone",
+            {
+                "model": requested_model,
+                "state": "hello",
+                "questions": {
+                    "is_greeting": {
+                        "type": "noul",
+                        "instructions": "Is this a greeting?",
+                    }
+                },
+            },
+            implementation,
+        )
+
     return (
         "/v1/chat/completions",
         {
@@ -218,6 +236,11 @@ def _extract_text_from_response(body: Any, implementation: str) -> str:
         text = body.get("output_text")
         if isinstance(text, str):
             return text
+
+    if implementation == JEV_PROTOCOL:
+        answers = body.get("answers")
+        if answers is not None:
+            return json.dumps(answers, ensure_ascii=False)
 
     if implementation == GEMINI_PROTOCOL:
         candidates = body.get("candidates")
@@ -490,7 +513,10 @@ async def test_model(
         )
         headers: dict[str, str] = {}
 
-        if data.stream:
+        # Jev has no streaming mode; always use the non-streaming path.
+        is_stream = data.stream and implementation != JEV_PROTOCOL
+
+        if is_stream:
             start = time.monotonic()
             (
                 initial_response,

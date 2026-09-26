@@ -7,9 +7,13 @@ Provides business logic processing for Providers.
 import json
 from typing import Any, Optional
 
-from app.common.errors import ConflictError, NotFoundError
+from app.common.errors import ConflictError, NotFoundError, ValidationError
 from app.common.proxy import build_proxy_config
-from app.common.provider_protocols import resolve_implementation_protocol
+from app.common.provider_protocols import (
+    is_model_type_protocol_compatible,
+    model_type_protocol_mismatch_message,
+    resolve_implementation_protocol,
+)
 from app.common.sanitizer import sanitize_api_key_display, sanitize_proxy_url
 from app.domain.provider import (
     Provider,
@@ -19,6 +23,7 @@ from app.domain.provider import (
     ProviderResponse,
 )
 from app.providers import get_provider_client
+from app.repositories.model_repo import ModelRepository
 from app.repositories.provider_repo import ProviderRepository
 
 
@@ -29,14 +34,22 @@ class ProviderService:
     Handles business logic related to providers, including CRUD operations and business rule validation.
     """
     
-    def __init__(self, repo: ProviderRepository):
+    def __init__(
+        self,
+        repo: ProviderRepository,
+        model_repo: Optional[ModelRepository] = None,
+    ):
         """
         Initialize Service
-        
+
         Args:
             repo: Provider Repository
+            model_repo: Model Repository, used to check that a protocol change
+                does not orphan models already bound to this provider. When it
+                is not supplied that check is skipped.
         """
         self.repo = repo
+        self.model_repo = model_repo
     
     async def create(self, data: ProviderCreate) -> ProviderResponse:
         """
@@ -166,8 +179,48 @@ class ProviderService:
                     code="duplicate_name",
                 )
         
+        await self._validate_protocol_against_bound_models(id, existing, data)
+
         provider = await self.repo.update(id, data)
         return self._to_response(provider)  # type: ignore
+
+    async def _validate_protocol_against_bound_models(
+        self,
+        provider_id: int,
+        existing: Provider,
+        data: ProviderUpdate,
+    ) -> None:
+        """Reject a protocol change that would orphan bound models.
+
+        Switching a provider into or out of the Jev protocol while models of
+        the other family are still bound would leave a configuration whose
+        requests can only fail at forward time.
+        """
+        if self.model_repo is None:
+            return
+        new_protocol = data.protocol
+        if not new_protocol or new_protocol == existing.protocol:
+            return
+
+        mappings = await self.model_repo.get_all_provider_mappings(
+            provider_id=provider_id
+        )
+        for item in mappings:
+            model = await self.model_repo.get_mapping(item.requested_model)
+            if not model:
+                continue
+            if not is_model_type_protocol_compatible(model.model_type, new_protocol):
+                raise ValidationError(
+                    message=(
+                        f"Cannot change protocol to '{new_protocol}': model "
+                        f"'{item.requested_model}' is bound to this provider. "
+                        + model_type_protocol_mismatch_message(
+                            model.model_type, new_protocol, existing.name
+                        )
+                        + ". Remove the binding first."
+                    ),
+                    code="model_protocol_mismatch",
+                )
     
     async def delete(self, id: int) -> None:
         """

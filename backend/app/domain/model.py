@@ -13,7 +13,7 @@ from typing_extensions import Literal
 
 BillingMode = Literal["token_flat", "token_tiered", "per_request", "per_image", "inherit_model_default"]
 SelectionStrategyType = Literal["round_robin", "cost_first", "priority"]
-ModelType = Literal["chat", "speech", "transcription", "embedding", "images", "alias"]
+ModelType = Literal["chat", "speech", "transcription", "embedding", "images", "alias", "jev"]
 
 
 class LatencyRoutingConfig(BaseModel):
@@ -60,7 +60,7 @@ class ModelMappingBase(BaseModel):
     )
     # Selection Strategy: round_robin / cost_first / priority
     strategy: SelectionStrategyType = Field("round_robin", description="Selection Strategy")
-    # Model Type: chat / speech / transcription / embedding / images
+    # Model Type: chat / speech / transcription / embedding / images / alias / jev
     model_type: ModelType = Field("chat", description="Model Type")
     alias_target_model: Optional[str] = Field(
         None, min_length=1, max_length=100, description="Real model used by an alias"

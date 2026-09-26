@@ -59,7 +59,10 @@ async def update_provider(provider_id: int, data: dict[str, Any]) -> dict[str, A
     ensure_writes_enabled()
     audit("update_provider", provider_id=provider_id)
     async with db_session() as session:
-        service = ProviderService(SQLAlchemyProviderRepository(session))
+        service = ProviderService(
+            SQLAlchemyProviderRepository(session),
+            SQLAlchemyModelRepository(session),
+        )
         try:
             result = await service.update(provider_id, ProviderUpdate(**data))
         except Exception as exc:  # noqa: BLE001

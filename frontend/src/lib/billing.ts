@@ -7,7 +7,7 @@ export type BillingMode = 'token_flat' | 'token_tiered' | 'per_request' | 'per_i
 
 /**
  * Returns the allowed billing modes for a given model type.
- * - chat / embedding: token_flat, token_tiered, per_request
+ * - chat / embedding / jev: token_flat, token_tiered, per_request
  * - images: per_image, token_flat
  * - undefined (no model type): all modes (for backwards compat)
  */
@@ -15,7 +15,9 @@ export function getBillingModesForModelType(modelType?: string): BillingMode[] {
   if (modelType === 'images') {
     return ['per_image', 'token_flat'];
   }
-  if (modelType === 'chat' || modelType === 'embedding') {
+  // Jev bills on input tokens (output is free upstream), so it uses the
+  // same token-based modes as chat; per-image makes no sense for it.
+  if (modelType === 'chat' || modelType === 'embedding' || modelType === 'jev') {
     return ['per_request', 'token_flat', 'token_tiered'];
   }
   // No model type specified → show all (e.g. in bulk upgrade dialog)

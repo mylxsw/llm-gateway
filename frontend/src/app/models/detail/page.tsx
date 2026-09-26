@@ -270,6 +270,8 @@ function ModelDetailContent() {
         return t('filters.embedding');
       case 'images':
         return t('filters.images');
+      case 'jev':
+        return t('filters.jev');
       case 'chat':
       default:
         return t('filters.chat');
@@ -300,7 +302,13 @@ function ModelDetailContent() {
 
   const status = getActiveStatus(model.is_active);
   const modelType = model.model_type ?? 'chat';
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
+  const supportsBilling =
+    modelType === 'chat' ||
+    modelType === 'embedding' ||
+    modelType === 'images' ||
+    modelType === 'jev';
+  // Jev models are testable too: the dialog posts to /v1/systemone.
+  const supportsModelTest = modelType === 'chat' || modelType === 'jev';
   const modelStats = modelStatsData?.find((stat) => stat.requested_model === requestedModel);
   const providerStats = providerStatsData ?? [];
   const isPriorityStrategy = model.strategy === 'priority';
@@ -417,7 +425,7 @@ function ModelDetailContent() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t('detail.providerConfig')}</CardTitle>
           <div className="flex items-center gap-2">
-            {modelType === 'chat' && (
+            {supportsModelTest && (
               <Button
                 variant="outline"
                 size="sm"
@@ -753,7 +761,7 @@ function ModelDetailContent() {
         loading={createMutation.isPending || updateMutation.isPending}
       />
 
-      {modelType === 'chat' && (
+      {supportsModelTest && (
         <ModelTestDialog
           open={testDialogOpen}
           onOpenChange={setTestDialogOpen}

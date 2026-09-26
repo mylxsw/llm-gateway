@@ -61,6 +61,7 @@ const FALLBACK_PROTOCOLS = [
   { protocol: 'openai_responses', label: 'OpenAI Responses', implementation: 'openai_responses' },
   { protocol: 'anthropic', label: 'Anthropic', implementation: 'anthropic' },
   { protocol: 'gemini', label: 'Google Gemini', implementation: 'gemini' },
+  { protocol: 'jev', label: 'TypeSafe Jev', implementation: 'jev' },
 ];
 
 const DEFAULT_EXPANDED_JSON_DEPTH = 4;
