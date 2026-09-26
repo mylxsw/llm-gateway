@@ -412,6 +412,7 @@
       "embedding": "向量",
       "images": "图像",
       "alias": "别名",
+      "jev": "Jev",
       "roundRobin": "轮询",
       "costFirst": "成本优先",
       "priority": "优先级",

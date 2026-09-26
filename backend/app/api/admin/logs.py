@@ -23,6 +23,7 @@ from app.api.deps import (
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
     GEMINI_PROTOCOL,
+    JEV_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
     resolve_implementation_protocol,
 )
@@ -237,6 +238,9 @@ def _build_playground_request_path(
     if implementation == OPENAI_RESPONSES_PROTOCOL:
         return "/v1/responses"
 
+    if implementation == JEV_PROTOCOL:
+        return "/v1/systemone"
+
     if implementation == GEMINI_PROTOCOL:
         if not isinstance(request_body, dict):
             raise ValidationError(
@@ -264,6 +268,9 @@ def _is_playground_stream(
     implementation = resolve_implementation_protocol(protocol)
     if implementation == GEMINI_PROTOCOL:
         return "streamGenerateContent" in request_path or "alt=sse" in request_path
+    # Jev has no streaming mode, so a stray "stream" field must not be honored.
+    if implementation == JEV_PROTOCOL:
+        return False
     return isinstance(request_body, dict) and bool(request_body.get("stream"))
 
 

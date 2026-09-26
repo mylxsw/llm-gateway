@@ -352,6 +352,15 @@ class ProtocolConverterManager:
         from typing import List
 
         new_body = copy.deepcopy(body)
+
+        # Jev is a pure pass-through protocol: the request shape is fixed
+        # (state/model/questions) and the upstream rejects unknown fields with
+        # 422, so no default parameters or chat-oriented normalization apply.
+        # Only the model field is rewritten to the provider's target model.
+        if protocol == Protocol.JEV:
+            new_body["model"] = target_model
+            return ConversionResult(path=path, body=new_body)
+
         new_body = self._apply_default_parameters(protocol, new_body, options or {})
         new_body["model"] = target_model
 

@@ -12,6 +12,7 @@ OPENAI_PROTOCOL = "openai"
 OPENAI_RESPONSES_PROTOCOL = "openai_responses"
 ANTHROPIC_PROTOCOL = "anthropic"
 GEMINI_PROTOCOL = "gemini"
+JEV_PROTOCOL = "jev"
 DEEPSEEK_PROTOCOL = "deepseek"
 ZHIPU_PROTOCOL = "zhipu"
 MOONSHOT_PROTOCOL = "moonshot"
@@ -59,6 +60,12 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
         base_url="https://generativelanguage.googleapis.com",
         label="Google Gemini",
     ),
+    JEV_PROTOCOL: ProtocolConfig(
+        frontend=JEV_PROTOCOL,
+        implementation=JEV_PROTOCOL,
+        base_url="https://api.typesafe.ai/v1",
+        label="TypeSafe Jev",
+    ),
     "deepseek": ProtocolConfig(
         frontend="deepseek",
         implementation=OPENAI_PROTOCOL,
@@ -98,6 +105,7 @@ IMPLEMENTATION_PROTOCOLS = (
     OPENAI_RESPONSES_PROTOCOL,
     ANTHROPIC_PROTOCOL,
     GEMINI_PROTOCOL,
+    JEV_PROTOCOL,
 )
 
 

@@ -63,6 +63,28 @@ converters = {
 }
 ```
 
+## 纯转发型协议（如 Jev）
+
+有些协议在网关中只做"透传"：对外暴露的接口与上游完全一致，中间不做任何语义转换。
+这类协议不需要编写任何转换器，接入步骤比上面的最小步骤更短：
+
+1. 在 `backend/app/common/provider_protocols.py` 中新增协议常量，并加入
+   `FRONTEND_PROTOCOL_CONFIGS` 与 `IMPLEMENTATION_PROTOCOLS`。
+2. 在 `backend/app/common/protocol/base.py` 的 `Protocol` 枚举与 `from_string` 中登记。
+3. **不要**注册任何跨协议 converter。用户协议与供应商协议相同时，
+   `ProtocolConverterManager` 会走 identity 路径；协议不同时会自然抛出
+   `UnsupportedConversionError`，这正是我们期望的行为（禁止错配）。
+4. 如果该协议的请求体不接受多余字段，需要在
+   `ProtocolConverterManager._identity_request_conversion` 中为它加一条短路分支，
+   跳过 `default_parameters` 注入与 chat 语义的规范化，只重写 `model` 字段。
+   Jev 就是这样处理的——上游对未知字段返回 422。
+5. 新增对应的 `ProviderClient` 实现与 `app/providers/factory.py` 注册；
+   若协议不支持流式，`forward_stream` 应产出一个明确的错误响应而不是抛异常。
+6. 若请求体结构与 chat 不同（没有 `messages` / `input` / `prompt`），
+   需要新增对应的 `TokenCounter` 并在 `get_token_counter` 中注册，
+   否则路由前的 token 预估恒为 0，`cost_first` 策略与阶梯计价选档会失效。
+   最终计费仍以上游返回的 `usage` 为准。
+
 ## 常见注意事项
 
 - **路径检查**：每个转换函数必须验证 `path` 是否受支持。

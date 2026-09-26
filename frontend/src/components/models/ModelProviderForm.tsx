@@ -160,7 +160,11 @@ export function ModelProviderForm({
   const billingMode = useWatch({ control, name: 'billing_mode' });
   const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
   const targetModelName = useWatch({ control, name: 'target_model_name' });
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
+  const supportsBilling =
+    modelType === 'chat' ||
+    modelType === 'embedding' ||
+    modelType === 'images' ||
+    modelType === 'jev';
   const [providerModels, setProviderModels] = useState<string[]>([]);
   const [providerModelDialogOpen, setProviderModelDialogOpen] = useState(false);
   const [providerModelSearch, setProviderModelSearch] = useState('');

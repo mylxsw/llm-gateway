@@ -48,6 +48,7 @@
 - **OpenAI Compatible**: Full support for `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/audio/*`, `/v1/images/*`
 - **OpenAI Responses Compatible**: `/v1/responses` with streaming and tool-calls
 - **Anthropic Compatible**: Native support for `/v1/messages` endpoint
+- **Jev Compatible**: Pass-through support for the TypeSafe `/v1/systemone` evaluation endpoint
 - **Protocol Conversion**: Smoothly convert between OpenAI Chat ↔ OpenAI Responses ↔ Anthropic Messages (requests, responses, and streaming), powered by the built-in `llm_api_converter`
 - **Streaming Support**: Full Server-Sent Events (SSE) support for real-time responses
 
@@ -243,6 +244,12 @@ response = client.responses.create(
 |--------|----------|-------------|
 | POST | `/v1/messages` | Messages API |
 
+#### Proxy Endpoints (Jev Compatible)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/systemone` | TypeSafe Jev evaluation API (pass-through, non-streaming) |
+
 #### Admin Endpoints
 
 | Resource | Endpoints |
@@ -331,6 +338,7 @@ Squirrel can proxy requests to any OpenAI or Anthropic compatible API:
 | OpenAI | OpenAI | Full support including GPT-4, GPT-3.5, embeddings, audio, images |
 | OpenAI | OpenAI Responses | Responses API via `/v1/responses` |
 | Anthropic | Anthropic | Claude models via Messages API |
+| TypeSafe | Jev | Jev models via `/v1/systemone`; pass-through only, no protocol conversion |
 | Azure OpenAI | OpenAI | Use Azure endpoint URL |
 | Local Models | OpenAI | Ollama, vLLM, LocalAI, etc. |
 | Other Providers | OpenAI/Anthropic | Any compatible API endpoint |

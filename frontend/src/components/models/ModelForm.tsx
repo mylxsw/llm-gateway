@@ -151,10 +151,16 @@ export function ModelForm({
   const latencyRoutingEnabled = useWatch({ control, name: 'latency_routing_enabled' });
   const modelType = useWatch({ control, name: 'model_type' });
   const isAlias = modelType === 'alias';
+  // Jev has no reasoning/thinking control; forcing one makes every request fail.
+  const supportsDisableThinking = modelType !== 'jev';
   const strategy = useWatch({ control, name: 'strategy' });
   const billingMode = useWatch({ control, name: 'billing_mode' });
   const cacheBillingEnabled = useWatch({ control, name: 'cache_billing_enabled' });
-  const supportsBilling = modelType === 'chat' || modelType === 'embedding' || modelType === 'images';
+  const supportsBilling =
+    modelType === 'chat' ||
+    modelType === 'embedding' ||
+    modelType === 'images' ||
+    modelType === 'jev';
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -169,6 +175,12 @@ export function ModelForm({
       setValue('strategy', 'round_robin');
     }
   }, [supportsBilling, strategy, setValue]);
+
+  useEffect(() => {
+    if (!supportsDisableThinking && disableThinking) {
+      setValue('disable_thinking', false);
+    }
+  }, [supportsDisableThinking, disableThinking, setValue]);
 
   // Fill form data in edit mode
   useEffect(() => {
@@ -436,6 +448,7 @@ export function ModelForm({
                     <SelectItem value="embedding">{t('filters.embedding')}</SelectItem>
                     <SelectItem value="images">{t('filters.images')}</SelectItem>
                     <SelectItem value="alias">{t('filters.alias')}</SelectItem>
+                    <SelectItem value="jev">{t('filters.jev')}</SelectItem>
                   </SelectContent>
                 </Select>
               )}
@@ -686,24 +699,26 @@ export function ModelForm({
                 />
               </div>
 
-              <div className="flex items-start justify-between gap-6 px-4 py-4">
-                <div className="space-y-1">
-                  <Label htmlFor="disable_thinking">
-                    {t('form.disableThinkingLabel')}
-                  </Label>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {t('form.disableThinkingHelp')}
-                  </p>
+              {supportsDisableThinking && (
+                <div className="flex items-start justify-between gap-6 px-4 py-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="disable_thinking">
+                      {t('form.disableThinkingLabel')}
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {t('form.disableThinkingHelp')}
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_thinking"
+                    className="mt-0.5"
+                    checked={disableThinking}
+                    onCheckedChange={(checked) =>
+                      setValue('disable_thinking', checked)
+                    }
+                  />
                 </div>
-                <Switch
-                  id="disable_thinking"
-                  className="mt-0.5"
-                  checked={disableThinking}
-                  onCheckedChange={(checked) =>
-                    setValue('disable_thinking', checked)
-                  }
-                />
-              </div>
+              )}
 
               <div className="space-y-4 px-4 py-4">
                 <div className="flex items-start justify-between gap-6">

@@ -85,6 +85,8 @@ export function ModelList({
         return t('filters.images');
       case 'alias':
         return t('filters.alias');
+      case 'jev':
+        return t('filters.jev');
       case 'chat':
       default:
         return t('filters.chat');

@@ -270,6 +270,8 @@ function ModelDetailContent() {
         return t('filters.embedding');
       case 'images':
         return t('filters.images');
+      case 'jev':
+        return t('filters.jev');
       case 'chat':
       default:
         return t('filters.chat');

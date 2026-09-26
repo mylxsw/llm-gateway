@@ -246,6 +246,92 @@ anthropic-version: 2023-06-01
 
 ---
 
+### 1.3 Jev Compatible Interface
+
+#### POST /v1/systemone
+
+TypeSafe Jev evaluation proxy interface.
+
+Jev is a pure pass-through protocol: the gateway forwards the request body to a
+Jev-protocol provider unchanged apart from the `model` field, and returns the
+upstream response verbatim. There is no streaming mode and no conversion to or
+from other protocols — a Jev model must be bound to a Jev provider.
+
+**Request Headers**
+```
+Authorization: Bearer <api_key>
+Content-Type: application/json
+```
+
+**Request Body**
+```json
+{
+  "model": "jev-latest",
+  "state": "Help! My payouts have been failing for 3 days.",
+  "questions": {
+    "is_urgent": {
+      "type": "noul",
+      "instructions": "Does this convey urgency?",
+      "criteria": {
+        "true": "Explicitly time-sensitive",
+        "false": "No urgency expressed"
+      }
+    },
+    "department": {
+      "type": "choice",
+      "instructions": "Which team should handle this?",
+      "criteria": {
+        "billing": "Payments, invoicing, refunds",
+        "technical": "Bugs, outages, integrations"
+      }
+    },
+    "frustration": {
+      "type": "score",
+      "instructions": "How frustrated is the customer?",
+      "criteria": ["Calm", "Frustrated", "Very angry"]
+    }
+  }
+}
+```
+
+**Response**
+```json
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "is_urgent": {"type": "noul", "noul": 0.95},
+    "department": {
+      "type": "choice",
+      "choice": "billing",
+      "probabilities": {"billing": 0.88, "technical": 0.12},
+      "confidence": 0.81
+    },
+    "frustration": {
+      "type": "score",
+      "score": 1.05,
+      "legend": {"0": "Calm", "1": "Frustrated", "2": "Very angry"},
+      "probabilities": {"0": 0.0, "1": 0.95, "2": 0.05},
+      "confidence": 0.92
+    }
+  },
+  "usage": {"input_tokens": 296, "output_tokens": 20}
+}
+```
+
+**Notes**
+
+- Upstream status codes (401 / 422 / 429 / 529) are passed through unchanged.
+  As with every other protocol, 5xx responses are retried on the same provider
+  and 4xx responses fail over to the next candidate provider.
+- Billing uses the upstream `usage` block. Prices are configured per model and
+  per provider in the admin UI like any other model; the `token_flat` mode
+  expresses Jev's "charge for input, output free" scheme by setting the output
+  price to 0.
+- `GET /v1/models` keeps its OpenAI shape and is **not** the Jev model list.
+  `POST /v1/systemone` is the only Jev endpoint the gateway exposes.
+
+---
+
 ## II. Admin API
 
 ### 2.1 Provider Management

@@ -412,6 +412,7 @@
       "embedding": "Embedding",
       "images": "Images",
       "alias": "Alias",
+      "jev": "Jev",
       "roundRobin": "Round Robin",
       "costFirst": "Cost First",
       "priority": "Priority",
