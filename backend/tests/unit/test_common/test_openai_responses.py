@@ -98,7 +98,8 @@ def test_responses_request_to_chat_completions_preserves_reasoning():
         }
     )
 
-    assert chat["reasoning"] == {"effort": "xhigh"}
+    assert chat["reasoning_effort"] == "xhigh"
+    assert "reasoning" not in chat
     assert "thinking" not in chat
     assert "output_config" not in chat
 
@@ -113,7 +114,8 @@ def test_responses_request_to_chat_completions_maps_anthropic_reasoning_fields()
         }
     )
 
-    assert chat["reasoning"] == {"effort": "xhigh"}
+    assert chat["reasoning_effort"] == "xhigh"
+    assert "reasoning" not in chat
     assert "thinking" not in chat
     assert "output_config" not in chat
 

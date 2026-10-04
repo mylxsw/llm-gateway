@@ -370,8 +370,6 @@ class ProtocolConverterManager:
 
         if protocol in (Protocol.OPENAI, Protocol.OPENAI_RESPONSES):
             new_body = normalize_reasoning_for_openai(new_body)
-        elif protocol == Protocol.ANTHROPIC:
-            new_body = normalize_reasoning_for_anthropic(new_body)
 
         # Remove stream_options and include_usage for OpenAI streaming requests
         # Some OpenAI-compatible providers do not support these parameters
@@ -390,6 +388,11 @@ class ProtocolConverterManager:
                     new_body["max_tokens"] = new_body["max_completion_tokens"]
                 else:
                     new_body["max_tokens"] = DEFAULT_MAX_TOKENS
+
+        # Runs after max_tokens is settled so a synthesized thinking budget
+        # can be kept below it.
+        if protocol == Protocol.ANTHROPIC:
+            new_body = normalize_reasoning_for_anthropic(new_body)
 
         return ConversionResult(path=path, body=new_body)
 

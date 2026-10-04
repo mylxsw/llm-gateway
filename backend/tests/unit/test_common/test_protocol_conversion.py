@@ -136,14 +136,14 @@ def test_convert_request_openai_to_anthropic_maps_reasoning_effort():
             "model": "any",
             "messages": [{"role": "user", "content": "Hi"}],
             "reasoning": {"effort": "xhigh"},
-            "max_tokens": 16,
+            "max_tokens": 4096,
         },
         target_model="claude-3-5-sonnet",
     )
 
     assert path == "/v1/messages"
     assert "reasoning" not in out_body
-    assert out_body["thinking"] == {"type": "enabled"}
+    assert out_body["thinking"] == {"type": "enabled", "budget_tokens": 3072}
     assert out_body["output_config"] == {"effort": "max"}
 
 
@@ -351,7 +351,7 @@ def test_convert_request_openai_completion_to_anthropic_maps_reasoning_effort():
             "model": "any",
             "prompt": "Hi",
             "reasoning": {"effort": "high"},
-            "max_tokens": 16,
+            "max_tokens": 32000,
         },
         target_model="claude-3-5-sonnet",
     )
@@ -362,7 +362,7 @@ def test_convert_request_openai_completion_to_anthropic_maps_reasoning_effort():
         [{"type": "text", "text": "Hi"}],
     )
     assert "reasoning" not in out_body
-    assert out_body["thinking"] == {"type": "enabled"}
+    assert out_body["thinking"] == {"type": "enabled", "budget_tokens": 16384}
     assert out_body["output_config"] == {"effort": "high"}
 
 
@@ -890,7 +890,8 @@ def test_convert_request_anthropic_to_openai_maps_thinking_effort():
     assert path == "/v1/chat/completions"
     assert "thinking" not in out_body
     assert "output_config" not in out_body
-    assert out_body["reasoning"] == {"effort": "xhigh"}
+    assert "reasoning" not in out_body
+    assert out_body["reasoning_effort"] == "xhigh"
 
 
 def test_convert_request_anthropic_to_openai_maps_disabled_thinking_to_none():
@@ -911,7 +912,7 @@ def test_convert_request_anthropic_to_openai_maps_disabled_thinking_to_none():
     assert path == "/v1/chat/completions"
     assert "thinking" not in out_body
     assert "output_config" not in out_body
-    assert out_body["reasoning"] == {"effort": "none"}
+    assert out_body["reasoning_effort"] == "none"
 
 
 def test_convert_request_identity_openai_normalizes_anthropic_reasoning_fields():
@@ -931,7 +932,8 @@ def test_convert_request_identity_openai_normalizes_anthropic_reasoning_fields()
     assert path == "/v1/chat/completions"
     assert "thinking" not in out_body
     assert "output_config" not in out_body
-    assert out_body["reasoning"] == {"effort": "low"}
+    assert "reasoning" not in out_body
+    assert out_body["reasoning_effort"] == "low"
 
 
 def test_convert_request_identity_openai_maps_thinking_effort_to_reasoning_effort():
@@ -949,7 +951,7 @@ def test_convert_request_identity_openai_maps_thinking_effort_to_reasoning_effor
 
     assert path == "/v1/chat/completions"
     assert "thinking" not in out_body
-    assert out_body["reasoning"] == {"effort": "medium"}
+    assert out_body["reasoning_effort"] == "medium"
 
 
 def test_convert_request_identity_anthropic_normalizes_openai_reasoning_fields():
@@ -967,7 +969,8 @@ def test_convert_request_identity_anthropic_normalizes_openai_reasoning_fields()
 
     assert path == "/v1/messages"
     assert "reasoning" not in out_body
-    assert out_body["thinking"] == {"type": "enabled"}
+    # Identity requests default max_tokens to 16384 -> budget capped at 75%.
+    assert out_body["thinking"] == {"type": "enabled", "budget_tokens": 12288}
     assert out_body["output_config"] == {"effort": "high"}
 
 

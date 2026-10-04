@@ -870,7 +870,7 @@ class AnthropicMessagesEncoder:
                     "input": {},
                 }
             elif isinstance(block, IRThinkingBlock):
-                content_block = {"type": "thinking", "thinking": ""}
+                content_block = {"type": "thinking", "thinking": "", "signature": ""}
             else:
                 content_block = {"type": "text", "text": ""}
 

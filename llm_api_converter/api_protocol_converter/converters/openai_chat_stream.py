@@ -4,14 +4,34 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Dict, List, Optional
 
-from ..ir import IRStreamEvent, IRTextBlock, IRToolUseBlock, StreamEventType
+from ..ir import (
+    IRStreamEvent,
+    IRTextBlock,
+    IRThinkingBlock,
+    IRToolUseBlock,
+    StreamEventType,
+)
 from .exceptions import StreamConversionError
+
+
+def reasoning_text(message: Dict[str, Any]) -> str:
+    """Return reasoning text from an OpenAI-compatible message or delta.
+
+    OpenAI Chat has no official reasoning output field; providers use
+    `reasoning_content` (DeepSeek, Qwen, Kimi, vLLM) or `reasoning` (OpenRouter).
+    """
+    for key in ("reasoning_content", "reasoning"):
+        value = message.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
 
 @dataclass
 class _Block:
     index: int
     tool: bool = False
+    thinking: bool = False
     source_index: Optional[int] = None
     id: str = ""
     name: str = ""
@@ -48,10 +68,10 @@ class OpenAIChatStreamBlocks:
         self._next_index = 0
         self._finished = False
 
-    def _new_block(self, tool: bool = False) -> _Block:
+    def _new_block(self, tool: bool = False, thinking: bool = False) -> _Block:
         if self._next_index >= self._max_blocks:
             raise StreamConversionError("Stream content block limit exceeded")
-        block = _Block(index=self._next_index, tool=tool)
+        block = _Block(index=self._next_index, tool=tool, thinking=thinking)
         self._next_index += 1
         self._pending.append(block)
         if tool:
@@ -125,14 +145,20 @@ class OpenAIChatStreamBlocks:
         return block
 
     def feed(self, delta: Dict[str, Any]) -> List[IRStreamEvent]:
+        reasoning = reasoning_text(delta)
         content = delta.get("content")
         calls = delta.get("tool_calls") or []
         if self._finished:
-            if content or calls:
+            if reasoning or content or calls:
                 raise StreamConversionError("Content received after stream finish")
             return []
+        if reasoning:
+            if not self._pending or not self._pending[-1].thinking:
+                self._new_block(thinking=True)
+            self._append_fragment(self._pending[-1], reasoning)
         if content:
-            if not self._pending or self._pending[-1].tool:
+            last = self._pending[-1] if self._pending else None
+            if last is None or last.tool or last.thinking:
                 self._new_block()
             self._append_fragment(self._pending[-1], content)
         for call in calls:
@@ -169,6 +195,8 @@ class OpenAIChatStreamBlocks:
                         content_block=(
                             IRToolUseBlock(id=block.id, name=block.name)
                             if block.tool
+                            else IRThinkingBlock(thinking="")
+                            if block.thinking
                             else IRTextBlock(text="")
                         ),
                     )
@@ -178,7 +206,11 @@ class OpenAIChatStreamBlocks:
                     IRStreamEvent(
                         type=StreamEventType.CONTENT_BLOCK_DELTA,
                         index=block.index,
-                        delta_type="input_json" if block.tool else "text",
+                        delta_type=(
+                            "input_json"
+                            if block.tool
+                            else "thinking" if block.thinking else "text"
+                        ),
                         delta_json=fragment if block.tool else None,
                         delta_text=None if block.tool else fragment,
                     )

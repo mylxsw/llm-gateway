@@ -21,6 +21,7 @@ from ..ir import (
     IRResponseFormat,
     IRStreamEvent,
     IRTextBlock,
+    IRThinkingBlock,
     IRToolChoice,
     IRToolDeclaration,
     IRToolResultBlock,
@@ -32,7 +33,7 @@ from ..ir import (
     ToolChoiceType,
 )
 from .exceptions import ConversionError, ValidationError
-from .openai_chat_stream import OpenAIChatStreamBlocks
+from .openai_chat_stream import OpenAIChatStreamBlocks, reasoning_text
 from .schema_utils import omit_null_required
 
 
@@ -312,6 +313,11 @@ class OpenAIChatDecoder:
 
             # Decode message content
             message = choice.get("message", {})
+            # De-facto reasoning fields of OpenAI-compatible providers
+            # (DeepSeek/Qwen/Kimi/vLLM: reasoning_content, OpenRouter: reasoning).
+            reasoning = reasoning_text(message)
+            if reasoning:
+                ir.content.append(IRThinkingBlock(thinking=reasoning, signature=""))
             content = message.get("content")
             if content:
                 ir.content.append(IRTextBlock(text=content))
@@ -708,15 +714,21 @@ class OpenAIChatEncoder:
 
         # Extract text content
         text_parts = []
+        reasoning_parts = []
         tool_calls = []
 
         for block in ir.content:
             if isinstance(block, IRTextBlock):
                 text_parts.append(block.text)
+            elif isinstance(block, IRThinkingBlock):
+                if not block.is_redacted and block.thinking:
+                    reasoning_parts.append(block.thinking)
             elif isinstance(block, IRToolUseBlock):
                 tool_calls.append(self._encode_tool_call(block))
 
         message["content"] = "".join(text_parts) if text_parts else None
+        if reasoning_parts:
+            message["reasoning_content"] = "".join(reasoning_parts)
 
         if tool_calls:
             message["tool_calls"] = tool_calls
@@ -782,6 +794,17 @@ class OpenAIChatEncoder:
                     {
                         "index": 0,
                         "delta": {"content": ir_event.delta_text},
+                        "finish_reason": None,
+                    }
+                ]
+                events.append(self._format_event(chunk, output_format))
+
+            elif ir_event.delta_type == "thinking" and ir_event.delta_text:
+                chunk = self._create_chunk_base()
+                chunk["choices"] = [
+                    {
+                        "index": 0,
+                        "delta": {"reasoning_content": ir_event.delta_text},
                         "finish_reason": None,
                     }
                 ]
