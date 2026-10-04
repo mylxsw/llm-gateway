@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.common.protocol.converters import strip_anthropic_extra
 from app.repositories.kv_store_repo import KVStoreRepository
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,18 @@ OPENAI_IMAGE_PATHS = {
     "/v1/images/edits",
     "/v1/images/variations",
 }
+
+
+def _strip_anthropic_thinking_extra(body: Any) -> None:
+    if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+        return
+    for message in body["messages"]:
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        tool_calls = message.get("tool_calls")
+        if isinstance(tool_calls, list):
+            for tool_call in tool_calls:
+                strip_anthropic_extra(tool_call)
 
 
 class ProtocolConversionHooks:
@@ -97,6 +110,10 @@ class ProtocolConversionHooks:
     ) -> dict[str, Any]:
         if supplier_protocol == "openai" and request_protocol != "openai" and self._kv_enabled:
             await self._inject_cached_content(supplier_body)
+        if supplier_protocol == "openai":
+            # Anthropic thinking signatures are only meaningful to the
+            # Anthropic upstream that issued them.
+            _strip_anthropic_thinking_extra(supplier_body)
 
         return supplier_body
 
@@ -117,7 +134,10 @@ class ProtocolConversionHooks:
         supplier_protocol: str,
     ) -> Any:
         if request_protocol == "openai" and supplier_protocol != "openai" and self._kv_enabled and isinstance(response_body, dict):
-            await self._cache_response_tool_call_extra_content(response_body)
+            # reasoning_content is only replayed to OpenAI-compatible upstreams.
+            await self._cache_response_tool_call_extra_content(
+                response_body, cache_reasoning=False
+            )
 
         return response_body
 
@@ -138,7 +158,11 @@ class ProtocolConversionHooks:
         supplier_protocol: str,
     ) -> bytes:
         if request_protocol == "openai" and supplier_protocol != "openai":
-            await self._cache_response_tool_call_extra_content_stream(chunk)
+            # Converted reasoning_content is not replayable upstream; skip the
+            # per-delta KV writes and cache only tool-call extra_content.
+            await self._cache_response_tool_call_extra_content_stream(
+                chunk, cache_reasoning=False
+            )
         return chunk
 
     async def before_image_request_conversion(
@@ -178,7 +202,7 @@ class ProtocolConversionHooks:
         return response_body
 
     async def _cache_response_tool_call_extra_content_stream(
-        self, chunk: bytes
+        self, chunk: bytes, *, cache_reasoning: bool = True
     ) -> bytes:
         if not self._kv_enabled:
             return chunk
@@ -205,7 +229,7 @@ class ProtocolConversionHooks:
 
                         # Accumulate reasoning_content keyed by chat_id
                         reasoning_content = delta.get("reasoning_content")
-                        if reasoning_content and chat_id:
+                        if cache_reasoning and reasoning_content and chat_id:
                             cache_key = f"chat_reasoning:{chat_id}"
                             try:
                                 cached = await kv.get(cache_key)
@@ -253,7 +277,7 @@ class ProtocolConversionHooks:
         return chunk
 
     async def _cache_response_tool_call_extra_content(
-        self, supplier_body: dict[str, Any]
+        self, supplier_body: dict[str, Any], *, cache_reasoning: bool = True
     ) -> None:
         """
         Cache extra_content and reasoning_content from tool_calls in non-streaming response.
@@ -266,7 +290,9 @@ class ProtocolConversionHooks:
             choices = supplier_body.get("choices", [])
             for choice in choices:
                 message = choice.get("message", {})
-                reasoning_content = message.get("reasoning_content")
+                reasoning_content = (
+                    message.get("reasoning_content") if cache_reasoning else None
+                )
 
                 tool_calls = message.get("tool_calls")
                 if not isinstance(tool_calls, list):

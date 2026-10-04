@@ -73,6 +73,10 @@ try:
     )
     from api_protocol_converter.stream import SSEFormatter, SSEParser
     from api_protocol_converter.converters.openai_chat_stream import OpenAIChatStreamBlocks
+    from api_protocol_converter.converters.thinking_extra import (
+        strip_anthropic_extra,
+        thinking_extra,
+    )
 
     _HAS_SDK = True
 except ImportError as e:
@@ -1904,6 +1908,10 @@ class SDKStreamConverter(IStreamConverter):
         current_tool_index = 0
         done = False
         final_usage: Optional[Dict[str, Any]] = None
+        # Signed thinking blocks waiting to ride on the next tool call, so the
+        # client can replay them (see thinking_extra).
+        pending_thinking: List[Dict[str, Any]] = []
+        current_thinking: Optional[Dict[str, Any]] = None
 
         async for chunk in upstream:
             for payload in decoder.feed(chunk):
@@ -1918,6 +1926,12 @@ class SDKStreamConverter(IStreamConverter):
                     continue
 
                 event_type = data.get("type")
+
+                if event_type == "content_block_stop":
+                    if current_thinking is not None and current_thinking["signature"]:
+                        pending_thinking.append(current_thinking)
+                    current_thinking = None
+                    continue
 
                 if event_type == "message_start":
                     message = data.get("message", {})
@@ -1951,8 +1965,22 @@ class SDKStreamConverter(IStreamConverter):
                                         response_id, model, delta, None
                                     )
                                 )
+                        elif block_type == "redacted_thinking":
+                            redacted = content_block.get("data")
+                            if isinstance(redacted, str) and redacted:
+                                pending_thinking.append(
+                                    {"type": "redacted_thinking", "data": redacted}
+                                )
                         elif block_type == "thinking":
-                            thinking = content_block.get("thinking") or ""
+                            thinking = content_block.get("thinking")
+                            if not isinstance(thinking, str):
+                                thinking = ""
+                            signature = content_block.get("signature")
+                            current_thinking = {
+                                "type": "thinking",
+                                "thinking": thinking,
+                                "signature": signature if isinstance(signature, str) else "",
+                            }
                             if thinking:
                                 delta = {"reasoning_content": thinking}
                                 if not sent_role:
@@ -1975,19 +2003,21 @@ class SDKStreamConverter(IStreamConverter):
                                 arguments = tool_args
                             else:
                                 arguments = "{}"
-                            delta = {
-                                "tool_calls": [
-                                    {
-                                        "index": current_tool_index,
-                                        "id": current_tool_id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": current_tool_name,
-                                            "arguments": arguments,
-                                        },
-                                    }
-                                ]
+                            tool_call: Dict[str, Any] = {
+                                "index": current_tool_index,
+                                "id": current_tool_id,
+                                "type": "function",
+                                "function": {
+                                    "name": current_tool_name,
+                                    "arguments": arguments,
+                                },
                             }
+                            if pending_thinking:
+                                tool_call["extra_content"] = thinking_extra(
+                                    pending_thinking
+                                )
+                                pending_thinking = []
+                            delta = {"tool_calls": [tool_call]}
                             if not sent_role:
                                 delta["role"] = "assistant"
                                 sent_role = True
@@ -2017,7 +2047,11 @@ class SDKStreamConverter(IStreamConverter):
                         elif delta_type == "thinking_delta":
                             # Surface Anthropic thinking as the de-facto
                             # OpenAI-compatible `reasoning_content` field.
-                            thinking = delta_obj.get("thinking") or ""
+                            thinking = delta_obj.get("thinking")
+                            if not isinstance(thinking, str):
+                                thinking = ""
+                            if current_thinking is not None:
+                                current_thinking["thinking"] += thinking
                             if thinking:
                                 delta = {"reasoning_content": thinking}
                                 if not sent_role:
@@ -2028,6 +2062,10 @@ class SDKStreamConverter(IStreamConverter):
                                         response_id, model, delta, None
                                     )
                                 )
+                        elif delta_type == "signature_delta":
+                            signature = delta_obj.get("signature")
+                            if current_thinking is not None and isinstance(signature, str):
+                                current_thinking["signature"] += signature
                         elif delta_type == "input_json_delta":
                             partial_json = delta_obj.get("partial_json") or ""
                             if partial_json:

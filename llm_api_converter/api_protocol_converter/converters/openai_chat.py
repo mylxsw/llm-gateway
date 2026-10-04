@@ -35,6 +35,11 @@ from ..ir import (
 from .exceptions import ConversionError, ValidationError
 from .openai_chat_stream import OpenAIChatStreamBlocks, reasoning_text
 from .schema_utils import omit_null_required
+from .thinking_extra import (
+    thinking_block_to_dict,
+    thinking_blocks_from_tool_call,
+    thinking_extra,
+)
 
 
 class OpenAIChatDecoder:
@@ -127,7 +132,16 @@ class OpenAIChatDecoder:
 
             # Decode tool calls (for assistant messages)
             if "tool_calls" in msg:
-                for tc in msg["tool_calls"]:
+                for position, tc in enumerate(msg["tool_calls"] or []):
+                    # Replay signed thinking carried on the tool call. The first
+                    # call's blocks open the message (Anthropic requires an
+                    # assistant tool-use turn to start with thinking); later
+                    # ones stay right before their own tool_use (interleaved).
+                    thinking = thinking_blocks_from_tool_call(tc)
+                    if position == 0:
+                        ir_message.content[0:0] = thinking
+                    else:
+                        ir_message.content.extend(thinking)
                     tool_use = IRToolUseBlock(
                         id=tc.get("id", ""),
                         name=tc.get("function", {}).get("name", ""),
@@ -716,6 +730,8 @@ class OpenAIChatEncoder:
         text_parts = []
         reasoning_parts = []
         tool_calls = []
+        # Signed thinking not yet attached to a tool call.
+        pending_thinking: List[Dict[str, Any]] = []
 
         for block in ir.content:
             if isinstance(block, IRTextBlock):
@@ -723,8 +739,15 @@ class OpenAIChatEncoder:
             elif isinstance(block, IRThinkingBlock):
                 if not block.is_redacted and block.thinking:
                     reasoning_parts.append(block.thinking)
+                replayable = thinking_block_to_dict(block)
+                if replayable:
+                    pending_thinking.append(replayable)
             elif isinstance(block, IRToolUseBlock):
-                tool_calls.append(self._encode_tool_call(block))
+                tool_call = self._encode_tool_call(block)
+                if pending_thinking:
+                    tool_call["extra_content"] = thinking_extra(pending_thinking)
+                    pending_thinking = []
+                tool_calls.append(tool_call)
 
         message["content"] = "".join(text_parts) if text_parts else None
         if reasoning_parts:
