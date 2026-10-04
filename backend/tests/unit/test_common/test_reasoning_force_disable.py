@@ -17,10 +17,43 @@ def test_force_disable_openai_overrides_conflicting_controls(protocol):
         target_model="gpt-test",
     )
 
-    assert result["reasoning"] == {"effort": "none"}
+    if protocol == "openai":
+        assert result["reasoning_effort"] == "none"
+        assert "reasoning" not in result
+    else:
+        assert result["reasoning"] == {"effort": "none"}
     assert "thinking" not in result
     assert "enable_thinking" not in result
     assert "output_config" not in result
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"messages": [], "reasoning_effort": "high"},
+        {"messages": [], "reasoning": {"effort": "high"}},
+    ],
+)
+def test_force_disable_openai_chat_uses_reasoning_effort(body):
+    result = force_disable_reasoning_for_supplier(
+        body,
+        supplier_protocol="openai",
+        target_model="gpt-test",
+    )
+
+    assert result["reasoning_effort"] == "none"
+    assert "reasoning" not in result
+
+
+def test_force_disable_openai_responses_drops_chat_effort_field():
+    result = force_disable_reasoning_for_supplier(
+        {"input": "hi", "reasoning_effort": "high"},
+        supplier_protocol="openai_responses",
+        target_model="gpt-test",
+    )
+
+    assert result["reasoning"] == {"effort": "none"}
+    assert "reasoning_effort" not in result
 
 
 @pytest.mark.parametrize("protocol", ["deepseek", "zhipu", "moonshot", "ark"])

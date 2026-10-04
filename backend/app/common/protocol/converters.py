@@ -1949,6 +1949,18 @@ class SDKStreamConverter(IStreamConverter):
                                         response_id, model, delta, None
                                     )
                                 )
+                        elif block_type == "thinking":
+                            thinking = content_block.get("thinking") or ""
+                            if thinking:
+                                delta = {"reasoning_content": thinking}
+                                if not sent_role:
+                                    delta["role"] = "assistant"
+                                    sent_role = True
+                                yield _encode_sse_json(
+                                    self._create_openai_chunk(
+                                        response_id, model, delta, None
+                                    )
+                                )
                         elif block_type == "tool_use":
                             current_tool_id = content_block.get("id")
                             current_tool_name = content_block.get("name")
@@ -1992,6 +2004,20 @@ class SDKStreamConverter(IStreamConverter):
                             text = delta_obj.get("text") or ""
                             if text:
                                 delta = {"content": text}
+                                if not sent_role:
+                                    delta["role"] = "assistant"
+                                    sent_role = True
+                                yield _encode_sse_json(
+                                    self._create_openai_chunk(
+                                        response_id, model, delta, None
+                                    )
+                                )
+                        elif delta_type == "thinking_delta":
+                            # Surface Anthropic thinking as the de-facto
+                            # OpenAI-compatible `reasoning_content` field.
+                            thinking = delta_obj.get("thinking") or ""
+                            if thinking:
+                                delta = {"reasoning_content": thinking}
                                 if not sent_role:
                                     delta["role"] = "assistant"
                                     sent_role = True
