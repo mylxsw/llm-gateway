@@ -12,6 +12,7 @@ from contextlib import aclosing
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple, Type
 
 from app.common.reasoning import (
+    ANTHROPIC_THINKING_STYLE_OPTION,
     normalize_reasoning_for_anthropic,
     normalize_reasoning_for_openai,
 )
@@ -392,7 +393,10 @@ class ProtocolConverterManager:
         # Runs after max_tokens is settled so a synthesized thinking budget
         # can be kept below it.
         if protocol == Protocol.ANTHROPIC:
-            new_body = normalize_reasoning_for_anthropic(new_body)
+            new_body = normalize_reasoning_for_anthropic(
+                new_body,
+                thinking_style=(options or {}).get(ANTHROPIC_THINKING_STYLE_OPTION),
+            )
 
         return ConversionResult(path=path, body=new_body)
 

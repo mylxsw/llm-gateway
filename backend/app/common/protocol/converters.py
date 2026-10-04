@@ -19,6 +19,7 @@ from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional, Union
 import anyio
 
 from app.common.reasoning import (
+    ANTHROPIC_THINKING_STYLE_OPTION,
     normalize_reasoning_for_anthropic,
     normalize_reasoning_for_openai,
 )
@@ -1525,6 +1526,7 @@ class SDKRequestConverter(IRequestConverter):
                 converted = normalize_reasoning_for_anthropic(
                     converted,
                     source_body=original_body,
+                    thinking_style=options.get(ANTHROPIC_THINKING_STYLE_OPTION),
                 )
 
             # Get target path
