@@ -22,6 +22,8 @@ from typing import Any, AsyncGenerator, Optional
 
 from app.common.errors import ServiceError
 from app.common.reasoning import (
+    ANTHROPIC_THINKING_STYLE_ADAPTIVE,
+    ANTHROPIC_THINKING_STYLE_OPTION,
     normalize_reasoning_for_dashscope,
     normalize_reasoning_for_deepseek,
 )
@@ -52,6 +54,7 @@ from app.common.provider_protocols import (
     OPENAI_RESPONSES_PROTOCOL,
     normalize_frontend_protocol,
     resolve_implementation_protocol,
+    uses_adaptive_thinking,
     uses_dashscope_thinking,
     uses_deepseek_compatible_thinking,
 )
@@ -99,6 +102,13 @@ def _apply_image_defaults(path: str, body: dict[str, Any]) -> None:
         body.setdefault("response_format", "b64_json")
 
 
+def _restrict_tool_choice_to_auto_or_none(body: dict[str, Any]) -> None:
+    """MiniMax's Anthropic API only accepts tool_choice `auto`/`none`."""
+    tool_choice = body.get("tool_choice")
+    if isinstance(tool_choice, dict) and tool_choice.get("type") in ("any", "tool"):
+        body["tool_choice"] = {"type": "auto"}
+
+
 def convert_request_for_supplier(
     *,
     request_protocol: str,
@@ -131,6 +141,11 @@ def convert_request_for_supplier(
     """
     try:
         supplier_frontend_protocol = normalize_frontend_protocol(supplier_protocol)
+        if uses_adaptive_thinking(supplier_frontend_protocol):
+            options = {
+                **(options or {}),
+                ANTHROPIC_THINKING_STYLE_OPTION: ANTHROPIC_THINKING_STYLE_ADAPTIVE,
+            }
 
         # Normalize protocols
         request_protocol = normalize_protocol(request_protocol)
@@ -157,6 +172,9 @@ def convert_request_for_supplier(
                 converted_body,
                 source_body=body,
             )
+
+        if uses_adaptive_thinking(supplier_frontend_protocol):
+            _restrict_tool_choice_to_auto_or_none(converted_body)
 
         _apply_image_defaults(result.path, converted_body)
 

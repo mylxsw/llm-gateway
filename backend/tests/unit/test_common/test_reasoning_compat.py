@@ -505,3 +505,130 @@ def test_response_without_reasoning_has_no_reasoning_content():
     )
 
     assert "reasoning_content" not in out["choices"][0]["message"]
+
+
+# --- MiniMax (Anthropic protocol, adaptive-only thinking) -------------------
+
+
+def _to_minimax(body, *, request_protocol="openai", path="/v1/chat/completions"):
+    return convert_request_for_supplier(
+        request_protocol=request_protocol,
+        supplier_protocol="minimax",
+        path=path,
+        body=body,
+        target_model="MiniMax-M3",
+    )
+
+
+def test_minimax_protocol_resolves_to_anthropic():
+    from app.common.provider_protocols import (
+        resolve_implementation_protocol,
+        uses_adaptive_thinking,
+    )
+
+    assert resolve_implementation_protocol("minimax") == "anthropic"
+    assert uses_adaptive_thinking("MiniMax")
+    assert not uses_adaptive_thinking("anthropic")
+
+
+def test_minimax_openai_reasoning_effort_uses_adaptive_thinking():
+    path, out = _to_minimax(
+        _chat_body(
+            reasoning_effort="high", max_tokens=16384, temperature=0.3, top_p=0.5
+        )
+    )
+
+    assert path == "/v1/messages"
+    assert out["thinking"] == {"type": "adaptive"}
+    assert out["output_config"] == {"effort": "high"}
+    assert "reasoning_effort" not in out
+    # MiniMax accepts sampling params together with thinking.
+    assert out["temperature"] == 0.3
+    assert out["top_p"] == 0.5
+
+
+def test_minimax_openai_reasoning_effort_none_disables_thinking():
+    _, out = _to_minimax(_chat_body(reasoning_effort="none", max_tokens=100))
+
+    assert out["thinking"] == {"type": "disabled"}
+    assert "output_config" not in out
+
+
+def test_minimax_without_reasoning_leaves_model_default():
+    _, out = _to_minimax(_chat_body(max_tokens=100))
+
+    assert "thinking" not in out
+    assert "output_config" not in out
+
+
+def test_minimax_forced_tool_choice_downgraded_and_thinking_kept():
+    _, out = _to_minimax(
+        _chat_body(
+            reasoning_effort="low",
+            max_tokens=8000,
+            tool_choice={"type": "function", "function": {"name": "f"}},
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "f",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ],
+        )
+    )
+
+    assert out["tool_choice"] == {"type": "auto"}
+    assert out["thinking"] == {"type": "adaptive"}
+
+
+def test_minimax_anthropic_enabled_budget_rewritten_to_adaptive():
+    _, out = _to_minimax(
+        {
+            "model": "any",
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 8000,
+            "thinking": {"type": "enabled", "budget_tokens": 4000},
+            "tool_choice": {"type": "any"},
+        },
+        request_protocol="anthropic",
+        path="/v1/messages",
+    )
+
+    assert out["thinking"] == {"type": "adaptive"}
+    assert out["tool_choice"] == {"type": "auto"}
+
+
+def test_minimax_responses_effort_maps_to_adaptive():
+    _, out = _to_minimax(
+        {"model": "any", "input": "Hi", "reasoning": {"effort": "xhigh"}},
+        request_protocol="openai_responses",
+        path="/v1/responses",
+    )
+
+    assert out["thinking"] == {"type": "adaptive"}
+    assert out["output_config"] == {"effort": "max"}
+
+
+def test_adaptive_style_keeps_converted_thinking_when_source_is_silent():
+    out = normalize_reasoning_for_anthropic(
+        {"thinking": {"type": "enabled", "budget_tokens": 2048}},
+        source_body={},
+        thinking_style="adaptive",
+    )
+
+    assert out == {"thinking": {"type": "adaptive"}}
+
+
+def test_force_disable_minimax():
+    from app.common.reasoning import force_disable_reasoning_for_supplier
+
+    out = force_disable_reasoning_for_supplier(
+        {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}},
+        supplier_protocol="minimax",
+        target_model="MiniMax-M3",
+    )
+
+    assert out["thinking"] == {"type": "disabled"}
+    assert "output_config" not in out

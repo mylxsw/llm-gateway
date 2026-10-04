@@ -18,6 +18,7 @@ ZHIPU_PROTOCOL = "zhipu"
 MOONSHOT_PROTOCOL = "moonshot"
 ALIYUN_PROTOCOL = "aliyun"
 ARK_PROTOCOL = "ark"
+MINIMAX_PROTOCOL = "minimax"
 DEEPSEEK_COMPATIBLE_THINKING_PROTOCOLS = (
     DEEPSEEK_PROTOCOL,
     ZHIPU_PROTOCOL,
@@ -25,6 +26,9 @@ DEEPSEEK_COMPATIBLE_THINKING_PROTOCOLS = (
     ARK_PROTOCOL,
 )
 DASHSCOPE_THINKING_PROTOCOLS = (ALIYUN_PROTOCOL,)
+# Anthropic-compatible suppliers that only accept `thinking.type` of
+# `adaptive`/`disabled` (no `enabled` + `budget_tokens`).
+ADAPTIVE_THINKING_PROTOCOLS = (MINIMAX_PROTOCOL,)
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,12 @@ FRONTEND_PROTOCOL_CONFIGS: dict[str, ProtocolConfig] = {
         base_url="https://ark.cn-beijing.volces.com/api/v3",
         label="Ark (OpenAI)",
     ),
+    MINIMAX_PROTOCOL: ProtocolConfig(
+        frontend=MINIMAX_PROTOCOL,
+        implementation=ANTHROPIC_PROTOCOL,
+        base_url="https://api.minimaxi.com/anthropic/v1",
+        label="MiniMax (Anthropic)",
+    ),
 }
 
 FRONTEND_PROTOCOLS = tuple(FRONTEND_PROTOCOL_CONFIGS.keys())
@@ -134,6 +144,10 @@ def uses_deepseek_compatible_thinking(protocol: str | None) -> bool:
 
 def uses_dashscope_thinking(protocol: str | None) -> bool:
     return normalize_frontend_protocol(protocol) in DASHSCOPE_THINKING_PROTOCOLS
+
+
+def uses_adaptive_thinking(protocol: str | None) -> bool:
+    return normalize_frontend_protocol(protocol) in ADAPTIVE_THINKING_PROTOCOLS
 
 
 def list_frontend_protocol_configs() -> list[ProtocolConfig]:
