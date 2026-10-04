@@ -42,6 +42,11 @@ _ANTHROPIC_DEFAULT_BUDGET = _ANTHROPIC_EFFORT_BUDGETS["medium"]
 _ANTHROPIC_MAX_BUDGET_RATIO = 0.75
 _ANTHROPIC_FORCED_TOOL_CHOICES = {"any", "tool"}
 
+# Conversion option selecting how Anthropic thinking is expressed upstream.
+ANTHROPIC_THINKING_STYLE_OPTION = "anthropic_thinking_style"
+ANTHROPIC_THINKING_STYLE_BUDGET = "budget"
+ANTHROPIC_THINKING_STYLE_ADAPTIVE = "adaptive"
+
 OPENAI_CHAT_API = "chat"
 OPENAI_RESPONSES_API = "responses"
 
@@ -220,14 +225,22 @@ def normalize_reasoning_for_anthropic(
     body: dict[str, Any],
     *,
     source_body: dict[str, Any] | None = None,
+    thinking_style: str | None = None,
 ) -> dict[str, Any]:
     """Return a body that uses Anthropic-compatible thinking/output_config only.
 
-    When thinking is translated from an OpenAI effort, the request is also made
-    valid for Anthropic: a `budget_tokens` is synthesized, sampling params that
-    are incompatible with thinking are dropped, and thinking is not enabled when
-    `tool_choice` forces tool use (Anthropic rejects that combination).
+    `thinking_style="budget"` (default, Anthropic): when thinking is translated
+    from an OpenAI effort, a `budget_tokens` is synthesized, sampling params
+    that are incompatible with thinking are dropped, and thinking is not
+    enabled when `tool_choice` forces tool use (Anthropic rejects that).
+
+    `thinking_style="adaptive"` (e.g. MiniMax): `enabled` is rewritten to
+    `adaptive` without `budget_tokens`; depth is carried by
+    `output_config.effort` only.
     """
+    if thinking_style == ANTHROPIC_THINKING_STYLE_ADAPTIVE:
+        return _normalize_reasoning_for_adaptive_anthropic(body, source_body)
+
     out = copy.deepcopy(body)
     source = source_body if isinstance(source_body, dict) else body
 
@@ -281,6 +294,37 @@ def normalize_reasoning_for_anthropic(
         output_config["effort"] = anthropic_effort
         out["output_config"] = output_config
 
+    return out
+
+
+def _normalize_reasoning_for_adaptive_anthropic(
+    body: dict[str, Any], source_body: dict[str, Any] | None
+) -> dict[str, Any]:
+    out = copy.deepcopy(body)
+    source = source_body if isinstance(source_body, dict) else body
+
+    thinking_type = _anthropic_thinking_type_from_body(source)
+    anthropic_effort = _anthropic_effort_from_body(source)
+    openai_effort = _openai_effort_from_body(source)
+    if thinking_type is None and openai_effort is not None:
+        thinking_type = "disabled" if openai_effort == "none" else "adaptive"
+    if anthropic_effort is None and openai_effort in _OPENAI_TO_ANTHROPIC_EFFORT:
+        anthropic_effort = _OPENAI_TO_ANTHROPIC_EFFORT[openai_effort]
+    if thinking_type is None:
+        # e.g. provider default parameters already on the converted body
+        thinking_type = _anthropic_thinking_type_from_body(out)
+    if thinking_type == "enabled":
+        thinking_type = "adaptive"
+
+    _pop_openai_reasoning_fields(out)
+    if thinking_type is not None:
+        out["thinking"] = {"type": thinking_type}
+    if anthropic_effort is not None and thinking_type != "disabled":
+        output_config = out.get("output_config")
+        if not isinstance(output_config, dict):
+            output_config = {}
+        output_config["effort"] = anthropic_effort
+        out["output_config"] = output_config
     return out
 
 
@@ -433,7 +477,7 @@ def force_disable_reasoning_for_supplier(
         out["thinking"] = {"type": "disabled"}
     elif protocol == "aliyun":
         out["enable_thinking"] = False
-    elif protocol == "anthropic":
+    elif protocol in {"anthropic", "minimax"}:
         out["thinking"] = {"type": "disabled"}
     elif protocol == "openai_responses":
         out["reasoning"] = {"effort": "none"}
