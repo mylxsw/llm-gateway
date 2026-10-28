@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # SQLite default database path, PostgreSQL requires full connection string
     DATABASE_URL: str = "sqlite+aiosqlite:///./llm_gateway.db"
 
+    # Commercial access is opt-in; migrations are an explicit operator action.
+    COMMERCIAL_ENABLED: bool = False
+    COMMERCIAL_ONLY: bool = True
+    COMMERCIAL_RECOVERY_DIR: str = "./billing-recovery"
+
     # Retry Config
     # Max retries on same provider (triggered when status code >= 500)
     RETRY_MAX_ATTEMPTS: int = 3

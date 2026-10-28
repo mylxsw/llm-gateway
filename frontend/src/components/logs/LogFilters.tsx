@@ -47,6 +47,7 @@ const FILTER_KEYS: Array<keyof LogQueryParams> = [
   'api_key_id',
   'api_key_name',
   'user_id',
+  'commercial_user_id',
   'retry_count_min',
   'retry_count_max',
   'input_tokens_min',
@@ -114,6 +115,7 @@ export function LogFilters({
       api_key_id: filters.api_key_id,
       api_key_name: filters.api_key_name,
       user_id: filters.user_id,
+      commercial_user_id: filters.commercial_user_id,
       retry_count_min: filters.retry_count_min,
       retry_count_max: filters.retry_count_max,
       input_tokens_min: filters.input_tokens_min,
@@ -125,6 +127,7 @@ export function LogFilters({
       filters.api_key_id,
       filters.api_key_name,
       filters.user_id,
+      filters.commercial_user_id,
       filters.end_time,
       filters.has_error,
       filters.input_tokens_max,
@@ -407,6 +410,11 @@ export function LogFilters({
                   placeholder={t('filters.fuzzyMatch')}
                   {...register('api_key_name')}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t('filters.commercialUserId')}</Label>
+                <Input {...register('commercial_user_id')} />
               </div>
 
               <div className="space-y-2">

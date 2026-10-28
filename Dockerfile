@@ -30,6 +30,7 @@ COPY llm_api_converter /app/llm_api_converter
 RUN pip install --no-cache-dir /app/llm_api_converter
 
 COPY backend/app /app/backend/app
+COPY backend/squirrel_commercial /app/backend/squirrel_commercial
 
 COPY --from=frontend-builder /build/frontend/out /app/static
 

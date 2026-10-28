@@ -70,6 +70,14 @@ async def lifespan(app: FastAPI):
             )
     if settings.KV_STORE_TYPE == "redis":
         await init_redis()
+    if settings.COMMERCIAL_ENABLED:
+        if settings.DATABASE_TYPE != "postgresql":
+            raise RuntimeError("Commercial production mode requires PostgreSQL")
+        if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):
+            raise RuntimeError("Commercial mode requires administrator credentials")
+        from app.db.session import engine
+        from squirrel_commercial.core import check_version
+        await check_version(engine)
     start_scheduler()
 
     # Run the MCP session manager for the lifetime of the app when enabled.

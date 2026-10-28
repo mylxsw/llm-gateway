@@ -7,3 +7,7 @@ data/
 .venv/
 backend/.venv/
 *.local.sh
+
+# Optional billing build and recovery artifacts
+*.egg-info/
+billing-recovery/

@@ -21,6 +21,7 @@ class RequestLogBase(BaseModel):
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     # API Key Name
     api_key_name: Optional[str] = Field(None, description="API Key Name")
+    commercial_user_id: Optional[str] = None
     # User identifier from X-User-ID request header
     user_id: Optional[str] = Field(None, description="User ID")
     # Requested Model Name
@@ -126,6 +127,7 @@ class RequestLogSummary(BaseModel):
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name")
     user_id: Optional[str] = Field(None, description="User ID")
+    commercial_user_id: Optional[str] = None
     requested_model: Optional[str] = Field(None, description="Requested Model Name")
     resolved_model: Optional[str] = Field(None, description="Resolved Model Name")
     target_model: Optional[str] = Field(None, description="Target Model Name")
@@ -219,6 +221,7 @@ class RequestLogQuery(BaseModel):
     api_key_name: Optional[str] = Field(None, description="API Key Name")
     # User ID Filter
     user_id: Optional[str] = Field(None, description="User ID (Fuzzy Match)")
+    commercial_user_id: Optional[str] = None
     # Retry Count Filter
     retry_count_min: Optional[int] = Field(None, description="Min Retry Count")
     retry_count_max: Optional[int] = Field(None, description="Max Retry Count")
@@ -261,6 +264,7 @@ class LogCostStatsQuery(BaseModel):
     api_key_id: Optional[int] = Field(None, description="API Key ID")
     api_key_name: Optional[str] = Field(None, description="API Key Name (Fuzzy Match)")
     user_id: Optional[str] = Field(None, description="User ID (Fuzzy Match)")
+    commercial_user_id: Optional[str] = None
     # Bucket granularity: minute/hour/day
     bucket: str = Field("day", pattern="^(minute|hour|day)$", description="Trend bucket")
     # Minute bucket size (only used when bucket="minute")

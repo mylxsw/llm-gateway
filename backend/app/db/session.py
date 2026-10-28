@@ -133,6 +133,7 @@ def _run_migrations(sync_conn) -> None:
                 continue
             sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
 
+    ensure_columns("request_logs", {"commercial_user_id": "commercial_user_id VARCHAR(36)"})
     ensure_columns(
         "model_mappings",
         {

@@ -1,3 +1,4 @@
+from app.services.commercial import commercial_call, request_id as commercial_request_id, account_id as commercial_account_id, settle_log
 """Proxy Core Service Module
 
 Implements core business logic for request proxying."""
@@ -220,6 +221,24 @@ class ProxyService:
                 self._log_repo_factory(session),
             )
 
+    async def _commercial_log_identity(self, log_data):
+        from app.config import get_settings
+        if not get_settings().COMMERCIAL_ENABLED:
+            return
+        if not hasattr(self, "_commercial_identities"):
+            self._commercial_identities = {}
+        uid = commercial_account_id.get() or self._commercial_identities.get(log_data.trace_id)
+        if uid:
+            self._commercial_identities[log_data.trace_id] = uid
+        if uid:
+            log_data.commercial_user_id = uid
+            # Never retain free-form upstream error bodies for commercial requests.
+            if log_data.error_info:
+                log_data.error_info = "upstream_request_failed"
+            if log_data.usage_details:
+                allowed = {"input_tokens", "output_tokens", "total_tokens", "source", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
+                log_data.usage_details = {k: v for k, v in log_data.usage_details.items() if k in allowed and ((k == "source" and v in ("upstream", "mixed", "estimated")) or (k != "source" and type(v) is int and v >= 0))}
+
     async def _write_log(
         self, log_data: RequestLogCreate, record_details: bool = True
     ) -> None:
@@ -230,6 +249,7 @@ class ProxyService:
         # earlier (e.g. before debug logging) so the payload never leaks.
         if not record_details:
             _strip_detail_payload(log_data)
+        await self._commercial_log_identity(log_data)
         async with self._repos() as (_model_repo, _provider_repo, log_repo):
             await log_repo.create(log_data)
 
@@ -263,6 +283,7 @@ class ProxyService:
             request_method=method,
             is_completed=False,
         )
+        await self._commercial_log_identity(log_data)
         async with self._repos() as (_model_repo, _provider_repo, log_repo):
             log_id = await log_repo.create_initial(log_data)
         return log_id
@@ -274,6 +295,8 @@ class ProxyService:
         if not record_details:
             _strip_detail_payload(log_data)
         log_data.is_completed = True
+        await self._commercial_log_identity(log_data)
+        await settle_log(log_data)
         try:
             async with self._repos() as (_model_repo, _provider_repo, log_repo):
                 await log_repo.update(log_id, log_data)
@@ -640,6 +663,7 @@ class ProxyService:
             provider_mapping_by_id,
         )
 
+    @commercial_call
     async def process_request(
         self,
         api_key_id: Optional[int],
@@ -672,10 +696,11 @@ class ProxyService:
             NotFoundError: Model not configured
             ServiceError: No available provider
         """
-        trace_id = generate_trace_id()
+        trace_id = commercial_request_id.get() or generate_trace_id()
         request_time = utc_now()
         sanitized_body = self._sanitize_request_body_for_log(body)
         user_id = _extract_user_id(headers)
+        commercial_user_id = commercial_account_id.get()
 
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -1251,6 +1276,8 @@ class ProxyService:
         if not record_details:
             _strip_detail_payload(log_data)
 
+        await self._commercial_log_identity(log_data)
+
         # DEBUG: Log request details
         try:
             logger.debug(f"Request Log: {log_data.model_dump_json()}")
@@ -1274,6 +1301,7 @@ class ProxyService:
             else None,
         }
 
+    @commercial_call
     async def process_request_stream(
         self,
         api_key_id: Optional[int],
@@ -1301,11 +1329,12 @@ class ProxyService:
         Returns:
             tuple: (Initial response, Stream generator, Log info)
         """
-        trace_id = generate_trace_id()
+        trace_id = commercial_request_id.get() or generate_trace_id()
         request_time = utc_now()
         start_monotonic = time.monotonic()
         sanitized_body = self._sanitize_request_body_for_log(body)
         user_id = _extract_user_id(headers)
+        commercial_user_id = commercial_account_id.get()
 
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
@@ -2032,6 +2061,8 @@ class ProxyService:
                 # logging disabled never leaks bodies/headers into application logs.
                 if not record_details:
                     _strip_detail_payload(log_data)
+
+                await self._commercial_log_identity(log_data)
 
                 # DEBUG: Log request details
                 try:

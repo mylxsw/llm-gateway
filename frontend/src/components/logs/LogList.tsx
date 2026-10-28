@@ -201,7 +201,7 @@ export function LogList({ logs, onView }: LogListProps) {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {log.api_key_name}
+                      {log.api_key_name}{log.commercial_user_id ? ` · ${log.commercial_user_id}` : ""}
                     </div>
                     {log.user_id && (
                       <div className="text-xs text-muted-foreground">

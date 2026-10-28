@@ -336,6 +336,7 @@ class RequestLog(Base):
     )
     # API Key Name (Redundant field for easy querying)
     api_key_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    commercial_user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     # User ID from X-User-ID request header
     user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Requested Model Name

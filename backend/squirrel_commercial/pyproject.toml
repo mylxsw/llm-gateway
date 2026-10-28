@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "squirrel-commercial"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["sqlalchemy>=2.0.45,<2.1"]
+[tool.setuptools]
+packages = ["squirrel_commercial"]
+package-dir = {squirrel_commercial = "."}

@@ -61,13 +61,18 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
     async def get_by_id(self, id: int) -> Optional[ApiKeyModel]:
         """Get API Key by ID"""
         result = await self.session.execute(
-            select(ApiKeyORM).where(ApiKeyORM.id == id)
+            select(ApiKeyORM).where(ApiKeyORM.id == id).execution_options(populate_existing=True)
         )
         entity = result.scalar_one_or_none()
         return self._to_domain(entity) if entity else None
     
     async def get_by_key_value(self, key_value: str) -> Optional[ApiKeyModel]:
         """Get API Key by key value (for authentication)"""
+        if key_value.startswith("sha256:"):
+            return None
+        if key_value.startswith("sqb-"):
+            from squirrel_commercial.core import digest
+            key_value = digest(key_value)
         result = await self.session.execute(
             select(ApiKeyORM).where(ApiKeyORM.key_value == key_value)
         )

@@ -42,6 +42,13 @@ async def list_models(
         items, _total = await service.get_all_mappings(
             is_active=True, page=1, page_size=1000
         )
+        if api_key.key_value.startswith("sha256:"):
+            from app.db.session import engine
+            from squirrel_commercial.schema import prices
+            from sqlalchemy import select
+            async with engine.connect() as c:
+                allowed = set((await c.execute(select(prices.c.model).where(prices.c.enabled == True))).scalars())
+            items = [item for item in items if item.requested_model in allowed]
         return {
             "object": "list",
             "data": [

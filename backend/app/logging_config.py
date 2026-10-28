@@ -3,6 +3,22 @@ import logging.config
 import sys
 from app.config import get_settings
 
+class CommercialPrivacyFilter(logging.Filter):
+    def filter(self, record):
+        if not get_settings().COMMERCIAL_ENABLED:
+            return True
+        from app.services.commercial import request_id
+        rid = request_id.get()
+        if rid:
+            if record.levelno < logging.WARNING:
+                return False
+            record.msg = "Commercial request diagnostic: request_id=%s logger=%s"
+            record.args = (rid, record.name)
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
+
 def setup_logging():
     """
     Configure global log format
@@ -57,3 +73,6 @@ def setup_logging():
     }
 
     logging.config.dictConfig(logging_config)
+    for name in ('', 'app', 'uvicorn', 'uvicorn.error', 'uvicorn.access'):
+        for handler in logging.getLogger(name).handlers:
+            handler.addFilter(CommercialPrivacyFilter())
