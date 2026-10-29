@@ -91,8 +91,10 @@ async def test_gateway_key_lifecycle_and_logging_policy(billing,monkeypatch):
         service=ApiKeyService(SQLAlchemyApiKeyRepository(session))
         key=await service.authenticate(token)
         assert key.record_details is False
-        with pytest.raises(AuthenticationError):
+        from app.common.errors import AppError
+        with pytest.raises(AppError) as exc:
             await service.get_raw_key_value(kid)
+        assert exc.value.status_code == 403
         with pytest.raises(AuthenticationError):
             await service.update(kid,ApiKeyUpdate(is_mcp_admin=True))
         await service.update(kid,ApiKeyUpdate(record_details=True))

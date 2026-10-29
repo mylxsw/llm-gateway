@@ -171,12 +171,13 @@ async def settle_log(log):
     interrupted = details.get('interrupted') is True or log.response_status in (499, 504)
     reliable = details.get('source') == 'upstream' and (not log.is_stream or details.get('final_usage') is True)
     failed = bool(log.response_status and log.response_status >= 400)
+    initial_rejection = log.is_stream and failed and details.get('stream_started') is False
     has_usage = bool((log.output_tokens or 0) > 0 or (details.get('source') in ('upstream', 'mixed') and (log.input_tokens or 0) > 0))
-    billable = reliable or interrupted or (log.is_stream and (not failed or has_usage))
+    billable = not initial_rejection and (reliable or interrupted or (log.is_stream and (not failed or has_usage)))
     payload = dict(request_id=log.trace_id,
         input_tokens=(log.input_tokens or 0) if billable else None,
         output_tokens=(log.output_tokens or 0) if billable else None,
-        failed=failed and not log.is_stream and not reliable and not interrupted)
+        failed=initial_rejection or (failed and not log.is_stream and not reliable and not interrupted))
     path = None
     try:
         path = write_journal(payload)

@@ -39,7 +39,10 @@ async def test_interrupted_before_response_settles_estimate(commercial_gateway, 
 
 
 @pytest.mark.parametrize('status,is_stream,usage,expected', [
-    (502, True, None, 'review'),
+    (502, True, {'stream_started': True}, 'review'),
+    (429, True, {'stream_started': False}, 'cancelled'),
+    (500, True, {'stream_started': False}, 'cancelled'),
+    (504, True, {'stream_started': False}, 'cancelled'),
     (502, True, {'source': 'upstream', 'final_usage': True}, 'settled'),
     (504, False, {'source': 'estimated'}, 'settled'),
     (499, True, {'source': 'mixed'}, 'settled'),
@@ -49,7 +52,7 @@ async def test_interrupted_before_response_settles_estimate(commercial_gateway, 
 async def test_settlement_failure_policy(commercial_gateway, status, is_stream, usage, expected):
     engine, kid = commercial_gateway
     await core.reserve(engine, 'edge', kid, 'model', 100, 100)
-    has_usage = usage is not None
+    has_usage = usage is not None and 'source' in usage
     await commercial.settle_log(RequestLogCreate(
         request_time=utc_now(), trace_id='edge', commercial_user_id='alice',
         response_status=status, is_stream=is_stream, input_tokens=10 if has_usage else None,
@@ -186,3 +189,42 @@ def test_openai_compatible_terminal_usage_with_finish_reason():
     accumulator = StreamUsageAccumulator('openai', 'model')
     accumulator.feed(event({'type': 'response.completed', 'response': {'usage': {'input_tokens': 10, 'output_tokens': 0}}}))
     assert accumulator.finalize().final_usage
+
+
+@pytest.mark.parametrize('protocol', ['openai', 'anthropic'])
+@pytest.mark.parametrize('status', [400, 429, 500, 502, 504])
+async def test_initial_stream_error_releases_reservation(commercial_gateway, monkeypatch, protocol, status):
+    from app.services.active_requests import active_requests
+    engine, kid = commercial_gateway
+    monkeypatch.setattr(get_settings(), 'RETRY_MAX_ATTEMPTS', 1)
+    monkeypatch.setattr(get_settings(), 'RETRY_DELAY_MS', 0)
+    result, owner, logs, closed, _ = await make_stream(
+        monkeypatch, kid, upstream=protocol, client=protocol, initial_status=status)
+    response, stream, info = result
+    assert response.status_code == status
+    # Exercise the controller's actual close-before-iteration branch.
+    proxy = SimpleNamespace(process_request_stream=AsyncMock(return_value=result))
+    body = {'model': 'model', 'stream': True, 'max_tokens': 100,
+            'messages': [{'role': 'user', 'content': 'hi'}]}
+    request = SimpleNamespace(headers={}, url='https://example.com/v1/messages', method='POST',
+                              json=AsyncMock(return_value=body))
+    key = SimpleNamespace(id=kid, key_name='test', record_details=False)
+    if protocol == 'openai':
+        from app.api.proxy.openai import _handle_proxy_request_with_body
+        result = await _handle_proxy_request_with_body(request, key, proxy, '/v1/chat/completions', body)
+    else:
+        from app.api.proxy.anthropic import create_message
+        result = await create_message(request, key, proxy)
+    assert result.status_code == status
+    row = await request_row(engine, info['trace_id'])
+    assert row['status'] == 'cancelled' and row['charged'] == 0
+    assert logs.update.call_args.args[1].usage_details['stream_started'] is False
+    async with engine.connect() as c:
+        account = (await c.execute(select(accounts).where(accounts.c.id == 'alice'))).mappings().one()
+        assert account['reserved'] == 0 and account['balance'] == 100000
+        assert not await c.scalar(select(requests.c.id).where(requests.c.status == 'review'))
+    assert closed.is_set() and not owner._commercial_identities
+    assert not await active_requests.is_active(991)
+    # A transient upstream error must not stop the next paid request.
+    await core.reserve(engine, 'next', kid, 'model', 100, 100)
+    await core.settle(engine, 'next', failed=True)

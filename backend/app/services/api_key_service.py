@@ -7,7 +7,7 @@ Provides business logic processing for API Keys.
 from datetime import datetime
 from typing import Optional
 
-from app.common.errors import ConflictError, NotFoundError, AuthenticationError
+from app.common.errors import AppError, ConflictError, NotFoundError, AuthenticationError
 from app.common.time import utc_now
 from app.common.sanitizer import sanitize_api_key_display
 from app.common.utils import generate_api_key
@@ -104,7 +104,7 @@ class ApiKeyService:
     async def assert_replay_allowed(self, key_id: int) -> None:
         key = await self.repo.get_by_id(key_id)
         if key and key.key_value.startswith("sha256:"):
-            raise AuthenticationError(message="Commercial keys cannot be replayed", code="commercial_key_hidden")
+            raise AppError(message="Commercial keys cannot be replayed", code="commercial_key_hidden", status_code=403)
 
     async def get_raw_key_value(self, id: int) -> str:
         """
@@ -126,7 +126,7 @@ class ApiKeyService:
                 code="api_key_not_found",
             )
         if api_key.key_value.startswith("sha256:"):
-            raise AuthenticationError(message="Commercial keys cannot be viewed or replayed", code="commercial_key_hidden")
+            raise AppError(message="Commercial keys cannot be viewed or replayed", code="commercial_key_hidden", status_code=403)
         return api_key.key_value
     
     async def get_all(

@@ -241,7 +241,7 @@ class ProxyService:
             if log_data.usage_details:
                 flags = {
                     k: v for k, v in log_data.usage_details.items()
-                    if k in ("interrupted", "final_usage") and type(v) is bool
+                    if k in ("interrupted", "final_usage", "stream_started") and type(v) is bool
                 }
                 allowed = {"input_tokens", "output_tokens", "total_tokens", "source", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
                 log_data.usage_details = {k: v for k, v in log_data.usage_details.items() if k in allowed and ((k == "source" and v in ("upstream", "mixed", "estimated")) or (k != "source" and type(v) is int and v >= 0))}
@@ -1887,6 +1887,10 @@ class ProxyService:
             await active_requests.deregister(log_id)
             raise error from e
 
+        # Preserve the initial outcome: this response object may be mutated when
+        # the upstream fails later, after a successful stream has already started.
+        stream_started = initial_response.is_success
+
         # Wrap generator to handle logging
         async def wrapped_generator():
             nonlocal input_tokens
@@ -1988,6 +1992,7 @@ class ProxyService:
                 if commercial_user_id:
                     usage_details["interrupted"] = stream_interrupted
                     usage_details["final_usage"] = usage_result.final_usage
+                    usage_details["stream_started"] = stream_started
                 total_time_ms = initial_response.total_time_ms
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)

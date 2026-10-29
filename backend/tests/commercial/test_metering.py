@@ -80,7 +80,7 @@ def test_only_terminal_usage_is_trusted():
     assert result.final_usage and result.output_tokens == 0
 
 
-async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None):
+async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None, initial_status=None):
     mapping = ModelMapping(requested_model='model', strategy='priority', is_active=True,
                            created_at=utc_now(), updated_at=utc_now())
     candidate = CandidateProvider(provider_id=1, provider_name='test', base_url='https://example.com',
@@ -96,8 +96,11 @@ async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', m
 
     async def forward_stream(**kwargs):
         seen.append(kwargs['body'])
-        response = ProviderResponse(status_code=200)
+        response = ProviderResponse(status_code=initial_status or 200)
         try:
+            if initial_status:
+                yield event({'error': {'message': 'upstream rejected'}}), response
+                return
             if upstream == 'anthropic':
                 yield event({'type': 'message_start', 'message': {'id': 'msg', 'type': 'message', 'role': 'assistant',
                             'model': 'model', 'content': [], 'usage': {'input_tokens': 10, 'output_tokens': 1}}}), response
@@ -172,6 +175,7 @@ async def test_stream_settlement_lifecycle(commercial_gateway, monkeypatch, upst
     assert not owner._commercial_identities
     row = await request_row(engine, info['trace_id'])
     assert row['status'] == 'settled'
+    assert logs.update.call_args.args[1].usage_details['stream_started'] is True
     if mode == 'complete':
         assert row['input_tokens'] == 10 and row['output_tokens'] == 0
     elif mode == 'unstarted':
@@ -229,9 +233,12 @@ async def test_admin_replay_rejects_hashed_keys(commercial_gateway, monkeypatch,
     async with async_sessionmaker(engine)() as session:
         service = ApiKeyService(SQLAlchemyApiKeyRepository(session))
         response = await execute_playground_request(1, PlaygroundExecuteRequest(request_body={}), logs, proxy, service)
-        assert response.status_code == 401 and b'commercial_key_hidden' in response.body
+        assert response.status_code == 403 and b'commercial_key_hidden' in response.body
         response = await retry_log(1, SimpleNamespace(), logs, service)
-        assert response.status_code == 401 and b'commercial_key_hidden' in response.body
+        assert response.status_code == 403 and b'commercial_key_hidden' in response.body
+        with pytest.raises(AppError) as exc:
+            await service.get_raw_key_value(kid)
+        assert exc.value.status_code == 403
         assert not proxy.process_request.called and not proxy.process_request_stream.called
 
 
