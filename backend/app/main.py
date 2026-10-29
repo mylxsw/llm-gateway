@@ -237,6 +237,10 @@ async def root():
 
 
 # Register Proxy Routers
+if settings.COMMERCIAL_ENABLED:
+    from app.api.proxy.credits import router as credits_router
+    app.include_router(credits_router)
+
 app.include_router(openai_router)
 app.include_router(anthropic_router)
 app.include_router(jev_router)
