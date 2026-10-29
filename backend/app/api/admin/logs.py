@@ -416,7 +416,7 @@ async def get_log_cost_stats(
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
     user_id: Optional[str] = Query(None, description="User ID from X-User-ID"),
-    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID"),
+    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID", include_in_schema=get_settings().COMMERCIAL_ENABLED),
     bucket: Optional[str] = Query(
         None,
         pattern="^(minute|hour|day)$",
@@ -504,7 +504,7 @@ async def list_logs(
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name"),
     user_id: Optional[str] = Query(None, description="User ID from X-User-ID"),
-    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID"),
+    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID", include_in_schema=get_settings().COMMERCIAL_ENABLED),
     retry_count_min: Optional[int] = Query(None, description="Min Retry Count"),
     retry_count_max: Optional[int] = Query(None, description="Max Retry Count"),
     input_tokens_min: Optional[int] = Query(None, description="Min Input Tokens"),

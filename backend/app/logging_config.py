@@ -73,6 +73,8 @@ def setup_logging():
     }
 
     logging.config.dictConfig(logging_config)
+    if not get_settings().COMMERCIAL_ENABLED:
+        return
     for name in ('', 'app', 'uvicorn', 'uvicorn.error', 'uvicorn.access'):
         for handler in logging.getLogger(name).handlers:
             handler.addFilter(CommercialPrivacyFilter())

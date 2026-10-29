@@ -5,6 +5,7 @@
 
 'use client';
 
+import { getAuthStatus } from '@/lib/api/auth';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -100,6 +101,12 @@ export function LogFilters({
   apiKeys,
 }: LogFiltersProps) {
   const t = useTranslations('logs');
+  const [commercialEnabled, setCommercialEnabled] = useState(false);
+  useEffect(() => {
+    let active = true;
+    getAuthStatus().then(status => { if (active) setCommercialEnabled(status.commercial_enabled === true); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const defaultValues = useMemo<Partial<LogQueryParams>>(
@@ -412,10 +419,10 @@ export function LogFilters({
                 />
               </div>
 
-              <div className="space-y-2">
+              {commercialEnabled && <div className="space-y-2">
                 <Label>{t('filters.commercialUserId')}</Label>
                 <Input {...register('commercial_user_id')} />
-              </div>
+              </div>}
 
               <div className="space-y-2">
                 <Label>{t('filters.userId')}</Label>

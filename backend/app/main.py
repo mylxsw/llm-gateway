@@ -78,6 +78,10 @@ async def lifespan(app: FastAPI):
         from app.db.session import engine
         from squirrel_commercial.core import check_version
         await check_version(engine)
+        from app.services.commercial import write_journal
+        import uuid
+        probe = write_journal({"request_id": "probe-" + str(uuid.uuid4())})
+        probe.unlink()
     start_scheduler()
 
     # Run the MCP session manager for the lifetime of the app when enabled.
@@ -137,6 +141,9 @@ app.add_middleware(
 
 # Add Rate Limit Middleware (should be added after CORS)
 app.add_middleware(RateLimitMiddleware)
+if settings.COMMERCIAL_ENABLED:
+    from app.services.commercial import CommercialPrivacyMiddleware
+    app.add_middleware(CommercialPrivacyMiddleware)
 logger.info(f"Rate limiting enabled: {settings.RATE_LIMIT_ENABLED}")
 
 

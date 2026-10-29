@@ -39,7 +39,7 @@ _SUMMARY_COLUMNS = [
     RequestLogORM.api_key_id,
     RequestLogORM.api_key_name,
     RequestLogORM.user_id,
-    RequestLogORM.commercial_user_id,
+    *([RequestLogORM.commercial_user_id] if hasattr(RequestLogORM, "commercial_user_id") else []),
     RequestLogORM.requested_model,
     RequestLogORM.resolved_model,
     RequestLogORM.target_model,
@@ -105,7 +105,7 @@ class SQLAlchemyLogRepository(LogRepository):
             api_key_id=entity.api_key_id,
             api_key_name=entity.api_key_name,
             user_id=entity.user_id,
-            commercial_user_id=entity.commercial_user_id,
+            commercial_user_id=getattr(entity, "commercial_user_id", None),
             requested_model=entity.requested_model,
             resolved_model=entity.resolved_model,
             target_model=entity.target_model,
@@ -157,7 +157,7 @@ class SQLAlchemyLogRepository(LogRepository):
             api_key_id=row["api_key_id"],
             api_key_name=row["api_key_name"],
             user_id=row["user_id"],
-            commercial_user_id=row["commercial_user_id"],
+            commercial_user_id=row.get("commercial_user_id"),
             requested_model=row["requested_model"],
             resolved_model=row["resolved_model"],
             target_model=row["target_model"],
@@ -186,7 +186,7 @@ class SQLAlchemyLogRepository(LogRepository):
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
             user_id=data.user_id,
-            commercial_user_id=data.commercial_user_id,
+            **({"commercial_user_id": data.commercial_user_id} if hasattr(RequestLogORM, "commercial_user_id") else {}),
             requested_model=data.requested_model,
             resolved_model=data.resolved_model,
             target_model=data.target_model,
@@ -250,7 +250,7 @@ class SQLAlchemyLogRepository(LogRepository):
             api_key_id=entity.api_key_id,
             api_key_name=entity.api_key_name,
             user_id=entity.user_id,
-            commercial_user_id=entity.commercial_user_id,
+            commercial_user_id=getattr(entity, "commercial_user_id", None),
             requested_model=entity.requested_model,
             resolved_model=entity.resolved_model,
             target_model=entity.target_model,
@@ -295,7 +295,7 @@ class SQLAlchemyLogRepository(LogRepository):
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
             user_id=data.user_id,
-            commercial_user_id=data.commercial_user_id,
+            **({"commercial_user_id": data.commercial_user_id} if hasattr(RequestLogORM, "commercial_user_id") else {}),
             requested_model=data.requested_model,
             resolved_model=data.resolved_model,
             target_model=data.target_model,
@@ -581,7 +581,7 @@ class SQLAlchemyLogRepository(LogRepository):
             conditions.append(
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
-        if query.commercial_user_id:
+        if query.commercial_user_id and hasattr(RequestLogORM, "commercial_user_id"):
             conditions.append(RequestLogORM.commercial_user_id == query.commercial_user_id)
         if query.user_id:
             conditions.append(RequestLogORM.user_id.ilike(f"%{query.user_id}%"))
@@ -770,7 +770,7 @@ class SQLAlchemyLogRepository(LogRepository):
             base_conditions.append(
                 RequestLogORM.api_key_name.ilike(f"%{query.api_key_name}%")
             )
-        if query.commercial_user_id:
+        if query.commercial_user_id and hasattr(RequestLogORM, "commercial_user_id"):
             base_conditions.append(RequestLogORM.commercial_user_id == query.commercial_user_id)
         if query.user_id:
             base_conditions.append(RequestLogORM.user_id.ilike(f"%{query.user_id}%"))

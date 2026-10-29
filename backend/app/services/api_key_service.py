@@ -167,6 +167,9 @@ class ApiKeyService:
             )
         
         if existing.key_value.startswith("sha256:"):
+            from app.config import get_settings
+            if not get_settings().COMMERCIAL_ENABLED:
+                raise AuthenticationError(message="Commercial access disabled", code="commercial_disabled")
             from app.db.session import engine
             from squirrel_commercial.core import admin_key_action, BillingError
             try:
@@ -205,6 +208,9 @@ class ApiKeyService:
             )
         
         if existing.key_value.startswith("sha256:"):
+            from app.config import get_settings
+            if not get_settings().COMMERCIAL_ENABLED:
+                raise AuthenticationError(message="Commercial access disabled", code="commercial_disabled")
             from app.db.session import engine
             from squirrel_commercial.core import admin_key_action
             await admin_key_action(engine, id, {'revoke': True})

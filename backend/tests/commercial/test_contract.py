@@ -87,7 +87,9 @@ async def test_price_snapshot_unknown_and_credit_idempotency(billing):
     async with billing.connect() as c:
         assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==1070
 
-async def test_digest_not_a_bearer_secret(billing):
+async def test_digest_not_a_bearer_secret(billing, monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setattr(get_settings(), "COMMERCIAL_ENABLED", True)
     from app.repositories.sqlalchemy.api_key_repo import SQLAlchemyApiKeyRepository
     kid,token=await core.create_key(billing,'alice','laptop')
     async with async_sessionmaker(billing)() as session:
@@ -201,6 +203,14 @@ async def test_global_detail_argument_cannot_enable_commercial_logging(billing,m
     assert seen==[False,True]
 
 async def test_commercial_identity_survives_log_list_serialization(billing):
+    # ORM optional columns are fixed at process startup. Exercise both boot modes
+    # without mutating a running SQLAlchemy mapper in the normal suite.
+    from app.db.models import RequestLog
+    if not hasattr(RequestLog, 'commercial_user_id'):
+        import subprocess, sys, os
+        result = subprocess.run([sys.executable, '-m', 'pytest', __file__ + '::test_commercial_identity_survives_log_list_serialization', '-q'], env={**os.environ, 'COMMERCIAL_ENABLED':'true'}, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
     from app.services.log_service import LogService
     from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
     from app.domain.log import RequestLogCreate,RequestLogQuery
@@ -211,3 +221,55 @@ async def test_commercial_identity_survives_log_list_serialization(billing):
         await service.create(RequestLogCreate(request_time=utc_now(),commercial_user_id='bob',trace_id='b'))
         rows,total=await service.query(RequestLogQuery(commercial_user_id='alice'))
         assert total==1 and rows[0].commercial_user_id=='alice'
+
+async def test_punctuation_key_name_authenticates(billing, monkeypatch):
+    from app.config import get_settings
+    from app.repositories.sqlalchemy.api_key_repo import SQLAlchemyApiKeyRepository
+    monkeypatch.setattr(get_settings(), 'COMMERCIAL_ENABLED', True)
+    kid, token = await core.create_key(billing, 'alice', 'Production / app.v1 🚀')
+    async with async_sessionmaker(billing)() as session:
+        assert (await SQLAlchemyApiKeyRepository(session).get_by_key_value(token)).id == kid
+    with pytest.raises(core.BillingError):
+        await core.create_key(billing, 'alice', '   ')
+
+async def test_waiver_wins_over_late_usage(billing):
+    from squirrel_commercial.schema import resolutions
+    kid, _ = await core.create_key(billing, 'alice', 'test')
+    await core.reserve(billing, 'waived', kid, 'model', 100, 100)
+    await core.settle(billing, 'waived')
+    async with billing.begin() as c:
+        await c.execute(insert(resolutions).values(request_id='waived',action='waive',reason='operator verified',created_at=core.now()))
+    await core.settle(billing, 'waived', 10, 10)
+    async with billing.connect() as c:
+        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice')) == 1000
+        assert await c.scalar(select(accounts.c.reserved).where(accounts.c.id=='alice')) == 0
+
+async def test_failed_journal_still_settles_in_database(billing, monkeypatch):
+    import app.db.session as database
+    from app.config import get_settings
+    import app.services.commercial as integration
+    from app.domain.log import RequestLogCreate
+    from app.common.time import utc_now
+    monkeypatch.setattr(database,'engine',billing)
+    monkeypatch.setattr(get_settings(),'COMMERCIAL_ENABLED',True)
+    def fail(payload):
+        raise OSError('disk full')
+    monkeypatch.setattr(integration,'write_journal',fail)
+    kid,_=await core.create_key(billing,'alice','test')
+    await core.reserve(billing,'disk-full',kid,'model',100,100)
+    await integration.settle_log(RequestLogCreate(request_time=utc_now(),trace_id='disk-full',commercial_user_id='alice',response_status=200,input_tokens=10,output_tokens=5,usage_details={'source':'upstream'}))
+    async with billing.connect() as c:
+        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==980
+
+async def test_commercial_privacy_covers_http_handler(monkeypatch):
+    from app.services.commercial import CommercialPrivacyMiddleware, request_id
+    from app.logging_config import CommercialPrivacyFilter
+    from app.config import get_settings
+    import logging
+    monkeypatch.setattr(get_settings(),'COMMERCIAL_ENABLED',True)
+    async def handler(scope, receive, send):
+        record=logging.LogRecord('app',logging.ERROR,'',0,'private request content',(),None)
+        assert CommercialPrivacyFilter().filter(record)
+        assert 'private request content' not in record.getMessage()
+    await CommercialPrivacyMiddleware(handler)({'type':'http','headers':[(b'authorization',b'Bearer sqb-test')]},None,None)
+    assert request_id.get() is None

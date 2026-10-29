@@ -13,6 +13,7 @@ from starlette.datastructures import UploadFile
 
 from app.api.deps import CurrentApiKey, ModelServiceDep, ProxyServiceDep
 from app.common.errors import AppError
+from app.config import get_settings
 from app.common.proxy_headers import sanitize_upstream_response_headers
 
 router = APIRouter(tags=["Proxy - OpenAI"])
@@ -42,7 +43,7 @@ async def list_models(
         items, _total = await service.get_all_mappings(
             is_active=True, page=1, page_size=1000
         )
-        if api_key.key_value.startswith("sha256:"):
+        if get_settings().COMMERCIAL_ENABLED and api_key.key_value.startswith("sha256:"):
             from app.db.session import engine
             from squirrel_commercial.schema import prices
             from sqlalchemy import select

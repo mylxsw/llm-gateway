@@ -232,6 +232,9 @@ class ProxyService:
             self._commercial_identities[log_data.trace_id] = uid
         if uid:
             log_data.commercial_user_id = uid
+            log_data.request_url = None
+            log_data.upstream_url = None
+            log_data.user_id = None
             # Never retain free-form upstream error bodies for commercial requests.
             if log_data.error_info:
                 log_data.error_info = "upstream_request_failed"
@@ -296,7 +299,15 @@ class ProxyService:
             _strip_detail_payload(log_data)
         log_data.is_completed = True
         await self._commercial_log_identity(log_data)
-        await settle_log(log_data)
+        try:
+            await settle_log(log_data)
+        except Exception:
+            # Financial reservation remains durable. Recovery replays journal, or
+            # moves an unknown result to review; do not turn a delivered success into a retry.
+            logger.error("Commercial settlement pending: request_id=%s", log_data.trace_id)
+        finally:
+            if hasattr(self, "_commercial_identities"):
+                self._commercial_identities.pop(log_data.trace_id, None)
         try:
             async with self._repos() as (_model_repo, _provider_repo, log_repo):
                 await log_repo.update(log_id, log_data)

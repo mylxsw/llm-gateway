@@ -68,9 +68,10 @@ class SQLAlchemyApiKeyRepository(ApiKeyRepository):
     
     async def get_by_key_value(self, key_value: str) -> Optional[ApiKeyModel]:
         """Get API Key by key value (for authentication)"""
-        if key_value.startswith("sha256:"):
+        from app.config import get_settings
+        if get_settings().COMMERCIAL_ENABLED and key_value.startswith("sha256:"):
             return None
-        if key_value.startswith("sqb-"):
+        if get_settings().COMMERCIAL_ENABLED and key_value.startswith("sqb-"):
             from squirrel_commercial.core import digest
             key_value = digest(key_value)
         result = await self.session.execute(

@@ -9,7 +9,7 @@ import time
 import uuid
 from sqlalchemy import select, insert, update, text
 from . import VERSION
-from .schema import metadata, version, accounts, keys, prices, requests, ledger, audit
+from .schema import metadata, version, accounts, keys, prices, requests, ledger, audit, resolutions
 
 class BillingError(Exception):
     def __init__(self, code, status=403):
@@ -53,6 +53,9 @@ async def add_audit(c, actor, action, target, reason):
                                         target=str(target), reason=reason, created_at=now()))
 
 async def create_key(engine, account_id, name):
+    name = name.strip()
+    if not name or len(name) > 100:
+        raise BillingError('invalid_key_name', 400)
     token = 'sqb-' + secrets.token_urlsafe(32)
     async with engine.begin() as c:
         account = await account_lock(c, account_id)
@@ -63,7 +66,7 @@ async def create_key(engine, account_id, name):
             raise BillingError('duplicate_key_name', 409)
         # Existing api_keys owns the canonical log identity. Never store the secret.
         result = await c.execute(text('INSERT INTO api_keys (key_name,key_value,is_active,record_details,is_mcp_admin,created_at) VALUES (:name,:value,true,false,false,CURRENT_TIMESTAMP) RETURNING id'),
-                                 {'name': name[:48] + '-' + str(uuid.uuid4()), 'value': digest(token)})
+                                 {'name': 'commercial-' + str(uuid.uuid4()), 'value': digest(token)})
         key_id = result.scalar_one()
         await c.execute(insert(keys).values(api_key_id=key_id, account_id=account_id,
             name=name, prefix=token[:12], paused=False, revoked=False, created_at=now()))
@@ -97,6 +100,8 @@ async def credit(engine, account_id, amount, reference, kind='credit'):
         await credit_in_transaction(c, account_id, amount, reference, kind)
 
 async def credit_in_transaction(c, account_id, amount, reference, kind='credit'):
+    if type(amount) is not int or amount <= 0:
+        raise BillingError('invalid_amount', 400)
     await account_lock(c, account_id)
     old = (await c.execute(select(ledger).where(ledger.c.id == reference))).mappings().first()
     if old:
@@ -107,6 +112,8 @@ async def credit_in_transaction(c, account_id, amount, reference, kind='credit')
     await c.execute(insert(ledger).values(id=reference, account_id=account_id, amount=amount, kind=kind, created_at=now()))
 
 async def reserve(engine, request_id, key_id, model, input_bound, output_bound):
+    if type(input_bound) is not int or type(output_bound) is not int or input_bound < 0 or output_bound <= 0:
+        raise BillingError('invalid_token_limits', 400)
     async with engine.begin() as c:
         key = await key_state(c, key_id)
         account = await account_lock(c, key['account_id'])
@@ -146,6 +153,8 @@ async def settle(engine, request_id, input_tokens=None, output_tokens=None, fail
         r = (await c.execute(select(requests).where(requests.c.id == request_id))).mappings().one()
         if r['status'] not in ('reserved', 'review'):
             return
+        if await c.scalar(select(resolutions.c.action).where(resolutions.c.request_id == request_id)) == 'waive':
+            failed = True
         if not failed and (type(input_tokens) is not int or type(output_tokens) is not int or min(input_tokens, output_tokens) < 0):
             await c.execute(update(requests).where(requests.c.id == request_id).values(status='review', updated_at=now()))
             return

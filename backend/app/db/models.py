@@ -28,6 +28,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.common.encryption import decrypt, encrypt, is_encrypted
 from app.common.time import utc_now_naive
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -336,7 +337,8 @@ class RequestLog(Base):
     )
     # API Key Name (Redundant field for easy querying)
     api_key_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    commercial_user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
+    if get_settings().COMMERCIAL_ENABLED:
+        commercial_user_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True, index=True)
     # User ID from X-User-ID request header
     user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Requested Model Name

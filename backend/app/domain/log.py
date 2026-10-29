@@ -7,12 +7,28 @@ Defines Request Log related Data Transfer Objects (DTOs).
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 from app.common.time import ensure_utc
+from app.config import get_settings
+
+def _commercial_schema(schema):
+    if not get_settings().COMMERCIAL_ENABLED:
+        schema.get("properties", {}).pop("commercial_user_id", None)
+
+class CommercialLogFields(BaseModel):
+    model_config = ConfigDict(json_schema_extra=_commercial_schema)
+
+    @model_serializer(mode="wrap")
+    def serialize_commercial(self, handler):
+        result = handler(self)
+        if not get_settings().COMMERCIAL_ENABLED:
+            result.pop("commercial_user_id", None)
+        return result
 
 
-class RequestLogBase(BaseModel):
+
+class RequestLogBase(CommercialLogFields):
     """Request Log Base Model"""
     
     # Request Time
@@ -119,7 +135,7 @@ class RequestLogModel(RequestLogCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RequestLogSummary(BaseModel):
+class RequestLogSummary(CommercialLogFields):
     """Request Log Summary Model (for list queries, no large fields)"""
 
     id: int = Field(..., description="Log ID")

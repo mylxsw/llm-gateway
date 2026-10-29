@@ -36,7 +36,7 @@ def commercial_call(fn):
             return await fn(*args, **kwargs)
         async with engine.connect() as c:
             detail_enabled = await c.scalar(text('SELECT record_details FROM api_keys WHERE id=:id'), {'id': key_id})
-        kwargs['record_details'] = bool(detail_enabled)
+        bound.arguments['record_details'] = bool(detail_enabled)
         body = bound.arguments['body']
         if bound.arguments['path'] not in ('/v1/chat/completions', '/v1/messages'):
             raise AppError('Interface not available for billing', code='unsupported_billing_interface', status_code=400)
@@ -61,7 +61,7 @@ def commercial_call(fn):
         account_context = account_id.set(key["account_id"])
         try:
             async with asyncio.timeout(3600):
-                result = await fn(*args, **kwargs)
+                result = await fn(*bound.args, **bound.kwargs)
             if fn.__name__ == 'process_request_stream':
                 response, stream, info = result
                 async def bounded_stream():
@@ -81,7 +81,11 @@ def commercial_call(fn):
             return result
         except BaseException:
             # Conservative: a thrown exception does not prove the upstream did no work.
-            await asyncio.shield(core.settle(engine, rid))
+            try:
+                await asyncio.shield(core.settle(engine, rid))
+            except Exception:
+                import logging
+                logging.getLogger(__name__).error("Commercial request requires recovery: %s", rid)
             raise
         finally:
             request_id.reset(context)
@@ -101,19 +105,37 @@ async def settle_log(log):
         input_tokens=log.input_tokens if reliable else None,
         output_tokens=log.output_tokens if reliable else None,
         failed=bool(log.response_status and log.response_status >= 400))
+    path = None
+    try:
+        path = write_journal(payload)
+    except OSError:
+        import logging
+        logging.getLogger(__name__).error("Commercial recovery storage unavailable: %s", log.trace_id)
+    await core.settle(engine, **payload)
+    if path is not None:
+        await discard_completed(engine, path, payload['request_id'])
+
+def write_journal(payload):
+    import os
+    import tempfile
     directory = Path(get_settings().COMMERCIAL_RECOVERY_DIR)
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path = directory / (log.trace_id + '.json')
-    temporary = path.with_suffix('.tmp')
-    import os
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as f:
-        json.dump(payload, f)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(temporary, path)
-    await core.settle(engine, **payload)
-    await discard_completed(engine, path, payload['request_id'])
+    path = directory / (payload['request_id'] + '.json')
+    fd, temporary = tempfile.mkstemp(prefix='settlement-', suffix='.tmp', dir=directory)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            json.dump(payload, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    return path
 
 async def discard_completed(engine, path, rid):
     async with engine.connect() as c:
@@ -122,6 +144,8 @@ async def discard_completed(engine, path, rid):
         path.unlink(missing_ok=True)
 
 async def recover():
+    if not get_settings().COMMERCIAL_ENABLED:
+        return
     from app.db.session import engine
     for path in Path(get_settings().COMMERCIAL_RECOVERY_DIR).glob('*.json'):
         try:
@@ -141,3 +165,23 @@ async def recover():
     from sqlalchemy import update
     async with engine.begin() as c:
         await c.execute(update(requests).where(requests.c.status == 'reserved', requests.c.created_at < core.now()-10800).values(status='review', updated_at=core.now()))
+
+class CommercialPrivacyMiddleware:
+    """Keep redaction active through authentication, error handlers and response send."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] != 'http':
+            return await self.app(scope, receive, send)
+        headers = dict(scope.get('headers', []))
+        value = headers.get(b'x-api-key') or headers.get(b'authorization', b'')
+        if value.lower().startswith(b'bearer '):
+            value = value[7:]
+        if not value.startswith(b'sqb-'):
+            return await self.app(scope, receive, send)
+        token = request_id.set(str(uuid.uuid4()))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            request_id.reset(token)
