@@ -8,6 +8,7 @@ import secrets
 import time
 import uuid
 from sqlalchemy import select, insert, update, text
+from sqlalchemy.exc import IntegrityError
 from . import VERSION
 from .schema import metadata, version, accounts, keys, prices, requests, ledger, audit, resolutions
 
@@ -179,10 +180,22 @@ async def admin_key_action(engine, key_id, changes, actor='gateway-admin', reaso
             raise BillingError('key_revoked')
         if changes.get('is_mcp_admin'):
             raise BillingError('commercial_admin_forbidden')
+        if changes.get('key_name') is not None:
+            conflict = await c.scalar(text('SELECT id FROM api_keys WHERE key_name=:name AND id<>:id'),
+                                      {'name': changes['key_name'], 'id': key_id})
+            if conflict:
+                raise BillingError('duplicate_name', 409)
         if changes.get('revoke'):
             await c.execute(update(keys).where(keys.c.api_key_id == key_id).values(revoked=True))
         else:
             for field in ('is_active','record_details','key_name'):
                 if field in changes and changes[field] is not None:
-                    await c.execute(text(f'UPDATE api_keys SET {field}=:value WHERE id=:id'),{'id':key_id,'value':changes[field]})
+                    try:
+                        # Savepoint handles a concurrent rename without aborting the transaction.
+                        async with c.begin_nested():
+                            await c.execute(text(f'UPDATE api_keys SET {field}=:value WHERE id=:id'),{'id':key_id,'value':changes[field]})
+                    except IntegrityError as exc:
+                        if field == 'key_name':
+                            raise BillingError('duplicate_name', 409) from exc
+                        raise
         await add_audit(c,actor,'key_update',key_id,reason + ': ' + ','.join(sorted(changes)))

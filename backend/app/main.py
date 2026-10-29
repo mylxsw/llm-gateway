@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
         await check_version(engine)
         from app.services.commercial import write_journal
         import uuid
-        probe = write_journal({"request_id": "probe-" + str(uuid.uuid4())})
+        probe = write_journal({"request_id": "probe-" + str(uuid.uuid4())}, probe=True)
         probe.unlink()
     start_scheduler()
 

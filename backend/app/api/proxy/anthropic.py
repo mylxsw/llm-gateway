@@ -7,10 +7,11 @@ Provides Anthropic-compatible API endpoints.
 from typing import Any
 
 from fastapi import APIRouter, Header, Request, status
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.api.deps import CurrentApiKey, ProxyServiceDep
 from app.common.errors import AppError
+from app.services.commercial import SettlingStreamingResponse as StreamingResponse
 from app.common.proxy_headers import sanitize_upstream_response_headers
 from app.common.token_counter import AnthropicTokenCounter
 
@@ -63,6 +64,7 @@ async def create_message(
             
             # If initial response is error, return directly
             if not initial_response.is_success:
+                await stream_gen.aclose()
                 content = initial_response.body
                 if isinstance(content, (dict, list)):
                     return JSONResponse(

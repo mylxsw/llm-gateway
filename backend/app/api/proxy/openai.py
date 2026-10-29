@@ -8,11 +8,12 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Header, Request, status
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import UploadFile
 
 from app.api.deps import CurrentApiKey, ModelServiceDep, ProxyServiceDep
 from app.common.errors import AppError
+from app.services.commercial import SettlingStreamingResponse as StreamingResponse
 from app.config import get_settings
 from app.common.proxy_headers import sanitize_upstream_response_headers
 
@@ -100,6 +101,7 @@ async def _handle_proxy_request_with_body(
 
             # If initial response is error, return directly
             if not initial_response.is_success:
+                await stream_gen.aclose()
                 content = initial_response.body
                 if isinstance(content, (dict, list)):
                     return JSONResponse(
@@ -420,6 +422,7 @@ async def _handle_proxy_request_openai_responses(
             )
 
             if not initial_response.is_success:
+                await stream_gen.aclose()
                 content = initial_response.body
                 if isinstance(content, (dict, list)):
                     return JSONResponse(

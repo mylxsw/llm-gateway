@@ -12,7 +12,7 @@ class MockTokenCounter(TokenCounter):
         return 0
 
 
-def test_stream_usage_accumulator_fallback_zero_output_tokens(monkeypatch):
+def test_stream_usage_accumulator_preserves_zero_output_tokens(monkeypatch):
     monkeypatch.setattr(
         "app.common.stream_usage.get_token_counter", lambda p: MockTokenCounter()
     )
@@ -26,8 +26,9 @@ def test_stream_usage_accumulator_fallback_zero_output_tokens(monkeypatch):
 
     result = acc.finalize()
 
-    # Should use calculated tokens (3 words) instead of reported 0
-    assert result.output_tokens == 3
+    # Zero is valid upstream usage. The local estimate remains separately available.
+    assert result.output_tokens == 0
+    assert result.estimated_output_tokens == 3
     assert result.output_text == "one two three"
 
 
