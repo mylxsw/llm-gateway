@@ -280,12 +280,15 @@ async def execute_playground_request(
     data: PlaygroundExecuteRequest,
     log_service: LogServiceDep,
     proxy_service: ProxyServiceDep,
+    api_key_service: ApiKeyServiceDep,
 ):
     """
     Execute a debug request based on an existing log with editable request data.
     """
     try:
         log = await log_service.get_by_id(log_id)
+        if log.api_key_id:
+            await api_key_service.assert_replay_allowed(log.api_key_id)
 
         if not log.api_key_id:
             raise ValidationError(
@@ -675,6 +678,7 @@ async def retry_log(
                 code="retry_multipart_unsupported",
             )
 
+        await api_key_service.assert_replay_allowed(log.api_key_id)
         raw_key = await api_key_service.get_raw_key_value(log.api_key_id)
         retry_headers, sanitized_lower_headers = _build_retry_headers(log, raw_key)
         base_url, path_with_query = _build_retry_target(log, sanitized_lower_headers)

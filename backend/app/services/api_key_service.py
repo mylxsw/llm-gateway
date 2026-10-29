@@ -101,6 +101,11 @@ class ApiKeyService:
             )
         return self._to_response(api_key)
 
+    async def assert_replay_allowed(self, key_id: int) -> None:
+        key = await self.repo.get_by_id(key_id)
+        if key and key.key_value.startswith("sha256:"):
+            raise AuthenticationError(message="Commercial keys cannot be replayed", code="commercial_key_hidden")
+
     async def get_raw_key_value(self, id: int) -> str:
         """
         Get raw (unsanitized) key_value by ID
@@ -175,6 +180,8 @@ class ApiKeyService:
             try:
                 await admin_key_action(engine, id, data.model_dump(exclude_unset=True))
             except BillingError as exc:
+                if exc.status == 409:
+                    raise ConflictError(message=exc.code, code=exc.code) from exc
                 raise AuthenticationError(message=exc.code, code=exc.code) from exc
             refreshed = await self.repo.get_by_id(id)
             return self._to_response(refreshed)

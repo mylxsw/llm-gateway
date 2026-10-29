@@ -524,6 +524,7 @@ async def test_model(
                 _log_info,
             ) = await service.process_request_stream(
                 api_key_id=None,
+                admin_model_test=True,
                 api_key_name=None,
                 request_protocol=data.protocol,
                 path=path,
@@ -553,6 +554,7 @@ async def test_model(
         start = time.monotonic()
         response, _log_info = await service.process_request(
             api_key_id=None,
+            admin_model_test=True,
             api_key_name=None,
             request_protocol=data.protocol,
             path=path,

@@ -72,6 +72,8 @@ class StreamUsageResult:
     input_tokens: Optional[int]
     upstream_reported_output_tokens: Optional[int]
     usage_details: Optional[dict[str, Any]]
+    final_usage: bool = False
+    estimated_output_tokens: int = 0
 
 
 def _merge_usage_details(
@@ -129,6 +131,8 @@ class StreamUsageAccumulator:
         self._upstream_output_tokens: Optional[int] = None
         self._upstream_input_tokens: Optional[int] = None
         self._usage_details: Optional[UsageDetails] = None
+        self._final_usage = False
+        self._anthropic_delta = False
 
     def feed(self, chunk: bytes) -> None:
         for payload in self._decoder.feed(chunk):
@@ -150,7 +154,7 @@ class StreamUsageAccumulator:
         output_text = "".join(self._text_parts)
         output_tokens = (
             self._upstream_output_tokens
-            if self._upstream_output_tokens
+            if self._upstream_output_tokens is not None
             else self._token_counter.count_tokens(output_text, self.model)
         )
 
@@ -162,6 +166,8 @@ class StreamUsageAccumulator:
             truncated = False
 
         return StreamUsageResult(
+            final_usage=self._final_usage,
+            estimated_output_tokens=self._token_counter.count_tokens(output_text, self.model),
             output_text=output_text,
             output_preview=preview,
             output_preview_truncated=truncated,
@@ -193,6 +199,26 @@ class StreamUsageAccumulator:
 
     def _handle_openai_event(self, data: dict[str, Any]) -> None:
         self._update_usage_from_payload(data)
+        # Chat Completions sends a usage-only chunk after all choices finish.
+        usage = data.get("usage")
+        choices = data.get("choices")
+        terminal_choices = choices == [] or (
+            isinstance(choices, list) and bool(choices)
+            and all(
+                isinstance(choice, dict) and choice.get("finish_reason") is not None
+                for choice in choices
+            )
+        )
+        if isinstance(usage, dict) and terminal_choices:
+            self._final_usage = (
+                type(usage.get("prompt_tokens")) is int
+                and type(usage.get("completion_tokens")) is int
+                and min(usage["prompt_tokens"], usage["completion_tokens"]) >= 0
+            )
+        if data.get("type") == "response.completed" and self._usage_details:
+            self._final_usage = (
+                self._upstream_input_tokens is not None and self._upstream_output_tokens is not None
+            )
 
         choices = data.get("choices")
         if not isinstance(choices, list):
@@ -263,6 +289,13 @@ class StreamUsageAccumulator:
     def _handle_anthropic_event(self, data: dict[str, Any]) -> None:
         event_type = data.get("type")
         self._update_usage_from_payload(data)
+        if event_type == "message_delta" and isinstance(data.get("usage"), dict):
+            self._anthropic_delta = (
+                type(data["usage"].get("output_tokens")) is int
+                and data["usage"]["output_tokens"] >= 0
+            )
+        elif event_type == "message_stop":
+            self._final_usage = self._anthropic_delta and self._upstream_input_tokens is not None
 
         if event_type == "content_block_start":
             index = data.get("index")
