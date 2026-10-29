@@ -241,7 +241,7 @@ class ProxyService:
             if log_data.usage_details:
                 flags = {
                     k: v for k, v in log_data.usage_details.items()
-                    if k in ("interrupted", "final_usage", "stream_started", "response_complete") and type(v) is bool
+                    if k in ("interrupted", "final_usage", "stream_started", "response_complete", "has_output", "has_upstream_usage") and type(v) is bool
                 }
                 allowed = {"input_tokens", "output_tokens", "total_tokens", "source", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
                 log_data.usage_details = {k: v for k, v in log_data.usage_details.items() if k in allowed and ((k == "source" and v in ("upstream", "mixed", "estimated")) or (k != "source" and type(v) is int and v >= 0))}
@@ -1221,9 +1221,18 @@ class ProxyService:
         # Extract cached tokens from usage details
         cached_input_tokens = None
         cache_creation_input_tokens = None
-        if commercial_user_id and usage_details:
-            from app.services.commercial import complete_usage
-            usage_details['response_complete'] = complete_usage(conversion_data.get('upstream_response_body') or result.response.body)
+        if commercial_user_id:
+            from app.services.commercial import complete_usage, response_has_output
+            upstream_body = conversion_data.get('upstream_response_body') or result.response.body
+            try:
+                reported_usage = extract_usage_details(upstream_body)
+            except Exception:
+                reported_usage = None
+            usage_details = usage_details or {}
+            usage_details['response_complete'] = complete_usage(upstream_body)
+            usage_details['has_upstream_usage'] = reported_usage is not None
+            usage_details['has_output'] = response_has_output(upstream_body) or bool(reported_usage and reported_usage.output_tokens)
+            usage_details['interrupted'] = result.response.interrupted
         if usage_details:
             cached_input_tokens = (
                 usage_details.get("cache_read_input_tokens")
@@ -1577,6 +1586,7 @@ class ProxyService:
                     protocol=supplier_protocol, model=candidate.target_model
                 )
                 stream_conversion_data['usage_accumulator'] = upstream_usage
+                stream_conversion_data.pop('interrupted', None)
 
                 async def upstream_bytes() -> AsyncGenerator[bytes, None]:
                     # Reset upstream chunks for the current attempt
@@ -1619,6 +1629,7 @@ class ProxyService:
                             if not resp.is_success:
                                 # first_resp is the same object surfaced as initial_response;
                                 # mutate it so final stream logging records the failure.
+                                first_resp.interrupted = resp.interrupted
                                 first_resp.status_code = resp.status_code
                                 first_resp.headers.update(resp.headers)
                                 first_resp.error = resp.error or "Upstream stream interrupted"
@@ -1966,6 +1977,8 @@ class ProxyService:
                         usage_result.estimated_output_tokens,
                     )
                     usage_result = upstream_result
+                has_upstream_usage = usage_result.usage_details is not None
+                has_output = bool(usage_result.output_text or usage_result.output_tokens)
                 usage_details = usage_result.usage_details
                 if usage_result.input_tokens is not None:
                     if commercial_user_id and not usage_result.final_usage:
@@ -2002,7 +2015,9 @@ class ProxyService:
                         usage_details.get("output_tokens") or 0
                     )
                 if commercial_user_id:
-                    usage_details["interrupted"] = stream_interrupted or stream_conversion_data.get('interrupted', False)
+                    usage_details["interrupted"] = stream_interrupted or initial_response.interrupted or stream_conversion_data.get('interrupted', False)
+                    usage_details["has_upstream_usage"] = has_upstream_usage
+                    usage_details["has_output"] = has_output
                     usage_details["final_usage"] = usage_result.final_usage
                     usage_details["stream_started"] = stream_started
                 total_time_ms = initial_response.total_time_ms

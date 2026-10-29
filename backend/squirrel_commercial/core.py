@@ -47,11 +47,13 @@ async def account_lock(c, account_id):
         raise BillingError('account_not_found')
     return (await c.execute(select(accounts).where(accounts.c.id == account_id))).mappings().one()
 
-async def add_audit(c, actor, action, target, reason):
+async def add_audit(c, actor, action, target, reason, *, before=None, after=None):
     await c.execute(insert(audit).values(id=str(uuid.uuid4()), actor=actor, action=action,
-                                        target=str(target), reason=reason, actor_type='system' if actor.startswith('system:') else 'user', actor_id=actor, created_at=now()))
+                                        target=str(target), reason=reason, before_json=before, after_json=after, actor_type='system' if actor.startswith('system:') else 'user', actor_id=actor, created_at=now()))
 
-async def create_key(engine, account_id, name):
+async def create_key(engine, account_id, name, monthly_limit_microcredits=None):
+    if monthly_limit_microcredits is not None:
+        integer(monthly_limit_microcredits)
     if not isinstance(name, str):
         raise BillingError('invalid_key_name', 400)
     name = name.strip()
@@ -70,9 +72,30 @@ async def create_key(engine, account_id, name):
                                  {'name': 'commercial-' + str(uuid.uuid4()), 'value': digest(token)})
         key_id = result.scalar_one()
         await c.execute(insert(keys).values(api_key_id=key_id, account_id=account_id,
-            name=name, prefix=token[:12], paused=False, revoked=False, created_at=now()))
-        await add_audit(c, account_id, 'create_key', key_id, 'User created key')
+            name=name, prefix=token[:12], paused=False, revoked=False, monthly_limit_microcredits=monthly_limit_microcredits, created_at=now()))
+        await add_audit(c, account_id, 'create_key', key_id, 'User created key', after={'monthly_limit_microcredits': monthly_limit_microcredits})
     return key_id, token
+
+async def set_key_monthly_limit(engine, account_id, key_id, monthly_limit_microcredits, *, actor=None, reason='User updated monthly limit'):
+    """Update a manual Key limit without resetting its existing month bucket."""
+    if monthly_limit_microcredits is not None:
+        integer(monthly_limit_microcredits)
+    async with engine.begin() as c:
+        account = await account_lock(c, account_id)
+        key = (await c.execute(select(keys).where(keys.c.api_key_id == key_id, keys.c.account_id == account_id))).mappings().first()
+        if key is None:
+            raise BillingError('key_not_found', 404)
+        if account['blocked'] or key['revoked']:
+            raise BillingError('key_change_forbidden')
+        if key['source'] != 'manual':
+            raise BillingError('oauth_grant_limit_required', 400)
+        if key['monthly_limit_microcredits'] == monthly_limit_microcredits:
+            return
+        await c.execute(update(keys).where(keys.c.api_key_id == key_id).values(monthly_limit_microcredits=monthly_limit_microcredits))
+        await add_audit(c, actor or account_id, 'set_key_monthly_limit', key_id, reason,
+            before={'monthly_limit_microcredits': key['monthly_limit_microcredits']},
+            after={'monthly_limit_microcredits': monthly_limit_microcredits})
+
 
 async def key_state(c, key_id):
     result = (await c.execute(select(keys, accounts.c.blocked).join(accounts, accounts.c.id == keys.c.account_id).where(keys.c.api_key_id == key_id))).mappings().first()
@@ -90,7 +113,7 @@ async def user_key_action(engine, account_id, key_id, action):
             raise BillingError('key_not_found', 404)
         if account['blocked'] or key['revoked']:
             raise BillingError('key_change_forbidden')
-        values = {'revoked': True} if action == 'revoke' else {'paused': action == 'pause'}
+        values = {'revoked': True, 'revoked_at': now()} if action == 'revoke' else {'paused': action == 'pause'}
         await c.execute(update(keys).where(keys.c.api_key_id == key_id).values(**values))
         await add_audit(c, account_id, action, key_id, 'User key action')
 
@@ -118,7 +141,7 @@ async def admin_key_action(engine, key_id, changes, actor='gateway-admin', reaso
             if conflict:
                 raise BillingError('duplicate_key_name', 409)
         if changes.get('revoke'):
-            await c.execute(update(keys).where(keys.c.api_key_id == key_id).values(revoked=True))
+            await c.execute(update(keys).where(keys.c.api_key_id == key_id).values(revoked=True, revoked_at=now()))
         else:
             for field in ('is_active','record_details','key_name'):
                 if field in changes and changes[field] is not None:

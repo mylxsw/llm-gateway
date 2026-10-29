@@ -85,7 +85,7 @@ def test_only_terminal_usage_is_trusted():
     assert result.final_usage and result.output_tokens == 0
 
 
-async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None, initial_status=None):
+async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None, initial_status=None, initial_interrupted=False):
     mapping = ModelMapping(requested_model='model', strategy='priority', is_active=True,
                            created_at=utc_now(), updated_at=utc_now())
     candidate = CandidateProvider(provider_id=1, provider_name='test', base_url='https://example.com',
@@ -101,12 +101,15 @@ async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', m
 
     async def forward_stream(**kwargs):
         seen.append(kwargs['body'])
-        response = ProviderResponse(status_code=initial_status or 200)
+        response = ProviderResponse(status_code=initial_status or 200, interrupted=initial_interrupted)
         try:
             if initial_status:
                 yield event({'error': {'message': 'upstream rejected'}}), response
                 return
-            if upstream == 'anthropic':
+            if upstream == 'openai_responses':
+                yield event({'type': 'response.created', 'response': {'id': 'resp_1', 'model': 'model', 'output': []}}), response
+                yield event({'type': 'response.output_text.delta', 'output_index': 0, 'content_index': 0, 'delta': 'hello world'}), response
+            elif upstream == 'anthropic':
                 yield event({'type': 'message_start', 'message': {'id': 'msg', 'type': 'message', 'role': 'assistant',
                             'model': 'model', 'content': [], 'usage': {'input_tokens': 10, 'output_tokens': 1}}}), response
                 yield event({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': 'hello world ' * 20}}), response
@@ -116,10 +119,14 @@ async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', m
                 await asyncio.Event().wait()
             elif mode == 'upstream_timeout':
                 raise TimeoutError('upstream read timed out')
+            elif mode == 'provider_timeout':
+                yield b'', ProviderResponse(status_code=504, interrupted=True)
             elif mode == 'error':
                 yield b'', ProviderResponse(status_code=502, error='failed after output')
             elif mode == 'complete':
-                if upstream == 'anthropic':
+                if upstream == 'openai_responses':
+                    yield event({'type': 'response.completed', 'response': {'id': 'resp_1', 'model': 'model', 'status': 'completed', 'output': [], 'usage': {'input_tokens': 10, 'output_tokens': 3, 'total_tokens': 13}}}), response
+                elif upstream == 'anthropic':
                     yield event({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {'output_tokens': 0}}), response
                     yield event({'type': 'message_stop'}), response
                 else:
@@ -147,7 +154,7 @@ async def request_row(engine, rid):
 
 
 @pytest.mark.parametrize('upstream,client', [('openai', 'openai'), ('anthropic', 'anthropic'), ('anthropic', 'openai'), ('openai', 'anthropic')])
-@pytest.mark.parametrize('mode', ['complete', 'eof', 'error', 'upstream_timeout', 'close', 'close_failure', 'unstarted', 'cancel', 'timeout'])
+@pytest.mark.parametrize('mode', ['complete', 'eof', 'error', 'upstream_timeout', 'provider_timeout', 'close', 'close_failure', 'unstarted', 'cancel', 'timeout'])
 async def test_stream_settlement_lifecycle(commercial_gateway, monkeypatch, upstream, client, mode):
     engine, kid = commercial_gateway
     (response, stream, info), owner, logs, closed, seen = await make_stream(

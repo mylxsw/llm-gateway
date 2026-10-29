@@ -120,6 +120,7 @@ class JevClient(ProviderClient):
             timer.stop()
             return ProviderResponse(
                 status_code=504,
+                interrupted=True,
                 error=f"Request timeout: {str(e)}",
                 first_byte_delay_ms=timer.first_byte_delay_ms,
                 total_time_ms=timer.total_time_ms,
@@ -198,6 +199,7 @@ class JevClient(ProviderClient):
             timer.stop()
             return ProviderResponse(
                 status_code=504,
+                interrupted=True,
                 error=f"Request timeout: {str(e)}",
                 first_byte_delay_ms=timer.first_byte_delay_ms,
                 total_time_ms=timer.total_time_ms,

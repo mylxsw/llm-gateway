@@ -21,10 +21,16 @@ def estimate_input(body):
     try:
         import tiktoken
         encoding = tiktoken.encoding_for_model(body.get('model', ''))
-    except (ImportError, KeyError):
+    except Exception:
         count, version = text_tokens, ESTIMATOR_VERSION
     else:
         count = lambda s: len(encoding.encode(s, disallowed_special=()))
         version = 'tiktoken-' + encoding.name
     total = 32 + sum(16 + count(m['content']) for m in messages) + count(system)
     return (total*120+99)//100, version
+
+
+async def estimate_input_async(body):
+    """Tokenizer initialization can read/download BPE data; keep it off the event loop."""
+    import asyncio
+    return await asyncio.to_thread(estimate_input, body)

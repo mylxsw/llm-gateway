@@ -185,7 +185,7 @@ class StreamUsageAccumulator:
 
         stripped = payload.strip()
         if stripped == "[DONE]":
-            self._final_usage = self._openai_usage
+            self._final_usage = self._final_usage or self._openai_usage
             return
 
         try:
@@ -193,6 +193,8 @@ class StreamUsageAccumulator:
         except Exception:
             return
 
+        if not isinstance(data, dict):
+            return
         if self.protocol == "anthropic":
             self._handle_anthropic_event(data)
         elif self.protocol == "gemini":
@@ -219,9 +221,13 @@ class StreamUsageAccumulator:
                 and min(usage["prompt_tokens"], usage["completion_tokens"]) >= 0
             )
         if data.get("type") == "response.completed":
-            usage = (data.get("response") or {}).get("usage") or {}
-            self._openai_usage = all(type(usage.get(k)) is int and usage[k] >= 0 for k in ('input_tokens', 'output_tokens'))
+            response = data.get('response')
+            usage = response.get('usage') if isinstance(response, dict) else None
+            # Responses terminates here; it does not send Chat Completions' [DONE].
+            self._final_usage = isinstance(usage, dict) and all(type(usage.get(k)) is int and usage[k] >= 0 for k in ('input_tokens', 'output_tokens'))
 
+        if data.get('type') == 'response.output_text.delta' and isinstance(data.get('delta'), str):
+            self._text_parts.append(data['delta'])
         choices = data.get("choices")
         if not isinstance(choices, list):
             return

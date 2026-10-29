@@ -75,11 +75,13 @@ async def read_price(c, model):
     # All source fields, current pointer and immutable version share one MVCC statement.
     stmt = select(models, price_configs.c.margin_bps.label('configured_margin'),
         price_configs.c.sales_enabled.label('configured_sales'), settings.c.value_json.label('global_margin'), price_versions).select_from(
-        models.join(price_configs, price_configs.c.model == models.c.requested_model)
-        .join(price_versions, (price_versions.c.model == price_configs.c.model) & (price_versions.c.version == price_configs.c.current_version))
-        .join(settings, settings.c.key == 'pricing.global_margin_bps')).where(models.c.requested_model == model)
+        models.outerjoin(price_configs, price_configs.c.model == models.c.requested_model)
+        .outerjoin(price_versions, (price_versions.c.model == price_configs.c.model) & (price_versions.c.version == price_configs.c.current_version))
+        .outerjoin(settings, settings.c.key == 'pricing.global_margin_bps')).where(models.c.requested_model == model)
     row = (await c.execute(stmt)).mappings().first()
     if row is None:
+        raise BillingError('model_not_for_sale')
+    if row['source_fingerprint'] is None or row['global_margin'] is None:
         raise BillingError('price_sync_pending', 503)
     expected = snapshot(row, dict(margin_bps=row['configured_margin'], sales_enabled=row['configured_sales']), row['global_margin'])
     if row['source_fingerprint'] != expected['source_fingerprint']:

@@ -40,14 +40,14 @@ async def test_interrupted_before_response_settles_estimate(commercial_gateway, 
 
 
 @pytest.mark.parametrize('status,is_stream,usage,expected', [
-    (502, True, {'stream_started': True}, 'review'),
-    (429, True, {'stream_started': False}, 'review'),
-    (500, True, {'stream_started': False}, 'review'),
-    (504, True, {'stream_started': False}, 'review'),
+    (502, True, {'stream_started': True, 'has_output': True}, 'review'),
+    (429, True, {'stream_started': False}, 'cancelled'),
+    (500, True, {'stream_started': False}, 'cancelled'),
+    (504, True, {'stream_started': False}, 'cancelled'),
     (502, True, {'source': 'upstream', 'response_complete': True, 'final_usage': True}, 'settled'),
-    (504, False, {'source': 'estimated'}, 'review'),
+    (504, False, {'source': 'estimated'}, 'cancelled'),
     (499, True, {'source': 'mixed'}, 'settled'),
-    (400, False, None, 'review'),
+    (400, False, None, 'cancelled'),
     (200, False, {'source': 'upstream', 'response_complete': True}, 'settled'),
 ])
 async def test_settlement_failure_policy(commercial_gateway, status, is_stream, usage, expected):
@@ -191,8 +191,6 @@ def test_openai_compatible_terminal_usage_with_finish_reason():
     assert accumulator.finalize().final_usage
     accumulator = StreamUsageAccumulator('openai', 'model')
     accumulator.feed(event({'type': 'response.completed', 'response': {'usage': {'input_tokens': 10, 'output_tokens': 0}}}))
-    assert not accumulator.finalize().final_usage
-    accumulator.feed(b'data: [DONE]\n\n')
     assert accumulator.finalize().final_usage
 
 
@@ -222,12 +220,12 @@ async def test_initial_stream_error_releases_reservation(commercial_gateway, mon
         result = await create_message(request, key, proxy)
     assert result.status_code == status
     row = await request_row(engine, info['trace_id'])
-    assert row['status'] == 'review' and row['charged_microcredits'] == 0
+    assert row['status'] == 'cancelled' and row['charged_microcredits'] == 0
     assert logs.update.call_args.args[1].usage_details['stream_started'] is False
     async with engine.connect() as c:
         account = (await c.execute(select(accounts).where(accounts.c.id == 'alice'))).mappings().one()
-        assert account['reserved_microcredits'] > 0 and account['balance_microcredits'] == 100000
-        assert await c.scalar(select(requests.c.id).where(requests.c.status == 'review'))
+        assert account['reserved_microcredits'] == 0 and account['balance_microcredits'] == 100000
+        assert not await c.scalar(select(requests.c.id).where(requests.c.status == 'review'))
     assert closed.is_set() and not owner._commercial_identities
     assert not await active_requests.is_active(991)
     # A transient upstream error must not stop the next paid request.

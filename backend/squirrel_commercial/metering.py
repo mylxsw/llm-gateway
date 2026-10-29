@@ -28,8 +28,13 @@ class UsageEvidence:
     estimated_output: int = 0
     end_reason: str = 'unknown'
     estimator_version: str = ESTIMATOR_VERSION
+    upstream_rejected: bool = False
 
     def tokens(self, reservation):
+        if self.upstream_rejected:
+            if self.interrupted or self.has_output or self.input_tokens is not None or self.output_tokens is not None:
+                raise BillingError('invalid_usage_evidence', 400)
+            return 0, 0
         if not self.sent_upstream:
             if self.has_output or self.input_tokens or self.output_tokens:
                 raise BillingError('invalid_usage_evidence', 400)
@@ -186,7 +191,7 @@ async def settle(engine, request_id, evidence=None):
                 return
             await c.execute(update(requests).where(requests.c.id == request_id).values(status='review', evidence_json=asdict(evidence), updated_at=now()))
             return
-        await finish(c, r, tokens, cancelled=not evidence.sent_upstream, evidence=asdict(evidence))
+        await finish(c, r, tokens, cancelled=not evidence.sent_upstream or evidence.upstream_rejected, evidence=asdict(evidence))
 
 
 async def resolve_review(engine, request_id, action, input_tokens=None, output_tokens=None, *, actor, reason, reference):

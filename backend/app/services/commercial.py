@@ -11,7 +11,7 @@ from contextvars import ContextVar
 from pathlib import Path
 from sqlalchemy import select, text
 from squirrel_commercial import core
-from squirrel_commercial.estimator import estimate_input
+from squirrel_commercial.estimator import estimate_input_async
 from squirrel_commercial.schema import requests, keys
 from app.config import get_settings
 from app.common.errors import AppError
@@ -126,7 +126,7 @@ def commercial_call(fn):
         if type(output) is not int or output <= 0:
             raise AppError('Specify a positive max_tokens', code='max_tokens_required', status_code=400)
         try:
-            input_bound, estimator_version = estimate_input(body)
+            input_bound, estimator_version = await estimate_input_async(body)
         except core.BillingError as exc:
             raise translate(exc) from exc
         rid = str(uuid.uuid4())
@@ -171,11 +171,14 @@ async def settle_log(log):
     details = log.usage_details or {}
     interrupted = details.get('interrupted') is True or log.response_status == 499
     reliable = details.get('source') == 'upstream' and (details.get('final_usage') is True if log.is_stream else details.get('response_complete') is True)
+    has_output = details.get('has_output', bool(log.output_tokens))
+    has_usage = details.get('has_upstream_usage', details.get('source') in ('upstream', 'mixed'))
+    rejected = bool(log.response_status and log.response_status >= 400 and not interrupted and not has_output and not has_usage)
     evidence = core.UsageEvidence(
-        input_tokens=log.input_tokens, output_tokens=log.output_tokens,
+        input_tokens=None if rejected else log.input_tokens, output_tokens=None if rejected else log.output_tokens,
         source=details.get('source', 'unknown'), terminal_complete=reliable,
-        interrupted=interrupted, has_output=bool(log.output_tokens),
-        end_reason='interrupted' if interrupted else 'response',
+        interrupted=interrupted, has_output=has_output, upstream_rejected=rejected,
+        end_reason='upstream_rejected' if rejected else ('interrupted' if interrupted else 'response'),
         estimated_input=details.get('estimated_input_tokens', 0),
         estimated_output=details.get('estimated_output_tokens', 0))
     from dataclasses import asdict
@@ -304,3 +307,28 @@ def complete_usage(body):
         if all(type(usage.get(k)) is int and usage[k] >= 0 for k in (inp, out)):
             return True
     return False
+
+
+def response_has_output(body):
+    """Error payload text is not assistant output, even when the body is unparsed."""
+    if isinstance(body, (str, bytes, bytearray)):
+        try:
+            body = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            return False
+    if not isinstance(body, dict):
+        return False
+    choices = body.get('choices')
+    for choice in choices if isinstance(choices, list) else []:
+        if not isinstance(choice, dict):
+            continue
+        message = choice.get('message') or choice.get('delta') or {}
+        if choice.get('text') or (isinstance(message, dict) and (message.get('content') or message.get('tool_calls'))):
+            return True
+    content = body.get('content')
+    if isinstance(content, str) and content:
+        return True
+    if isinstance(content, list) and any(isinstance(block, dict) and (block.get('text') or block.get('type') == 'tool_use') for block in content):
+        return True
+    output = body.get('output')
+    return isinstance(output, list) and any(isinstance(item, dict) and response_has_output(item) for item in output)
