@@ -11,7 +11,8 @@ from contextvars import ContextVar
 from pathlib import Path
 from sqlalchemy import select, text
 from squirrel_commercial import core
-from squirrel_commercial.schema import requests, keys, resolutions
+from squirrel_commercial.estimator import estimate_input
+from squirrel_commercial.schema import requests, keys
 from app.config import get_settings
 from app.common.errors import AppError
 
@@ -19,7 +20,10 @@ request_id = ContextVar('commercial_request_id', default=None)
 account_id = ContextVar('commercial_account_id', default=None)
 
 def translate(exc):
-    return AppError(message=exc.code, code=exc.code, status_code=exc.status)
+    error = AppError(message=exc.code, code=exc.code, status_code=exc.status)
+    if exc.code == 'price_sync_pending':
+        error.headers = {'Retry-After': '1'}
+    return error
 
 def apply_stream_usage(body, protocol, options=None):
     if protocol != 'openai' or not body.get('stream'):
@@ -121,14 +125,13 @@ def commercial_call(fn):
         output = body.get('max_completion_tokens', body.get('max_tokens'))
         if type(output) is not int or output <= 0:
             raise AppError('Specify a positive max_tokens', code='max_tokens_required', status_code=400)
-        # Text only: bound input by UTF-8 bytes plus framing; reject multimodal.
-        messages = body.get('messages')
-        if not isinstance(messages, list) or any(not isinstance(m, dict) or not isinstance(m.get('content'), str) for m in messages) or body.get('tools'):
-            raise AppError('Only text messages are supported', code='unsupported_billing_input', status_code=400)
-        input_bound = len(json.dumps(body, ensure_ascii=False).encode()) + 1024
+        try:
+            input_bound, estimator_version = estimate_input(body)
+        except core.BillingError as exc:
+            raise translate(exc) from exc
         rid = str(uuid.uuid4())
         try:
-            await core.reserve(engine, rid, key_id, body.get('model', ''), input_bound, output)
+            await core.reserve(engine, rid, key_id, body.get('model', ''), input_bound, output, estimator_version)
         except core.BillingError as exc:
             raise translate(exc) from exc
         context = request_id.set(rid)
@@ -145,11 +148,9 @@ def commercial_call(fn):
         except BaseException as exc:
             # Conservative: a thrown exception does not prove the upstream did no work.
             try:
-                from app.common.token_counter import get_token_counter
                 interrupted = isinstance(exc, (asyncio.CancelledError, TimeoutError, GeneratorExit))
-                estimated = get_token_counter(bound.arguments.get('request_protocol', 'openai')).count_request(body, body.get('model', '')) if interrupted else None
                 with anyio.CancelScope(shield=True):
-                    await core.settle(engine, rid, estimated, 0 if interrupted else None)
+                    await core.settle(engine, rid, core.UsageEvidence(interrupted=interrupted, estimated_input=input_bound, estimated_output=0))
             except Exception:
                 logging.getLogger(__name__).error("Commercial request requires recovery: %s", rid)
             raise
@@ -168,28 +169,30 @@ async def settle_log(log):
     if not log.commercial_user_id:
         return
     details = log.usage_details or {}
-    interrupted = details.get('interrupted') is True or log.response_status in (499, 504)
-    reliable = details.get('source') == 'upstream' and (not log.is_stream or details.get('final_usage') is True)
-    failed = bool(log.response_status and log.response_status >= 400)
-    initial_rejection = log.is_stream and failed and details.get('stream_started') is False
-    has_usage = bool((log.output_tokens or 0) > 0 or (details.get('source') in ('upstream', 'mixed') and (log.input_tokens or 0) > 0))
-    billable = not initial_rejection and (reliable or interrupted or (log.is_stream and (not failed or has_usage)))
-    payload = dict(request_id=log.trace_id,
-        input_tokens=(log.input_tokens or 0) if billable else None,
-        output_tokens=(log.output_tokens or 0) if billable else None,
-        failed=initial_rejection or (failed and not log.is_stream and not reliable and not interrupted))
+    interrupted = details.get('interrupted') is True or log.response_status == 499
+    reliable = details.get('source') == 'upstream' and (details.get('final_usage') is True if log.is_stream else details.get('response_complete') is True)
+    evidence = core.UsageEvidence(
+        input_tokens=log.input_tokens, output_tokens=log.output_tokens,
+        source=details.get('source', 'unknown'), terminal_complete=reliable,
+        interrupted=interrupted, has_output=bool(log.output_tokens),
+        end_reason='interrupted' if interrupted else 'response',
+        estimated_input=details.get('estimated_input_tokens', 0),
+        estimated_output=details.get('estimated_output_tokens', 0))
+    from dataclasses import asdict
+    payload = dict(protocol_version=2, request_id=log.trace_id, evidence=asdict(evidence))
     path = None
     try:
         path = write_journal(payload)
     except OSError:
         logging.getLogger(__name__).error("Commercial recovery storage unavailable: %s", log.trace_id)
-    await core.settle(engine, **payload)
+    await core.settle(engine, payload['request_id'], payload.get('evidence', {}))
     if path is not None:
         await discard_completed(engine, path, payload['request_id'])
 
 def write_journal(payload, *, probe=False):
     import os
     import tempfile
+    payload = {'protocol_version': 2, **payload}
     directory = Path(get_settings().COMMERCIAL_RECOVERY_DIR)
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = directory / (payload['request_id'] + ('.probe' if probe else '.json'))
@@ -223,32 +226,46 @@ async def recover():
     if not get_settings().COMMERCIAL_ENABLED:
         return
     from app.db.session import engine
-    for path in Path(get_settings().COMMERCIAL_RECOVERY_DIR).glob('*.json'):
+    from squirrel_commercial.pricing import models, sync_price
+    cursor = ''
+    while True:
+        async with engine.begin() as c:
+            names = (await c.execute(select(models.c.requested_model).where(models.c.requested_model > cursor).order_by(models.c.requested_model).limit(100))).scalars().all()
+            for name in names:
+                await sync_price(c, name)
+        if len(names) < 100:
+            break
+        cursor = names[-1]
+    from itertools import islice
+    for path in islice(Path(get_settings().COMMERCIAL_RECOVERY_DIR).glob('*.json'), 100):
         try:
             payload = json.loads(path.read_text())
+            if payload.get('protocol_version') != 2:
+                raise ValueError('incompatible journal protocol')
             async with engine.connect() as c:
                 state = await c.scalar(select(requests.c.status).where(requests.c.id == payload['request_id']))
             if state in ('reserved', 'review'):
-                await core.settle(engine, **payload)
+                await core.settle(engine, payload['request_id'], payload.get('evidence', {}))
             await discard_completed(engine, path, payload['request_id'])
+        except (ValueError, KeyError, TypeError):
+            quarantine = path.parent / 'quarantine'
+            quarantine.mkdir(exist_ok=True, mode=0o700)
+            path.replace(quarantine / path.name)
+            logging.getLogger(__name__).error('Invalid commercial journal quarantined: %s', path.stem)
         except Exception:
             logging.getLogger(__name__).error("Commercial settlement recovery pending: %s", path.stem)
-    async with engine.connect() as c:
-        pending = select(resolutions).join(
-            requests, requests.c.id == resolutions.c.request_id
-        ).where(requests.c.status.in_(('reserved', 'review')))
-        decisions = (await c.execute(pending)).mappings().all()
-    for decision in decisions:
-        try:
-            if decision['action'] == 'waive':
-                await core.settle(engine, decision['request_id'], failed=True)
-        except Exception:
-            logging.getLogger(__name__).error('Commercial resolution recovery pending: %s', decision['request_id'])
+    import time
+    archive = Path(get_settings().COMMERCIAL_RECOVERY_DIR) / 'review'
+    for old in archive.glob('*.json'):
+        if old.stat().st_mtime < time.time() - 30*86400:
+            old.unlink(missing_ok=True)
     # A hard execution deadline is enforced by the wrapper. After a generous
     # grace interval, orphan reservations become review cases, never auto-refunded.
     from sqlalchemy import update
     async with engine.begin() as c:
-        await c.execute(update(requests).where(requests.c.status == 'reserved', requests.c.created_at < core.now()-10800).values(status='review', updated_at=core.now()))
+        stale = (await c.execute(select(requests.c.id).where(requests.c.status == 'reserved', requests.c.updated_at < core.now()-10800).order_by(requests.c.updated_at, requests.c.id).limit(100).with_for_update(skip_locked=True))).scalars().all()
+        if stale:
+            await c.execute(update(requests).where(requests.c.id.in_(stale), requests.c.status == 'reserved').values(status='review', updated_at=core.now()))
 
 class CommercialPrivacyMiddleware:
     """Keep redaction active through authentication, error handlers and response send."""
@@ -269,3 +286,21 @@ class CommercialPrivacyMiddleware:
             await self.app(scope, receive, send)
         finally:
             request_id.reset(token)
+
+
+def complete_usage(body):
+    """Validate complete non-stream usage before normalized/coerced counters."""
+    if isinstance(body, (str, bytes, bytearray)):
+        try:
+            body = json.loads(body)
+        except (ValueError, UnicodeDecodeError):
+            return False
+    if not isinstance(body, dict) or not isinstance(body.get('usage'), dict):
+        return False
+    usage = body['usage']
+    if any(type(usage[k]) is not int or usage[k] < 0 for k in ('cache_read_input_tokens', 'cache_creation_input_tokens') if k in usage):
+        return False
+    for inp, out in (('prompt_tokens', 'completion_tokens'), ('input_tokens', 'output_tokens')):
+        if all(type(usage.get(k)) is int and usage[k] >= 0 for k in (inp, out)):
+            return True
+    return False

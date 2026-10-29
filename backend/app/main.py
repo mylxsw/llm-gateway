@@ -161,6 +161,7 @@ async def app_error_handler(request: Request, exc: AppError):
     return JSONResponse(
         status_code=exc.status_code,
         content=exc.to_dict(include_details=include_details),
+        headers=getattr(exc, 'headers', None),
     )
 
 

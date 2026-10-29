@@ -241,7 +241,7 @@ class ProxyService:
             if log_data.usage_details:
                 flags = {
                     k: v for k, v in log_data.usage_details.items()
-                    if k in ("interrupted", "final_usage", "stream_started") and type(v) is bool
+                    if k in ("interrupted", "final_usage", "stream_started", "response_complete") and type(v) is bool
                 }
                 allowed = {"input_tokens", "output_tokens", "total_tokens", "source", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
                 log_data.usage_details = {k: v for k, v in log_data.usage_details.items() if k in allowed and ((k == "source" and v in ("upstream", "mixed", "estimated")) or (k != "source" and type(v) is int and v >= 0))}
@@ -1127,7 +1127,7 @@ class ProxyService:
         # 9. Calculate Output Token and usage details
         output_tokens = 0
         usage_details: Optional[dict[str, Any]] = None
-        if result.success and result.response.body:
+        if (result.success or commercial_user_id) and result.response.body:
             upstream_body = conversion_data.get("upstream_response_body")
             details = None
             try:
@@ -1221,6 +1221,9 @@ class ProxyService:
         # Extract cached tokens from usage details
         cached_input_tokens = None
         cache_creation_input_tokens = None
+        if commercial_user_id and usage_details:
+            from app.services.commercial import complete_usage
+            usage_details['response_complete'] = complete_usage(conversion_data.get('upstream_response_body') or result.response.body)
         if usage_details:
             cached_input_tokens = (
                 usage_details.get("cache_read_input_tokens")
@@ -1611,21 +1614,27 @@ class ProxyService:
 
                     async for event in process_chunk(first_chunk):
                         yield event
-                    async for chunk, resp in upstream_gen:
-                        if not resp.is_success:
-                            # first_resp is the same object surfaced as initial_response;
-                            # mutate it so final stream logging records the failure.
-                            first_resp.status_code = resp.status_code
-                            first_resp.headers.update(resp.headers)
-                            first_resp.error = resp.error or "Upstream stream interrupted"
-                            first_resp.body = resp.body
-                            first_resp.total_time_ms = resp.total_time_ms
-                            raise ServiceError(
-                                message=first_resp.error,
-                                code="upstream_stream_failed",
-                            )
-                        async for event in process_chunk(chunk):
-                            yield event
+                    try:
+                        async for chunk, resp in upstream_gen:
+                            if not resp.is_success:
+                                # first_resp is the same object surfaced as initial_response;
+                                # mutate it so final stream logging records the failure.
+                                first_resp.status_code = resp.status_code
+                                first_resp.headers.update(resp.headers)
+                                first_resp.error = resp.error or "Upstream stream interrupted"
+                                first_resp.body = resp.body
+                                first_resp.total_time_ms = resp.total_time_ms
+                                raise ServiceError(
+                                    message=first_resp.error,
+                                    code="upstream_stream_failed",
+                                )
+                            async for event in process_chunk(chunk):
+                                yield event
+                    except Exception as exc:
+                        if commercial_user_id:
+                            import httpx
+                            stream_conversion_data['interrupted'] = isinstance(exc, (TimeoutError, httpx.TimeoutException))
+                        raise
 
                     # Flush any remaining data in buffer (incomplete event)
                     if event_buffer:
@@ -1677,6 +1686,9 @@ class ProxyService:
                                 yield hooked_out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
+                    if commercial_user_id:
+                        import httpx
+                        stream_conversion_data['interrupted'] = stream_conversion_data.get('interrupted', False) or isinstance(e, (TimeoutError, httpx.TimeoutException))
                     if first_resp.is_success:
                         first_resp.status_code = 502
                     first_resp.error = err
@@ -1956,11 +1968,11 @@ class ProxyService:
                     usage_result = upstream_result
                 usage_details = usage_result.usage_details
                 if usage_result.input_tokens is not None:
-                    if commercial_user_id and (stream_error or not initial_response.is_success or not usage_result.final_usage):
+                    if commercial_user_id and not usage_result.final_usage:
                         input_tokens = max(input_tokens or 0, usage_result.input_tokens)
                     else:
                         input_tokens = usage_result.input_tokens
-                if commercial_user_id and (stream_error or not initial_response.is_success or not usage_result.final_usage):
+                if commercial_user_id and not usage_result.final_usage:
                     usage_result.output_tokens = max(usage_result.output_tokens, usage_result.estimated_output_tokens)
                     if usage_details:
                         usage_details.update(
@@ -1990,7 +2002,7 @@ class ProxyService:
                         usage_details.get("output_tokens") or 0
                     )
                 if commercial_user_id:
-                    usage_details["interrupted"] = stream_interrupted
+                    usage_details["interrupted"] = stream_interrupted or stream_conversion_data.get('interrupted', False)
                     usage_details["final_usage"] = usage_result.final_usage
                     usage_details["stream_started"] = stream_started
                 total_time_ms = initial_response.total_time_ms

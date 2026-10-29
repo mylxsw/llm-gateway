@@ -126,7 +126,7 @@ async def create_message(
             )
             
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         # Unexpected errors return 500
         import logging
@@ -161,7 +161,7 @@ async def count_message_tokens(
         input_tokens = token_counter.count_request(body, model)
         return JSONResponse(content={"input_tokens": input_tokens})
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         import logging
 
