@@ -110,3 +110,20 @@ async def set_global_margin(c, value, actor, reason):
     names = (await c.execute(select(models.c.requested_model).order_by(models.c.requested_model))).scalars().all()
     for name in names:
         await sync_price(c, name, actor, reason)
+
+
+def quote_order(package, settings_snapshot):
+    """Freeze rational FX and package bonuses without binary floating point."""
+    usd = settings_snapshot['usd_cny']
+    credits = settings_snapshot['credits_per_cny']
+    cents = integer(package['amount_usd_cents'], minimum=1)
+    bonus_bps = integer(package['bonus_bps'], maximum=10000)
+    for ratio in (usd, credits):
+        integer(ratio['numerator'], minimum=1, maximum=10**9)
+        integer(ratio['denominator'], minimum=1, maximum=10**9)
+    minor = integer((cents * usd['numerator'] + usd['denominator']-1) // usd['denominator'])
+    base = integer(cents * usd['numerator'] * credits['numerator'] * 10**6 //
+                   (100 * usd['denominator'] * credits['denominator']))
+    bonus = integer(base * bonus_bps // 10000)
+    integer(base + bonus)
+    return minor, base, bonus

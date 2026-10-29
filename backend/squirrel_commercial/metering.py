@@ -195,6 +195,11 @@ async def settle(engine, request_id, evidence=None):
 
 
 async def resolve_review(engine, request_id, action, input_tokens=None, output_tokens=None, *, actor, reason, reference):
+    async with engine.begin() as c:
+        return await resolve_review_in_transaction(c, request_id, action, input_tokens, output_tokens, actor=actor, reason=reason, reference=reference)
+
+
+async def resolve_review_in_transaction(c, request_id, action, input_tokens=None, output_tokens=None, *, actor, reason, reference):
     from .core import account_lock, add_audit, now
     if not actor or not reason or action not in ('waive', 'charge'):
         raise BillingError('invalid_resolution', 400)
@@ -203,23 +208,22 @@ async def resolve_review(engine, request_id, action, input_tokens=None, output_t
     elif input_tokens is not None or output_tokens is not None:
         raise BillingError('invalid_resolution', 400)
     decision = fingerprint([action, input_tokens, output_tokens, actor, reason, reference])
-    async with engine.begin() as c:
-        r = (await c.execute(select(requests).where(requests.c.id == request_id))).mappings().first()
-        if r is None:
-            raise BillingError('request_not_found', 404)
-        await account_lock(c, r['account_id'])
-        r = (await c.execute(select(requests).where(requests.c.id == request_id))).mappings().one()
-        old = (await c.execute(select(resolutions).where(resolutions.c.request_id == request_id))).mappings().first()
-        if old:
-            if old['decision_hash'] != decision:
-                raise BillingError('resolution_conflict', 409)
-            return
-        if r['status'] != 'review':
-            raise BillingError('request_not_in_review', 409)
-        await reference_lock(c, 'resolution:' + reference if len(reference) <= 89 else reference)
-        if await c.scalar(select(resolutions.c.request_id).where(resolutions.c.reference == reference)):
-            raise BillingError('resolution_reference_conflict', 409)
-        await c.execute(insert(resolutions).values(request_id=request_id, action=action, input_tokens=input_tokens,
-            output_tokens=output_tokens, actor=actor, reason=reason, reference=reference, decision_hash=decision, applied_at=now(), created_at=now()))
-        await finish(c, r, (input_tokens or 0, output_tokens or 0), cancelled=action == 'waive')
-        await add_audit(c, actor, 'resolve_'+action, request_id, reason)
+    r = (await c.execute(select(requests).where(requests.c.id == request_id))).mappings().first()
+    if r is None:
+        raise BillingError('request_not_found', 404)
+    await account_lock(c, r['account_id'])
+    r = (await c.execute(select(requests).where(requests.c.id == request_id))).mappings().one()
+    old = (await c.execute(select(resolutions).where(resolutions.c.request_id == request_id))).mappings().first()
+    if old:
+        if old['decision_hash'] != decision:
+            raise BillingError('resolution_conflict', 409)
+        return
+    if r['status'] != 'review':
+        raise BillingError('request_not_in_review', 409)
+    await reference_lock(c, 'resolution:' + reference if len(reference) <= 89 else reference)
+    if await c.scalar(select(resolutions.c.request_id).where(resolutions.c.reference == reference)):
+        raise BillingError('resolution_reference_conflict', 409)
+    await c.execute(insert(resolutions).values(request_id=request_id, action=action, input_tokens=input_tokens,
+        output_tokens=output_tokens, actor=actor, reason=reason, reference=reference, decision_hash=decision, applied_at=now(), created_at=now()))
+    await finish(c, r, (input_tokens or 0, output_tokens or 0), cancelled=action == 'waive')
+    await add_audit(c, actor, 'resolve_'+action, request_id, reason)
