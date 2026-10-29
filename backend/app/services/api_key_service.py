@@ -255,12 +255,6 @@ class ApiKeyService:
                 code="invalid_api_key",
             )
         
-        if not api_key.is_active:
-            raise AuthenticationError(
-                message="API Key is disabled",
-                code="api_key_disabled",
-            )
-        
         from app.config import get_settings
         settings = get_settings()
         if api_key.key_value.startswith("sha256:"):
@@ -272,9 +266,18 @@ class ApiKeyService:
                 try:
                     await key_state(c, api_key.id)
                 except BillingError as exc:
+                    if exc.code in ("account_blocked", "application_suspended"):
+                        from app.services.commercial import translate
+                        raise translate(exc) from exc
                     raise AuthenticationError(message=exc.code, code=exc.code) from exc
         elif settings.COMMERCIAL_ENABLED and settings.COMMERCIAL_ONLY:
             raise AuthenticationError(message="Commercial key required", code="commercial_key_required")
+
+        if not api_key.is_active:
+            raise AuthenticationError(
+                message="API Key is disabled",
+                code="api_key_disabled",
+            )
 
         # Update last used time
         try:

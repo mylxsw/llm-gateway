@@ -29,6 +29,10 @@ async def main():
     assert 'commercial_user_id' not in columns
     assert not hasattr(RequestLog, 'commercial_user_id')
     assert 'commercial_user_id' not in str(app.openapi())
+    assert '/v1/credits' not in app.openapi()['paths']
+    import httpx
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        assert (await client.get('/v1/credits')).status_code == 404
     status = await auth_status(authorization=None, x_admin_token=None)
     assert set(status.model_dump()) == {'enabled','authenticated','enable_view_api_keys'}
     async with AsyncSessionLocal() as session:

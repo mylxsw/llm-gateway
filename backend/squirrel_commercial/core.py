@@ -101,10 +101,25 @@ async def set_key_monthly_limit_in_transaction(c, account_id, key_id, monthly_li
         after={'monthly_limit_microcredits': monthly_limit_microcredits})
 
 
-async def key_state(c, key_id):
+async def key_state(c, key_id, required_scope=None):
     result = (await c.execute(select(keys, accounts.c.blocked).join(accounts, accounts.c.id == keys.c.account_id).where(keys.c.api_key_id == key_id))).mappings().first()
-    if not result or result['revoked'] or result['paused'] or result['blocked']:
+    if not result or result['revoked'] or result['paused']:
         raise BillingError('commercial_key_disabled')
+    if result['blocked']:
+        raise BillingError('account_blocked')
+    if result['source'] == 'oauth':
+        grant = (await c.execute(select(oauth_grants).where(
+            oauth_grants.c.id == result['oauth_grant_id']))).mappings().first()
+        if not grant or grant['revoked_at'] is not None or grant['active_key_id'] != key_id or grant['account_id'] != result['account_id']:
+            raise BillingError('oauth_grant_disabled')
+        app = (await c.execute(select(oauth_apps).where(
+            oauth_apps.c.id == grant['app_id']))).mappings().first()
+        if app and app['status'] == 'suspended':
+            raise BillingError('application_suspended')
+        if not app or (app['status'] != 'verified' and app['owner_account_id'] != result['account_id']):
+            raise BillingError('oauth_grant_disabled')
+        if required_scope and required_scope not in grant['scope'].split():
+            raise BillingError('insufficient_scope')
     return result
 
 async def user_key_action(engine, account_id, key_id, action):

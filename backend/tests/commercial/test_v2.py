@@ -128,7 +128,7 @@ async def test_oauth_grant_month_survives_rotation_and_suspension(billing):
         await core.reserve(billing,'oauth-old',kid,'model',1,1)
     async with billing.begin() as c:
         await c.execute(update(oauth_apps).values(status='suspended'))
-    with pytest.raises(core.BillingError,match='oauth_grant_disabled'):
+    with pytest.raises(core.BillingError,match='application_suspended'):
         await core.reserve(billing,'oauth-c',new,'model',1,1)
 
 

@@ -71,7 +71,7 @@ async def test_suspend_and_restore_at_gateway_reservation(oauth_app):
     async with engine.begin() as c:
         await app_lock(c)
         await c.execute(update(oauth_apps).values(status="suspended"))
-    with pytest.raises(core.BillingError, match="oauth_grant_disabled"):
+    with pytest.raises(core.BillingError, match="application_suspended"):
         await core.reserve(engine, "after", g["active_key_id"], "model", 1, 1)
     await core.settle(
         engine,

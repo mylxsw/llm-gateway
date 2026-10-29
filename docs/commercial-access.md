@@ -14,6 +14,20 @@ Reserve reads all price sources and the immutable version in one MVCC statement,
 
 Use `create_account_in_transaction` to create an empty account and regular/welcome buckets, and `credit_in_transaction` to add funds alongside a payment transaction. `credit(engine, ...)` owns its transaction. `eligibility='welcome'` is exclusively for welcome funds; purchases, bonuses and compensation use the default regular bucket. Credit references are globally unique and retries with different parameters return 409. Every balance/debt change has a ledger event; old v1 amount columns remain untouched and new v2 rows fill required old amounts with zero. Reports must select columns by protocol version.
 
+## Credit resource
+
+With commercial access enabled, `GET /v1/credits` accepts a commercial Key through
+`Authorization: Bearer` or `x-api-key`. OAuth grants require `credits:read`; manual
+Keys allow this by default. The response contains `balance`, `reserved`, `available`,
+`debt`, `monthly_limit`, `month_settled` and `month_reserved`, all integer microcredit
+strings except a nullable unlimited `monthly_limit`. Available credit is balance
+minus reservations. Unverified developer apps see only the regular funding bucket.
+Month counters use UTC and belong to the grant for OAuth Keys, surviving rotation.
+
+Recognized Keys on blocked accounts return 403 `account_blocked`; suspended OAuth
+apps return 403 `application_suspended`. Unknown Keys still return 401. When
+`COMMERCIAL_ENABLED=false`, the route is absent from both HTTP and OpenAPI.
+
 ## Requests, monthly limits and evidence
 
 Commercial requests support text `/v1/chat/completions` and `/v1/messages`, one completion, no tools/media. Exactly one positive `max_tokens` or `max_completion_tokens` is required. There is no per-call input/output Token cap. The versioned estimator counts actual messages/system text with the model tokenizer when available; fallback counts ASCII runs as ceil(length/3), every other code point as 2, adds 16 per message plus 32 framing, then rounds 120% upward. Metadata and JSON byte length are excluded.
