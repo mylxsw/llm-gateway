@@ -1,41 +1,58 @@
-# Optional commercial access (schema v1)
+# Optional commercial access (schema/protocol v2)
 
-Disabled by default. The gateway remains independently usable without private portal code.
+Disabled by default. The gateway remains independently usable without private portal code. `COMMERCIAL_ENABLED=false` never reads commercial tables. A commercial deployment requires PostgreSQL, explicit administrator authentication and `COMMERCIAL_ENABLED=true`; use `COMMERCIAL_ONLY=true` to reject ordinary public API Keys.
 
-Set `COMMERCIAL_ENABLED=true`, `COMMERCIAL_ONLY=true`, PostgreSQL database configuration, and administrator credentials to run a dedicated commercial gateway. Initialize the gateway schema, then explicitly run `python -m squirrel_commercial.migrate` from backend. Startup checks the shared schema version. The Docker image includes the public shared Python package.
+Initialize the gateway schema first, then a **fresh** commercial database with `python -m squirrel_commercial.migrate`. Existing v1 installations must use the explicit maintenance migration below. Startup requires schema=2, protocol=2 and unit=microcredit. Deploy the private portal/worker with the same shared package version (2.0.0); v1 writers must never run against v2.
 
-## Shared database contract
+## Units, pricing and transaction contract
 
-The `squirrel_commercial` package owns generic accounts, key associations, price versions, request reservations, ledger entries, audit records and operator resolution requests. It contains no payment provider or private login implementation. A separate portal may use this package and the same database; no portal RPC occurs during inference.
+All amounts are integer microcredits (1 Credit = 1,000,000). Prices are microcredits per million tokens. `quote_rate(base_nano_usd, margin_bps)` computes the model-level USD base price × 70 × (1+margin), rounded upward to 0.01 Credit. A model override wins over the global margin (default 3000 basis points). `cost` rounds the combined input/output charge once. Cached tokens are already included in input usage.
 
-- `api_keys.id` remains the log identity. Commercial secrets start with `sqb-`; only SHA-256 digests are persisted in `api_keys.key_value`. Digest strings cannot authenticate as bearer tokens.
-- `billing_keys.account_id` identifies the payer. A commercial account is not a gateway administrator or resource owner.
-- The deployment has one global resource pool. This feature does not add resource multi-tenancy.
-- Money uses integer micro-CNY; price rates are micro-CNY per million tokens. Each request snapshots rates and rounds the combined charge upward once to a micro-CNY.
-- Account-row transactions serialize reservations, payments and refunds. Model calls run outside database transactions. A request ledger ID is globally unique, so settlement retries cannot debit twice.
-- Commercial user identity is saved separately from caller-supplied `X-User-ID`. Log list and statistics support exact `commercial_user_id` filtering.
-- Deleting a commercial key marks it revoked and retains its historical identity. User pause cannot undo administrator disable. Commercial keys cannot acquire MCP admin rights, reveal their original secret, or use log replay.
+`configure_price(connection, model, margin_bps=..., sales_enabled=..., actor=..., reason=...)`, `set_global_margin(connection, ...)` and `sync_price(connection, ...)` publish immutable versions. These accept the caller's transaction; the private portal must use them for configuration writes. Gateway model edits publish before commit; recovery synchronizes directly edited sources in bounded pages. Only active `chat` models with nonnegative base prices, `token_flat` billing and sales enabled are sellable. Alias prices never inherit from a target. `/v1/models` uses the same sale checks as reservation.
 
-## Request policy
+Reserve reads all price sources and the immutable version in one MVCC statement, without price locks. A missing or mismatched version returns `price_sync_pending` (503) without calling the upstream. Settle and operator review use the request's frozen rates. Lock order: price settings → model → price config; financial transactions: OAuth app → account → grant/Key → month → request. Model calls run outside database transactions.
 
-Initial interfaces: text chat completions and Anthropic messages, with explicit positive output-token limits; no tools, media, multiple completions or other endpoints. `/v1/models` filters to sale-enabled models. Cache input counts toward total input at the normal input rate.
+Use `create_account_in_transaction` to create an empty account and regular/welcome buckets, and `credit_in_transaction` to add funds alongside a payment transaction. `credit(engine, ...)` owns its transaction. `eligibility='welcome'` is exclusively for welcome funds; purchases, bonuses and compensation use the default regular bucket. Credit references are globally unique and retries with different parameters return 409. Every balance/debt change has a ledger event; old v1 amount columns remain untouched and new v2 rows fill required old amounts with zero. Reports must select columns by protocol version.
 
-Input budget uses a conservative UTF-8 estimate plus framing allowance. Complete streams use final upstream usage; interrupted or incomplete streams use the larger of reported usage and local estimates for each token count. A zero completion count is valid. An unsuccessful initial upstream response cancels the reservation without charge. After a successful stream starts, failures with measured usage are charged; failures without usage and charges above the reservation enter `review`. Review accounts cannot authorize further calls until the pending case is resolved. A blocked account fails all keys. Each account has at most eight outstanding requests and sixty authorizations per minute.
+## Requests, monthly limits and evidence
 
-Commercial key detail logging defaults to false in the shared creator. The gateway ignores caller-provided defaults and reads the actual key setting. Only explicit administrator key updates enable details. Diagnostics are redacted in commercial request context, including stream processing; free-form upstream errors and arbitrary usage payloads are not saved to commercial logs. Metadata and billing remain available when payload logging is off.
+Commercial requests support text `/v1/chat/completions` and `/v1/messages`, one completion, no tools/media. Exactly one positive `max_tokens` or `max_completion_tokens` is required. There is no per-call input/output Token cap. The versioned estimator counts actual messages/system text with the model tokenizer when available; fallback counts ASCII runs as ceil(length/3), every other code point as 2, adds 16 per message plus 32 framing, then rounds 120% upward. Metadata and JSON byte length are excluded.
 
-Commercial OpenAI streams request `stream_options.include_usage=true` after protocol conversion. For a provider that explicitly rejects this parameter, set `provider_options.supports_stream_usage=false`; incomplete usage then falls back to local estimates. Upstream usage is trusted only after an OpenAI final usage chunk or Anthropic `message_delta` followed by `message_stop`, including when protocols are converted.
+Manual Keys use their own UTC month bucket; OAuth Keys use the persistent grant bucket, including across Key rotations. `settled + reserved + new reservation` must fit `monthly_limit_microcredits`; NULL is unlimited and zero prevents spending. Review reservations remain frozen in their original month. Accounts allow eight active reservations and sixty new requests/minute; review does not consume concurrency. Request ID retries are parameter-checked and idempotent; the gateway generates IDs internally.
 
-Admin Playground and Retry reject logs associated with hashed commercial keys with HTTP 403, preserving the administrator session. Admin model tests explicitly bypass commercial-only restrictions and never reserve or charge customer funds.
+`settle(engine, request_id, UsageEvidence(...))` accepts explicit upstream/termination evidence. OpenAI Chat Completions SSE needs final usage followed by `[DONE]`; Anthropic needs final `message_delta` usage and `message_stop`. Complete nonstream responses must contain nonnegative integer usage. Zero output is valid. HTTP error status alone never proves no work was done. A confirmed local rejection (`sent_upstream=False`) cancels with zero charge. Explicit disconnect/cancel/timeout charges the per-dimension maximum of reported and estimated usage, including the original input estimate; it estimates only observed output. Other incomplete/ambiguous responses enter review and freeze only their own reservation.
 
-## Recovery and operations
+`resolve_review(engine, request_id, 'charge'|'waive', input_tokens=..., output_tokens=..., actor=..., reason=..., reference=...)` atomically records the decision, audit and settlement. Charge requires verified nonnegative usage; waive takes no tokens. Identical retries are no-ops, conflicting decisions return 409, and late upstream evidence cannot override the result.
 
-`COMMERCIAL_RECOVERY_DIR` must be a writable persistent volume. Before final settlement, the gateway writes a body-free recovery record, flushes it, then commits the ledger. A scheduled job retries records still reserved or under review. Settled records are removed; review records move into the recovery volume’s `review/` directory for investigation. Startup probes use `.probe` files and are excluded from settlement recovery. Loss of this volume may leave unconfirmed use requiring manual review, not automatic free settlement.
+A charge can exceed its reservation. It consumes only funds not reserved by other requests and records the shortfall as debt. The full charge counts toward that original month's usage. Settlement/release/credit and subsequent reservations offset idle eligible funds against debt with a separate idempotent ledger event, without counting consumption twice. Debt blocks further spending after eligible offsets. Unverified OAuth uses only regular funds; its debt remains regular-only even if the application is later verified. Welcome funds cannot repay that debt.
 
-Nonstream work and streaming iteration each have a one-hour deadline. Orphan reservations older than three hours enter review rather than being refunded while they might still execute. Operators can enqueue a waiver in `billing_resolutions`; only the gateway recovery worker applies it. Explicit disconnects, cancellations and timeouts settle from available usage and local estimates. Nonstream cancellation while waiting for a response uses the input estimate and zero output because no output estimate is available. Response cleanup also settles streams that were never consumed. Recovery applies each pending operator decision independently.
+## Privacy and recovery
 
-Log retention is not billing retention. Never delete ledger data while pruning diagnostics. Watch pending recovery files, review requests and reserved amounts. Infrastructure backups must cover both the database and recovery volume. Test rollback by stopping new traffic and draining in-flight requests before downgrading; schema version mismatch fails closed.
+`api_keys.id` remains the log identity. Secrets begin `sqb-`; only SHA-256 digests are persisted and digest strings cannot authenticate. Commercial accounts do not confer gateway administrator rights. Pausing/resuming cannot undo administrator disable. Key deletion retains historical identity. Playground/Retry reject commercial logs even after revocation. Authenticated admin model tests bypass customer billing.
 
-Commercial mode disabled: normal keys retain existing behavior; `sqb-` keys fail authentication. Commercial-only enabled: ordinary keys cannot bypass payment via public model routes. PostgreSQL and explicit admin authentication are required at commercial startup.
+Detail logging defaults off and follows the actual Key setting. Diagnostics redact free-form errors and arbitrary usage payloads. `COMMERCIAL_RECOVERY_DIR` must be a writable persistent volume. The gateway fsyncs body-free v2 journals before settlement. Recovery processes at most 100 journals per pass, isolates malformed/incompatible journals into `quarantine/`, archives review evidence for 30 days, and deletes terminal journals. `.probe` files are excluded. Reservations untouched for three hours enter review. Decisions apply synchronously through the shared API, never via ad hoc SQL insertion.
 
-Tests: `python -m pytest tests/commercial -q` from backend. Optional `BILLING_TEST_DATABASE_URL` exercises a dedicated PostgreSQL database using temporary isolated schemas. Full regression tests remain required for changes to proxy behavior.
+Nonstream and stream execution have one-hour deadlines. The response owns its finalizer in ASGI try/finally, including disconnect before first iteration; cleanup closes the upstream and shields settlement. Database failures leave journal evidence for recovery. Billing history is retained independently of log retention.
+
+## Maintenance migration
+
+Stop new commercial traffic and portal writes/workers; ordinary traffic can continue. Drain all v1 reserved/review requests and journals using v1. Resolve old refunds and close/expire unpaid orders at the provider. Back up the database and recovery volume and verify restoration. Reconcile v1 account balances with ledger totals; documented opening adjustments must be recorded explicitly before upgrade.
+
+From backend, using the configured `DATABASE_URL`:
+
+```sh
+python -m squirrel_commercial.migrate --from-version 1 --to-version 2 --dry-run
+python -m squirrel_commercial.migrate --from-version 1 --to-version 2 --apply --backup-ref VERIFIED_BACKUP_ID
+```
+
+The advisory-locked DDL transaction preserves old columns, snapshots old financial rows/checksums, adds v2 tables/columns/indexes/checks, and converts old balances, request amounts/rates and ledger amounts ×10. Historical funds go into regular, welcome/debt start at zero, and migrated Keys have unlimited manual monthly limits. A zero-value migration ledger event records each account's conversion. The schema/protocol pointer advances last. Failure rolls back; repeated apply never multiplies twice. The package refuses outstanding requests, reservations, refunds/orders, overflow, duplicate active Key names or unreconciled money.
+
+Migrate the private portal separately before reopening traffic. Before reopening, rollback means restoring pre-upgrade software/data under maintenance; old columns are intact. Once v2 money or OAuth writes exist, never downgrade to v1 or divide balances by 10. Restore a verified full backup and reconcile external events, or fix forward with v2.
+
+Run `python -m pytest` from backend. Set `BILLING_TEST_DATABASE_URL` to an isolated PostgreSQL database to exercise real locks using disposable test schemas. Test both `COMMERCIAL_ENABLED=false` and `true`.
+
+Manual Key creation accepts `monthly_limit_microcredits=None` (unlimited), zero (no spending), or a nonnegative BIGINT. `set_key_monthly_limit(engine, account_id, key_id, limit, actor=..., reason=...)` checks ownership under the account lock, records the old/new limit in audit, and preserves existing monthly usage/reservations. OAuth limits belong to the grant and must be updated by the grant service.
+
+A Responses stream terminates with `response.completed` containing complete integer usage; it does not require `[DONE]`. Chat Completions still requires final usage plus `[DONE]`. An upstream error with neither output nor reported usage cancels at zero cost. Provider-detected transport timeouts carry explicit interruption evidence and settle from estimates; an HTTP 504 returned by the upstream does not by itself prove a transport timeout. Successful responses missing usage, and partial output without complete evidence, remain in review.
+
+Gemini streaming termination evidence is not yet validated for automatic commercial settlement and can leave reservations in review. JEV currently rejects streaming requests; use OpenAI Chat Completions, Responses, or Anthropic for automatic stream settlement. Tokenizer initialization runs outside the event loop and falls back to `unicode-v1` if loading fails, including offline deployments.

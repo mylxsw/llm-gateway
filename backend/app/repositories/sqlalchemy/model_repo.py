@@ -50,6 +50,16 @@ class SQLAlchemyModelRepository(ModelRepository):
 
     async def _commit_with_alias_integrity(self, operation: str) -> None:
         try:
+            from app.config import get_settings
+            if get_settings().COMMERCIAL_ENABLED and operation != 'delete':
+                from squirrel_commercial.schema import settings
+                from squirrel_commercial.pricing import sync_price
+                connection = await self.session.connection()
+                await connection.execute(select(settings).where(settings.c.key == 'pricing.global_margin_bps').with_for_update())
+                changed = sorted({obj.requested_model for obj in self.session.new | self.session.dirty if isinstance(obj, ModelMappingORM)})
+                await self.session.flush()
+                for name in changed:
+                    await sync_price(connection, name)
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()

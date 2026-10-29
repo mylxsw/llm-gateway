@@ -46,10 +46,16 @@ async def list_models(
         )
         if get_settings().COMMERCIAL_ENABLED and api_key.key_value.startswith("sha256:"):
             from app.db.session import engine
-            from squirrel_commercial.schema import prices
-            from sqlalchemy import select
+            from squirrel_commercial.pricing import read_price
+            from squirrel_commercial.core import BillingError
             async with engine.connect() as c:
-                allowed = set((await c.execute(select(prices.c.model).where(prices.c.enabled == True))).scalars())
+                allowed = set()
+                for item in items:
+                    try:
+                        await read_price(c, item.requested_model)
+                    except BillingError:
+                        continue
+                    allowed.add(item.requested_model)
             items = [item for item in items if item.requested_model in allowed]
         return {
             "object": "list",
@@ -63,7 +69,7 @@ async def list_models(
             ],
         }
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
 
 
 async def _handle_proxy_request_with_body(
@@ -167,7 +173,7 @@ async def _handle_proxy_request_with_body(
         )
 
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         # Unexpected errors return 500
         import logging
@@ -488,7 +494,7 @@ async def _handle_proxy_request_openai_responses(
         )
 
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         import logging
 

@@ -1,3 +1,4 @@
+from conftest import settle_usage
 import asyncio
 import pytest
 from sqlalchemy import insert, select, text, update
@@ -39,10 +40,10 @@ async def test_concurrent_reservation_and_once_only_settlement(billing):
     result=await asyncio.gather(reserve('one'),reserve('two'))
     assert sum(v is not None for v in result)==1
     rid=next(v for v in result if v)
-    await asyncio.gather(core.settle(billing,rid,50,20),core.settle(billing,rid,50,20))
+    await asyncio.gather(settle_usage(billing,rid,50,20),settle_usage(billing,rid,50,20))
     async with billing.connect() as c:
         a=(await c.execute(select(accounts).where(accounts.c.id=='alice'))).mappings().one()
-        assert a['balance']==910 and a['reserved']==0
+        assert a['balance_microcredits']==910 and a['reserved_microcredits']==0
         assert len((await c.execute(select(ledger))).all())==1
 
 async def test_price_snapshot_unknown_and_credit_idempotency(billing):
@@ -50,16 +51,16 @@ async def test_price_snapshot_unknown_and_credit_idempotency(billing):
     await core.reserve(billing,'one',kid,'model',100,100)
     async with billing.begin() as c:
         await c.execute(update(prices).values(input_rate=9000000,version=2))
-    await core.settle(billing,'one')
+    await settle_usage(billing,'one')
     async with billing.connect() as c:
         assert await c.scalar(select(requests.c.status))=='review'
-    await core.settle(billing,'one',10,10)
+    await settle_usage(billing,'one',10,10)
     await core.credit(billing,'alice',100,'payment:test')
     await core.credit(billing,'alice',100,'payment:test')
     with pytest.raises(core.BillingError):
         await core.credit(billing,'bob',100,'payment:test')
     async with billing.connect() as c:
-        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==1070
+        assert await c.scalar(select(accounts.c.balance_microcredits).where(accounts.c.id=='alice'))==1070
 
 async def test_digest_not_a_bearer_secret(billing, monkeypatch):
     from app.config import get_settings
@@ -106,7 +107,7 @@ async def test_gateway_key_lifecycle_and_logging_policy(billing,monkeypatch):
             await service.authenticate(token)
     a=account_id.set('alice'); r=request_id.set('request-test')
     try:
-        log=RequestLogCreate(request_time=utc_now(),trace_id='request-test',error_info='PRIVATE-ERROR',usage_details={'source':'upstream','raw_usage':{'secret':'no'},'input_tokens':20})
+        log=RequestLogCreate(request_time=utc_now(),trace_id='request-test',error_info='PRIVATE-ERROR',usage_details={'source':'upstream','response_complete':True,'raw_usage':{'secret':'no'},'input_tokens':20})
         proxy=ProxyService(None,None,None)
         await proxy._commercial_log_identity(log)
         assert log.commercial_user_id=='alice' and 'PRIVATE' not in log.error_info
@@ -117,18 +118,16 @@ async def test_gateway_key_lifecycle_and_logging_policy(billing,monkeypatch):
     finally:
         account_id.reset(a);request_id.reset(r)
 
-async def test_blocking_unknown_usage_and_overage(billing):
+async def test_overage_settles_and_records_debt(billing):
     kid,_=await core.create_key(billing,'alice','Laptop')
     await core.reserve(billing,'one',kid,'model',10,10)
-    await core.settle(billing,'one',1000,1000)
+    await settle_usage(billing,'one',1000,1000)
     async with billing.connect() as c:
-        assert await c.scalar(select(requests.c.status).where(requests.c.id=='one'))=='review'
-        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==1000
-    with pytest.raises(core.BillingError):
+        row=(await c.execute(select(accounts).where(accounts.c.id=='alice'))).mappings().one()
+        assert row['balance_microcredits']==0 and row['debt_microcredits']==2000
+        assert await c.scalar(select(requests.c.status).where(requests.c.id=='one'))=='settled'
+    with pytest.raises(core.BillingError, match='debt_outstanding'):
         await core.reserve(billing,'two',kid,'model',10,10)
-    await core.settle(billing,'one',failed=True)
-    async with billing.connect() as c:
-        assert await c.scalar(select(accounts.c.reserved).where(accounts.c.id=='alice'))==0
 
 async def test_recovery_journal_survives_database_failure(billing,monkeypatch,tmp_path):
     import app.db.session as database
@@ -141,7 +140,7 @@ async def test_recovery_journal_survives_database_failure(billing,monkeypatch,tm
     monkeypatch.setattr(get_settings(),'COMMERCIAL_RECOVERY_DIR',str(tmp_path/'recovery'))
     kid,_=await core.create_key(billing,'alice','test')
     await core.reserve(billing,'durable',kid,'model',100,100)
-    log=RequestLogCreate(request_time=utc_now(),trace_id='durable',commercial_user_id='alice',response_status=200,input_tokens=10,output_tokens=5,usage_details={'source':'upstream'})
+    log=RequestLogCreate(request_time=utc_now(),trace_id='durable',commercial_user_id='alice',response_status=200,input_tokens=10,output_tokens=5,usage_details={'source':'upstream','response_complete':True})
     original=core.settle
     async def fail(*args,**kwargs):
         raise OSError('database unavailable')
@@ -154,7 +153,7 @@ async def test_recovery_journal_survives_database_failure(billing,monkeypatch,tm
     await integration.recover()
     await integration.recover()
     async with billing.connect() as c:
-        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==980
+        assert await c.scalar(select(accounts.c.balance_microcredits).where(accounts.c.id=='alice'))==980
     assert not list((tmp_path/'recovery').glob('*.json'))
 
 async def test_global_detail_argument_cannot_enable_commercial_logging(billing,monkeypatch):
@@ -212,13 +211,12 @@ async def test_waiver_wins_over_late_usage(billing):
     from squirrel_commercial.schema import resolutions
     kid, _ = await core.create_key(billing, 'alice', 'test')
     await core.reserve(billing, 'waived', kid, 'model', 100, 100)
-    await core.settle(billing, 'waived')
-    async with billing.begin() as c:
-        await c.execute(insert(resolutions).values(request_id='waived',action='waive',reason='operator verified',created_at=core.now()))
-    await core.settle(billing, 'waived', 10, 10)
+    await settle_usage(billing, 'waived')
+    await core.resolve_review(billing, 'waived', 'waive', actor='operator', reason='verified', reference='waiver-one')
+    await settle_usage(billing, 'waived', 10, 10)
     async with billing.connect() as c:
-        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice')) == 1000
-        assert await c.scalar(select(accounts.c.reserved).where(accounts.c.id=='alice')) == 0
+        assert await c.scalar(select(accounts.c.balance_microcredits).where(accounts.c.id=='alice')) == 1000
+        assert await c.scalar(select(accounts.c.reserved_microcredits).where(accounts.c.id=='alice')) == 0
 
 async def test_failed_journal_still_settles_in_database(billing, monkeypatch):
     import app.db.session as database
@@ -233,9 +231,9 @@ async def test_failed_journal_still_settles_in_database(billing, monkeypatch):
     monkeypatch.setattr(integration,'write_journal',fail)
     kid,_=await core.create_key(billing,'alice','test')
     await core.reserve(billing,'disk-full',kid,'model',100,100)
-    await integration.settle_log(RequestLogCreate(request_time=utc_now(),trace_id='disk-full',commercial_user_id='alice',response_status=200,input_tokens=10,output_tokens=5,usage_details={'source':'upstream'}))
+    await integration.settle_log(RequestLogCreate(request_time=utc_now(),trace_id='disk-full',commercial_user_id='alice',response_status=200,input_tokens=10,output_tokens=5,usage_details={'source':'upstream','response_complete':True}))
     async with billing.connect() as c:
-        assert await c.scalar(select(accounts.c.balance).where(accounts.c.id=='alice'))==980
+        assert await c.scalar(select(accounts.c.balance_microcredits).where(accounts.c.id=='alice'))==980
 
 async def test_commercial_privacy_covers_http_handler(monkeypatch):
     from app.services.commercial import CommercialPrivacyMiddleware, request_id

@@ -1,3 +1,4 @@
+from conftest import settle_usage
 """Regressions for G1–G8 and G10, including actual proxy/response lifecycles."""
 import asyncio
 import json
@@ -38,7 +39,9 @@ async def commercial_gateway(billing, monkeypatch, tmp_path):
     monkeypatch.setattr(get_settings(), 'COMMERCIAL_ENABLED', True)
     monkeypatch.setattr(get_settings(), 'COMMERCIAL_RECOVERY_DIR', str(tmp_path / 'journal'))
     async with billing.begin() as c:
-        await c.execute(update(accounts).values(balance=100000))
+        await c.execute(update(accounts).values(balance_microcredits=100000))
+        from squirrel_commercial.schema import buckets
+        await c.execute(update(buckets).where(buckets.c.kind == 'regular').values(balance_microcredits=100000))
         await c.execute(update(prices).values(max_input=5000))
     kid, _ = await core.create_key(billing, 'alice', 'test')
     return billing, kid
@@ -76,11 +79,13 @@ def test_only_terminal_usage_is_trusted():
     acc.feed(event({'choices': [{'delta': {}}], 'usage': {'prompt_tokens': 10, 'completion_tokens': 1}}))
     assert not acc.finalize().final_usage
     acc.feed(event({'choices': [], 'usage': {'prompt_tokens': 10, 'completion_tokens': 0}}))
+    assert not acc.finalize().final_usage
+    acc.feed(b'data: [DONE]\n\n')
     result = acc.finalize()
     assert result.final_usage and result.output_tokens == 0
 
 
-async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None, initial_status=None):
+async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', mode='complete', options=None, initial_status=None, initial_interrupted=False):
     mapping = ModelMapping(requested_model='model', strategy='priority', is_active=True,
                            created_at=utc_now(), updated_at=utc_now())
     candidate = CandidateProvider(provider_id=1, provider_name='test', base_url='https://example.com',
@@ -96,12 +101,15 @@ async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', m
 
     async def forward_stream(**kwargs):
         seen.append(kwargs['body'])
-        response = ProviderResponse(status_code=initial_status or 200)
+        response = ProviderResponse(status_code=initial_status or 200, interrupted=initial_interrupted)
         try:
             if initial_status:
                 yield event({'error': {'message': 'upstream rejected'}}), response
                 return
-            if upstream == 'anthropic':
+            if upstream == 'openai_responses':
+                yield event({'type': 'response.created', 'response': {'id': 'resp_1', 'model': 'model', 'output': []}}), response
+                yield event({'type': 'response.output_text.delta', 'output_index': 0, 'content_index': 0, 'delta': 'hello world'}), response
+            elif upstream == 'anthropic':
                 yield event({'type': 'message_start', 'message': {'id': 'msg', 'type': 'message', 'role': 'assistant',
                             'model': 'model', 'content': [], 'usage': {'input_tokens': 10, 'output_tokens': 1}}}), response
                 yield event({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': 'hello world ' * 20}}), response
@@ -109,10 +117,16 @@ async def make_stream(monkeypatch, kid, *, upstream='openai', client='openai', m
                 yield event({'choices': [{'delta': {'content': 'hello world ' * 20}}]}), response
             if mode == 'wait':
                 await asyncio.Event().wait()
-            elif mode in ('error', 'upstream_timeout'):
-                yield b'', ProviderResponse(status_code=504 if mode == 'upstream_timeout' else 502, error='failed after output')
+            elif mode == 'upstream_timeout':
+                raise TimeoutError('upstream read timed out')
+            elif mode == 'provider_timeout':
+                yield b'', ProviderResponse(status_code=504, interrupted=True)
+            elif mode == 'error':
+                yield b'', ProviderResponse(status_code=502, error='failed after output')
             elif mode == 'complete':
-                if upstream == 'anthropic':
+                if upstream == 'openai_responses':
+                    yield event({'type': 'response.completed', 'response': {'id': 'resp_1', 'model': 'model', 'status': 'completed', 'output': [], 'usage': {'input_tokens': 10, 'output_tokens': 3, 'total_tokens': 13}}}), response
+                elif upstream == 'anthropic':
                     yield event({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {'output_tokens': 0}}), response
                     yield event({'type': 'message_stop'}), response
                 else:
@@ -140,7 +154,7 @@ async def request_row(engine, rid):
 
 
 @pytest.mark.parametrize('upstream,client', [('openai', 'openai'), ('anthropic', 'anthropic'), ('anthropic', 'openai'), ('openai', 'anthropic')])
-@pytest.mark.parametrize('mode', ['complete', 'eof', 'error', 'upstream_timeout', 'close', 'close_failure', 'unstarted', 'cancel', 'timeout'])
+@pytest.mark.parametrize('mode', ['complete', 'eof', 'error', 'upstream_timeout', 'provider_timeout', 'close', 'close_failure', 'unstarted', 'cancel', 'timeout'])
 async def test_stream_settlement_lifecycle(commercial_gateway, monkeypatch, upstream, client, mode):
     engine, kid = commercial_gateway
     (response, stream, info), owner, logs, closed, seen = await make_stream(
@@ -174,13 +188,13 @@ async def test_stream_settlement_lifecycle(commercial_gateway, monkeypatch, upst
     assert closed.is_set()
     assert not owner._commercial_identities
     row = await request_row(engine, info['trace_id'])
-    assert row['status'] == 'settled'
+    assert row['status'] == ('review' if mode in ('eof', 'error') else 'settled')
     assert logs.update.call_args.args[1].usage_details['stream_started'] is True
     if mode == 'complete':
         assert row['input_tokens'] == 10 and row['output_tokens'] == 0
     elif mode == 'unstarted':
         assert row['input_tokens'] >= 8 and row['output_tokens'] >= 0
-    else:
+    elif mode not in ('eof', 'error'):
         assert row['input_tokens'] >= 8 and row['output_tokens'] > 1
     if upstream == 'openai':
         assert seen[0]['stream_options']['include_usage'] is True
@@ -188,8 +202,9 @@ async def test_stream_settlement_lifecycle(commercial_gateway, monkeypatch, upst
     assert not await active_requests.is_active(991)
     await stream.aclose()
     async with engine.connect() as c:
-        assert len((await c.execute(select(ledger))).all()) == 1
-        assert await c.scalar(select(accounts.c.reserved).where(accounts.c.id == 'alice')) == 0
+        assert len((await c.execute(select(ledger))).all()) == (0 if mode in ('eof', 'error') else 1)
+        frozen = await c.scalar(select(accounts.c.reserved_microcredits).where(accounts.c.id == 'alice'))
+        assert frozen > 0 if mode in ('eof', 'error') else frozen == 0
     assert commercial.request_id.get() is None
 
 
@@ -260,9 +275,7 @@ async def test_recovery_filters_history_isolates_errors_and_archives(commercial_
     engine, kid = commercial_gateway
     for rid in ('old', 'bad', 'good', 'unknown'):
         await core.reserve(engine, rid, kid, 'model', 100, 100)
-    await core.settle(engine, 'old', 1, 1)
-    async with engine.begin() as c:
-        await c.execute(insert(resolutions), [dict(request_id=rid, action='waive', reason='verified', created_at=core.now()) for rid in ('old', 'bad', 'good')])
+    await settle_usage(engine, 'old', 1, 1)
     calls = []
     original = core.settle
     async def settle(engine, request_id, *args, **kwargs):
@@ -272,6 +285,8 @@ async def test_recovery_filters_history_isolates_errors_and_archives(commercial_
             raise OSError('database temporarily unavailable')
         return await original(engine, rid, *args, **kwargs)
     monkeypatch.setattr(core, 'settle', settle)
+    commercial.write_journal({'request_id': 'bad'})
+    commercial.write_journal({'request_id': 'good', 'evidence': {'sent_upstream': False}})
     path = commercial.write_journal({'request_id': 'unknown'})
     probe = commercial.write_journal({'request_id': 'probe-leftover'}, probe=True)
     await commercial.recover()

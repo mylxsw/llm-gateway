@@ -1,3 +1,4 @@
+from conftest import settle_usage
 """Failure boundaries and administration regressions for commercial metering."""
 import asyncio
 from types import SimpleNamespace
@@ -39,15 +40,15 @@ async def test_interrupted_before_response_settles_estimate(commercial_gateway, 
 
 
 @pytest.mark.parametrize('status,is_stream,usage,expected', [
-    (502, True, {'stream_started': True}, 'review'),
+    (502, True, {'stream_started': True, 'has_output': True}, 'review'),
     (429, True, {'stream_started': False}, 'cancelled'),
     (500, True, {'stream_started': False}, 'cancelled'),
     (504, True, {'stream_started': False}, 'cancelled'),
-    (502, True, {'source': 'upstream', 'final_usage': True}, 'settled'),
-    (504, False, {'source': 'estimated'}, 'settled'),
+    (502, True, {'source': 'upstream', 'response_complete': True, 'final_usage': True}, 'settled'),
+    (504, False, {'source': 'estimated'}, 'cancelled'),
     (499, True, {'source': 'mixed'}, 'settled'),
     (400, False, None, 'cancelled'),
-    (200, False, {'source': 'upstream'}, 'settled'),
+    (200, False, {'source': 'upstream', 'response_complete': True}, 'settled'),
 ])
 async def test_settlement_failure_policy(commercial_gateway, status, is_stream, usage, expected):
     engine, kid = commercial_gateway
@@ -60,7 +61,7 @@ async def test_settlement_failure_policy(commercial_gateway, status, is_stream, 
     row = await request_row(engine, 'edge')
     assert row['status'] == expected
     if expected == 'settled':
-        assert row['charged'] == 10
+        assert row['charged_microcredits'] == (100 if status == 499 else 10)
 
 
 async def test_nonstream_zero_usage_is_not_reestimated(commercial_gateway, monkeypatch):
@@ -114,10 +115,10 @@ async def test_recovery_skips_terminal_journals_and_old_reservations_review(comm
     engine, kid = commercial_gateway
     await core.reserve(engine, 'old', kid, 'model', 100, 100)
     await core.reserve(engine, 'done', kid, 'model', 100, 100)
-    await core.settle(engine, 'done', 10, 0)
+    await settle_usage(engine, 'done', 10, 0)
     path = commercial.write_journal({'request_id': 'done', 'failed': True})
     async with engine.begin() as c:
-        await c.execute(update(requests).where(requests.c.id == 'old').values(created_at=core.now() - 10801))
+        await c.execute(update(requests).where(requests.c.id == 'old').values(updated_at=core.now() - 10801))
     await commercial.recover()
     assert not path.exists()
     assert (await request_row(engine, 'done'))['status'] == 'settled'
@@ -185,6 +186,8 @@ def test_openai_compatible_terminal_usage_with_finish_reason():
     accumulator = StreamUsageAccumulator('openai', 'model')
     accumulator.feed(event({'choices': [{'delta': {}, 'finish_reason': 'stop'}],
                             'usage': {'prompt_tokens': 10, 'completion_tokens': 0}}))
+    assert not accumulator.finalize().final_usage
+    accumulator.feed(b'data: [DONE]\n\n')
     assert accumulator.finalize().final_usage
     accumulator = StreamUsageAccumulator('openai', 'model')
     accumulator.feed(event({'type': 'response.completed', 'response': {'usage': {'input_tokens': 10, 'output_tokens': 0}}}))
@@ -217,14 +220,14 @@ async def test_initial_stream_error_releases_reservation(commercial_gateway, mon
         result = await create_message(request, key, proxy)
     assert result.status_code == status
     row = await request_row(engine, info['trace_id'])
-    assert row['status'] == 'cancelled' and row['charged'] == 0
+    assert row['status'] == 'cancelled' and row['charged_microcredits'] == 0
     assert logs.update.call_args.args[1].usage_details['stream_started'] is False
     async with engine.connect() as c:
         account = (await c.execute(select(accounts).where(accounts.c.id == 'alice'))).mappings().one()
-        assert account['reserved'] == 0 and account['balance'] == 100000
+        assert account['reserved_microcredits'] == 0 and account['balance_microcredits'] == 100000
         assert not await c.scalar(select(requests.c.id).where(requests.c.status == 'review'))
     assert closed.is_set() and not owner._commercial_identities
     assert not await active_requests.is_active(991)
     # A transient upstream error must not stop the next paid request.
     await core.reserve(engine, 'next', kid, 'model', 100, 100)
-    await core.settle(engine, 'next', failed=True)
+    await settle_usage(engine, 'next', failed=True)
