@@ -453,6 +453,12 @@ def responses_response_to_chat_completion(resp_body: dict[str, Any]) -> dict[str
     }
 
 
+def _sse_event(event_type: str, payload: dict[str, Any]) -> bytes:
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n".encode(
+        "utf-8"
+    )
+
+
 async def chat_completions_sse_to_responses_sse(
     *,
     upstream: AsyncGenerator[bytes, None],
@@ -461,80 +467,66 @@ async def chat_completions_sse_to_responses_sse(
     input_tokens: Optional[int] = None,
 ) -> AsyncGenerator[bytes, None]:
     """
-
-
     Convert OpenAI Chat Completions SSE stream to Responses SSE stream.
 
-
-
-
-
-    This is a best-effort compatibility layer focused on text output deltas.
-
-
+    Supports text output deltas and streamed function (tool) calls.
     """
-
     decoder = SSEDecoder()
-
     resp_id = response_id or _new_id("resp")
-
     msg_id = _new_id("msg")
 
-    created = {
-        "type": "response.created",
-        "response": {
-            "id": resp_id,
-            "object": "response",
-            "created_at": int(time.time()),
-            "model": model,
-            "status": "in_progress",
-            "output": [
-                {
-                    "id": msg_id,
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": ""}],
-                }
-            ],
+    yield _sse_event(
+        "response.created",
+        {
+            "type": "response.created",
+            "response": {
+                "id": resp_id,
+                "object": "response",
+                "created_at": int(time.time()),
+                "model": model,
+                "status": "in_progress",
+                "output": [],
+            },
         },
-    }
-
-    yield f"event: response.created\ndata: {json.dumps(created, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
     )
 
-    # Emit response.output_item.added so SDK state machines can attach deltas
-    item_added = {
-        "type": "response.output_item.added",
-        "output_index": 0,
-        "item": {
-            "id": msg_id,
-            "type": "message",
-            "role": "assistant",
-            "content": [],
-        },
-    }
-    yield f"event: response.output_item.added\ndata: {json.dumps(item_added, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
-    )
-
-    # Emit response.content_part.added
-    content_part_added = {
-        "type": "response.content_part.added",
-        "output_index": 0,
-        "content_index": 0,
-        "item_id": msg_id,
-        "part": {"type": "output_text", "text": ""},
-    }
-    yield f"event: response.content_part.added\ndata: {json.dumps(content_part_added, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
-    )
-
+    next_output_index = 0
+    message_output_index: Optional[int] = None
     text_parts: list[str] = []
-
+    # chat tool_call index -> state
+    tool_calls: dict[int, dict[str, Any]] = {}
     saw_done = False
-
     final_usage = None
+
+    def open_message() -> list[bytes]:
+        nonlocal next_output_index, message_output_index
+        message_output_index = next_output_index
+        next_output_index += 1
+        return [
+            _sse_event(
+                "response.output_item.added",
+                {
+                    "type": "response.output_item.added",
+                    "output_index": message_output_index,
+                    "item": {
+                        "id": msg_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [],
+                    },
+                },
+            ),
+            _sse_event(
+                "response.content_part.added",
+                {
+                    "type": "response.content_part.added",
+                    "output_index": message_output_index,
+                    "content_index": 0,
+                    "item_id": msg_id,
+                    "part": {"type": "output_text", "text": ""},
+                },
+            ),
+        ]
 
     async for chunk in upstream:
         for payload in decoder.feed(chunk):
@@ -543,141 +535,222 @@ async def chat_completions_sse_to_responses_sse(
 
             if payload.strip() == "[DONE]":
                 saw_done = True
-
                 break
 
             try:
                 data = json.loads(payload)
-
             except Exception:
                 continue
+            if not isinstance(data, dict):
+                continue
 
-            # Try to extract usage from upstream if available (e.g. stream_options: {include_usage: true})
-
-            if "usage" in data and data["usage"]:
+            # Usage may be provided upstream (e.g. stream_options: {include_usage: true})
+            if data.get("usage"):
                 final_usage = data["usage"]
 
             choices = data.get("choices")
-
             if not isinstance(choices, list):
                 continue
 
             for choice in choices:
                 if not isinstance(choice, dict):
                     continue
-
                 delta = (
                     choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
                 )
 
                 content = delta.get("content")
-
                 if isinstance(content, str) and content:
+                    if message_output_index is None:
+                        for evt in open_message():
+                            yield evt
                     text_parts.append(content)
-
-                    evt = {
-                        "type": "response.output_text.delta",
-                        "delta": content,
-                        "output_index": 0,
-                        "content_index": 0,
-                        "item_id": msg_id,
-                    }
-
-                    yield f"event: response.output_text.delta\ndata: {json.dumps(evt, ensure_ascii=False)}\n\n".encode(
-                        "utf-8"
+                    yield _sse_event(
+                        "response.output_text.delta",
+                        {
+                            "type": "response.output_text.delta",
+                            "delta": content,
+                            "output_index": message_output_index,
+                            "content_index": 0,
+                            "item_id": msg_id,
+                        },
                     )
+
+                delta_tool_calls = delta.get("tool_calls")
+                if not isinstance(delta_tool_calls, list):
+                    continue
+                for tool_call in delta_tool_calls:
+                    if not isinstance(tool_call, dict):
+                        continue
+                    tc_index = tool_call.get("index")
+                    if not isinstance(tc_index, int):
+                        tc_index = len(tool_calls)
+                    function = (
+                        tool_call.get("function")
+                        if isinstance(tool_call.get("function"), dict)
+                        else {}
+                    )
+
+                    state = tool_calls.get(tc_index)
+                    if state is None:
+                        call_id = tool_call.get("id")
+                        if not isinstance(call_id, str) or not call_id:
+                            call_id = _new_id("call")
+                        name = function.get("name")
+                        state = {
+                            "output_index": next_output_index,
+                            "item_id": _new_id("fc"),
+                            "call_id": call_id,
+                            "name": name if isinstance(name, str) else "",
+                            "arguments": "",
+                        }
+                        next_output_index += 1
+                        tool_calls[tc_index] = state
+                        yield _sse_event(
+                            "response.output_item.added",
+                            {
+                                "type": "response.output_item.added",
+                                "output_index": state["output_index"],
+                                "item": {
+                                    "id": state["item_id"],
+                                    "type": "function_call",
+                                    "status": "in_progress",
+                                    "call_id": state["call_id"],
+                                    "name": state["name"],
+                                    "arguments": "",
+                                },
+                            },
+                        )
+                    elif not state["name"] and isinstance(function.get("name"), str):
+                        state["name"] = function["name"]
+
+                    args = function.get("arguments")
+                    if isinstance(args, str) and args:
+                        state["arguments"] += args
+                        yield _sse_event(
+                            "response.function_call_arguments.delta",
+                            {
+                                "type": "response.function_call_arguments.delta",
+                                "output_index": state["output_index"],
+                                "item_id": state["item_id"],
+                                "delta": args,
+                            },
+                        )
 
         if saw_done:
             break
 
     final_text = "".join(text_parts)
 
-    # Emit response.output_text.done
-    text_done = {
-        "type": "response.output_text.done",
-        "output_index": 0,
-        "content_index": 0,
-        "item_id": msg_id,
-        "text": final_text,
-    }
-    yield f"event: response.output_text.done\ndata: {json.dumps(text_done, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
-    )
+    # Preserve an (empty) assistant message when the model produced neither text nor tools.
+    if message_output_index is None and not tool_calls:
+        for evt in open_message():
+            yield evt
 
-    # Emit response.content_part.done
-    content_part_done = {
-        "type": "response.content_part.done",
-        "output_index": 0,
-        "content_index": 0,
-        "item_id": msg_id,
-        "part": {"type": "output_text", "text": final_text},
-    }
-    yield f"event: response.content_part.done\ndata: {json.dumps(content_part_done, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
-    )
+    output_items: list[tuple[int, dict[str, Any]]] = []
 
-    # Emit response.output_item.done
-    output_item_done = {
-        "type": "response.output_item.done",
-        "output_index": 0,
-        "item": {
+    if message_output_index is not None:
+        message_item = {
             "id": msg_id,
             "type": "message",
             "role": "assistant",
             "content": [{"type": "output_text", "text": final_text}],
-        },
-    }
-    yield f"event: response.output_item.done\ndata: {json.dumps(output_item_done, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
-    )
+        }
+        output_items.append((message_output_index, message_item))
+        yield _sse_event(
+            "response.output_text.done",
+            {
+                "type": "response.output_text.done",
+                "output_index": message_output_index,
+                "content_index": 0,
+                "item_id": msg_id,
+                "text": final_text,
+            },
+        )
+        yield _sse_event(
+            "response.content_part.done",
+            {
+                "type": "response.content_part.done",
+                "output_index": message_output_index,
+                "content_index": 0,
+                "item_id": msg_id,
+                "part": {"type": "output_text", "text": final_text},
+            },
+        )
+        yield _sse_event(
+            "response.output_item.done",
+            {
+                "type": "response.output_item.done",
+                "output_index": message_output_index,
+                "item": message_item,
+            },
+        )
+
+    for state in tool_calls.values():
+        function_item = {
+            "id": state["item_id"],
+            "type": "function_call",
+            "status": "completed",
+            "call_id": state["call_id"],
+            "name": state["name"],
+            "arguments": state["arguments"],
+        }
+        output_items.append((state["output_index"], function_item))
+        yield _sse_event(
+            "response.function_call_arguments.done",
+            {
+                "type": "response.function_call_arguments.done",
+                "output_index": state["output_index"],
+                "item_id": state["item_id"],
+                "arguments": state["arguments"],
+            },
+        )
+        yield _sse_event(
+            "response.output_item.done",
+            {
+                "type": "response.output_item.done",
+                "output_index": state["output_index"],
+                "item": function_item,
+            },
+        )
+
+    output_items.sort(key=lambda pair: pair[0])
 
     # Calculate usage if not provided by upstream
-
     if not final_usage:
         token_counter = get_token_counter("openai")
-
         output_tokens = token_counter.count_tokens(final_text, model)
-
+        for state in tool_calls.values():
+            output_tokens += token_counter.count_tokens(
+                f"{state['name']}{state['arguments']}", model
+            )
         total_input = input_tokens or 0
-
         final_usage = {
             "input_tokens": total_input,
             "output_tokens": output_tokens,
             "total_tokens": total_input + output_tokens,
         }
+    elif "prompt_tokens" in final_usage:
+        final_usage = {
+            "input_tokens": final_usage.get("prompt_tokens", 0),
+            "output_tokens": final_usage.get("completion_tokens", 0),
+            "total_tokens": final_usage.get("total_tokens", 0),
+        }
 
-    else:
-        # Normalize usage keys
-
-        if "prompt_tokens" in final_usage:
-            final_usage = {
-                "input_tokens": final_usage.get("prompt_tokens", 0),
-                "output_tokens": final_usage.get("completion_tokens", 0),
-                "total_tokens": final_usage.get("total_tokens", 0),
-            }
-
-    completed = {
-        "type": "response.completed",
-        "response": {
-            "id": resp_id,
-            "object": "response",
-            "created_at": int(time.time()),
-            "model": model,
-            "status": "completed",
-            "output": [
-                {
-                    "id": msg_id,
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": final_text}],
-                }
-            ],
-            "usage": final_usage,
+    yield _sse_event(
+        "response.completed",
+        {
+            "type": "response.completed",
+            "response": {
+                "id": resp_id,
+                "object": "response",
+                "created_at": int(time.time()),
+                "model": model,
+                "status": "completed",
+                "output": [item for _, item in output_items],
+                "usage": final_usage,
+            },
         },
-    }
-
-    yield f"event: response.completed\ndata: {json.dumps(completed, ensure_ascii=False)}\n\n".encode(
-        "utf-8"
     )
 
 
