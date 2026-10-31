@@ -24,7 +24,7 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            BASE_IMAGE=ghcr.io/mylxsw/llm-gateway@sha256:2e994c2bc36a50ae3c0532a6c90133d4bd906d346ad05ab5112c8fd0b24b43a2
+            BASE_IMAGE=ghcr.io/mylxsw/llm-gateway@sha256:4c99d5a793bb175369ee27191ba58d5a2f4738e74bc0a7d1f57e7b8630322422
             SOURCE_SHA=${{ github.sha }}
           tags: ghcr.io/mylxsw/llm-gateway:typeflux-persona-${{ github.sha }}
       - name: Record immutable image
