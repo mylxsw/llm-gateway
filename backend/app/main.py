@@ -4,6 +4,7 @@ LLM Gateway Application Entry Point
 FastAPI application main entry, including router registration and application configuration.
 """
 
+import asyncio
 import logging
 import os
 import traceback
@@ -55,6 +56,8 @@ async def lifespan(app: FastAPI):
     Initialize database on startup, clean up resources on shutdown.
     """
     # Startup
+    from app.common.token_counter import warm_tokenizers
+    await asyncio.to_thread(warm_tokenizers)
     await init_db()
     settings = get_settings()
     if not is_admin_auth_enabled(settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD):

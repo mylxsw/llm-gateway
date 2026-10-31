@@ -951,3 +951,15 @@ def _safe_int(value: Any) -> Optional[int]:
     if isinstance(value, str) and value.isdigit():
         return int(value)
     return None
+
+
+def warm_tokenizers() -> None:
+    """Load every supported tokenizer before accepting proxy requests.
+
+    Images include these files. Never make the first customer request download
+    a tokenizer synchronously on the ASGI event loop.
+    """
+    if TIKTOKEN_AVAILABLE:
+        names = {OpenAITokenCounter.DEFAULT_ENCODING, *OpenAITokenCounter.MODEL_ENCODING_MAP.values()}
+        for name in sorted(names):
+            tiktoken.get_encoding(name)

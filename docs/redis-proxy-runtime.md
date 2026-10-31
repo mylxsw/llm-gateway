@@ -13,3 +13,5 @@ Before switching traffic, verify Redis connectivity, snapshot readiness and jour
 Verify real Typeflux requests against the domestic public origin, using an explicitly authorized account, synthetic text, and unique request IDs. Check first content time, total time, final usage, effective upstream thinking controls, one settlement per invocation, journal backlog and errors. Never retry an ambiguous billable request automatically.
 
 Backend regression tests include SQL-denial during full streaming and non-streaming proxy handling, Redis reasoning-cache writes, configuration misses, disabled keys, retry recovery, duplicate log delivery and failed-provider attempts. Install development dependencies with `uv sync --group dev`, then run `uv run pytest` from `backend/`.
+
+Tokenizers are included in both the normal image and runtime patch image under `/app/tiktoken-cache`. Startup loads them in a worker thread before readiness. The preparation workflow verifies token counting with Docker networking disabled, so a cold customer request never downloads tokenizer files. Saved provider reads also skip repeated blocking DNS validation; admin writes still validate URLs.

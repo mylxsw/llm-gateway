@@ -214,3 +214,16 @@ async def test_runtime_snapshot_reads_do_not_perform_blocking_dns(runtime, monke
     from pydantic import ValidationError
     with pytest.raises(ValidationError, match="Blocking DNS"):
         ProviderCreate(name="New provider", base_url="https://api.deepseek.com", protocol="deepseek")
+
+
+async def test_startup_warms_every_tokenizer_before_requests(monkeypatch):
+    from app.common import token_counter
+    loaded = []
+    monkeypatch.setattr(token_counter, "TIKTOKEN_AVAILABLE", True)
+    monkeypatch.setattr(token_counter.tiktoken, "get_encoding", loaded.append)
+    await asyncio.to_thread(token_counter.warm_tokenizers)
+    assert set(loaded) == {"cl100k_base", "p50k_base"}
+    loaded.clear()
+    monkeypatch.setattr(token_counter, "TIKTOKEN_AVAILABLE", False)
+    token_counter.warm_tokenizers()
+    assert loaded == []

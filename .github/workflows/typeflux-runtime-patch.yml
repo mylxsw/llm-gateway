@@ -27,6 +27,12 @@ jobs:
             BASE_IMAGE=ghcr.io/mylxsw/llm-gateway@sha256:4c99d5a793bb175369ee27191ba58d5a2f4738e74bc0a7d1f57e7b8630322422
             SOURCE_SHA=${{ github.sha }}
           tags: ghcr.io/mylxsw/llm-gateway:typeflux-persona-${{ github.sha }}
+      - name: Verify token counting without a network
+        env:
+          IMAGE: ghcr.io/mylxsw/llm-gateway@${{ steps.image.outputs.digest }}
+        run: |
+          docker pull "$IMAGE"
+          docker run --rm --network none --entrypoint python "$IMAGE" -c 'from app.common.token_counter import warm_tokenizers, get_token_counter; warm_tokenizers(); counter=get_token_counter("openai"); assert counter.count_tokens("offline warmup", "deepseek-flash") > 0; assert counter.count_tokens("offline warmup", "text-davinci-003") > 0'
       - name: Record immutable image
         env:
           SOURCE: ${{ github.sha }}

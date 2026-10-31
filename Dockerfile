@@ -18,6 +18,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app/backend \
+    TIKTOKEN_CACHE_DIR=/app/tiktoken-cache \
     FRONTEND_DIST_DIR=/app/static \
     DATABASE_URL=sqlite+aiosqlite:////data/llm_gateway.db
 
@@ -25,6 +26,7 @@ WORKDIR /app
 
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir --prefer-binary -r /app/backend/requirements.txt
+RUN python -c "import tiktoken; [tiktoken.get_encoding(name) for name in ('cl100k_base', 'p50k_base')]"
 
 COPY llm_api_converter /app/llm_api_converter
 RUN pip install --no-cache-dir /app/llm_api_converter
