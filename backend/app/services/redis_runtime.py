@@ -100,7 +100,16 @@ class RuntimeRoutes:
 
     async def get_by_id(self, id):
         data = (await self._load())["providers"].get(str(id))
-        return Provider.model_validate(data) if data else None
+        if data is None:
+            return None
+        from datetime import datetime
+        # This document comes from validated persisted admin configuration.
+        # Re-validating a URL here performs blocking DNS on the event loop.
+        data = dict(data)
+        for field in ("created_at", "updated_at"):
+            if isinstance(data.get(field), str):
+                data[field] = datetime.fromisoformat(data[field])
+        return Provider.model_construct(**data)
 
 
 class RuntimeLogs:
@@ -144,7 +153,7 @@ class RedisRuntime:
             model_repo = SQLAlchemyModelRepository(session)
             models = await all_pages(model_repo.get_all_mappings)
             mappings = await model_repo.get_all_provider_mappings()
-            providers = await all_pages(SQLAlchemyProviderRepository(session).get_all)
+            providers = await all_pages(SQLAlchemyProviderRepository(session, validate_reads=False).get_all)
             document = {
                 "keys": {key_hash(x.key_value): x.model_dump(mode="json") for x in keys},
                 "models": {x.requested_model: x.model_dump(mode="json") for x in models},

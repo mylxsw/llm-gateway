@@ -9,3 +9,4 @@ COPY --chown=appuser:appuser backend/app/db/redis.py /app/backend/app/db/redis.p
 COPY --chown=appuser:appuser backend/app/main.py /app/backend/app/main.py
 COPY --chown=appuser:appuser backend/app/services/active_requests.py /app/backend/app/services/active_requests.py
 COPY --chown=appuser:appuser backend/app/services/redis_runtime.py /app/backend/app/services/redis_runtime.py
+COPY --chown=appuser:appuser backend/app/repositories/sqlalchemy/provider_repo.py /app/backend/app/repositories/sqlalchemy/provider_repo.py

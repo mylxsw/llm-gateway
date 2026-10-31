@@ -197,3 +197,19 @@ async def test_http_boundary_denies_sql_until_stream_finishes(async_engine):
         await app({"type":"http", "method":"POST", "path":"/v1/chat/completions"}, None, None)
     # Background tasks and admin reads remain outside the HTTP runtime boundary.
     await app({"type":"http", "method":"GET", "path":"/api/logs"}, None, None)
+
+
+async def test_runtime_snapshot_reads_do_not_perform_blocking_dns(runtime, monkeypatch):
+    def reject_dns(*_):
+        raise AssertionError("Blocking DNS validation on the event loop")
+    monkeypatch.setattr("app.common.url_validator.socket.gethostbyname", reject_dns)
+    # Projection reads trusted persisted configuration; admin write validation remains intact.
+    await runtime.refresh()
+    routes = RuntimeRoutes(runtime.client)
+    mapping = (await routes.get_provider_mappings("deepseek-flash"))[0]
+    provider = await routes.get_by_id(mapping.provider_id)
+    assert provider.base_url == "https://api.deepseek.com"
+    assert provider.created_at.tzinfo is not None
+    from app.domain.provider import ProviderCreate
+    with pytest.raises(AssertionError, match="Blocking DNS"):
+        ProviderCreate(name="New provider", base_url="https://api.deepseek.com", protocol="deepseek")
