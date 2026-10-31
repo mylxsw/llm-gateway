@@ -68,8 +68,17 @@ async def lifespan(app: FastAPI):
                 "Admin authentication credentials are not configured and "
                 "ALLOW_UNAUTHENTICATED_ADMIN=false; admin APIs will fail closed with 401."
             )
-    if settings.KV_STORE_TYPE == "redis":
+    if settings.KV_STORE_TYPE == "redis" or settings.PROXY_REDIS_RUNTIME:
         await init_redis()
+    runtime = None
+    if settings.PROXY_REDIS_RUNTIME:
+        from app.db.redis import get_redis
+        from app.db.session import AsyncSessionLocal, engine
+        from app.services.redis_runtime import RedisRuntime, install_sql_boundary
+
+        install_sql_boundary(engine)
+        runtime = RedisRuntime(get_redis(), AsyncSessionLocal)
+        await runtime.start()
     start_scheduler()
 
     # Run the MCP session manager for the lifetime of the app when enabled.
@@ -77,15 +86,19 @@ async def lifespan(app: FastAPI):
         async with _mcp_server.session_manager.run():
             yield
             # Shutdown (inside MCP lifespan so it is torn down last)
+            if runtime is not None:
+                await runtime.stop()
             shutdown_scheduler()
-            if settings.KV_STORE_TYPE == "redis":
+            if settings.KV_STORE_TYPE == "redis" or settings.PROXY_REDIS_RUNTIME:
                 await close_redis()
         return
 
     yield
     # Shutdown
+    if runtime is not None:
+        await runtime.stop()
     shutdown_scheduler()
-    if settings.KV_STORE_TYPE == "redis":
+    if settings.KV_STORE_TYPE == "redis" or settings.PROXY_REDIS_RUNTIME:
         await close_redis()
 
 
@@ -129,6 +142,9 @@ app.add_middleware(
 
 # Add Rate Limit Middleware (should be added after CORS)
 app.add_middleware(RateLimitMiddleware)
+if settings.PROXY_REDIS_RUNTIME:
+    from app.services.redis_runtime import RuntimeBoundaryMiddleware
+    app.add_middleware(RuntimeBoundaryMiddleware)
 logger.info(f"Rate limiting enabled: {settings.RATE_LIMIT_ENABLED}")
 
 

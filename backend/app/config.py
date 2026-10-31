@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Admin login token TTL (seconds)
     ADMIN_TOKEN_TTL_SECONDS: int = 86400
 
+    # Redis-only proxy runtime; SQL is confined to background workers.
+    PROXY_REDIS_RUNTIME: bool = False
+
     # KV Store Config
     # KV store backend: "database" uses the SQL database, "redis" uses Redis
     KV_STORE_TYPE: Literal["database", "redis"] = "database"

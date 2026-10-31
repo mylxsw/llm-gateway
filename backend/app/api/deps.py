@@ -124,7 +124,7 @@ def _build_protocol_hooks() -> ProtocolConversionHooks:
       session and releases the pooled connection immediately.
     """
     settings = get_settings()
-    if settings.KV_STORE_TYPE == "redis":
+    if settings.KV_STORE_TYPE == "redis" or settings.PROXY_REDIS_RUNTIME:
         from app.db.redis import get_redis
         from app.repositories.redis import RedisKVStoreRepository
 
@@ -142,6 +142,20 @@ def get_proxy_service() -> ProxyService:
     uses a short-lived session. This prevents streaming responses from holding
     a pooled connection for the entire upstream stream (see pool-exhaustion fix).
     """
+    if get_settings().PROXY_REDIS_RUNTIME:
+        from app.db.redis import get_redis
+        from app.services.redis_runtime import RuntimeLogs, RuntimeRoutes
+
+        routes = RuntimeRoutes(get_redis())
+        return ProxyService(
+            model_repo=routes, provider_repo=routes, log_repo=RuntimeLogs(get_redis()),
+            round_robin_strategy=_round_robin_strategy,
+            cost_first_strategy=_cost_first_strategy,
+            priority_strategy=_priority_strategy,
+            protocol_hooks=_build_protocol_hooks(),
+            health_tracker=_provider_health_tracker,
+            latency_tracker=_stream_latency_tracker,
+        )
     return ProxyService(
         session_factory=AsyncSessionLocal,
         model_repo_factory=lambda s: SQLAlchemyModelRepository(s),
@@ -237,7 +251,13 @@ async def get_current_api_key(
     Raises:
         AuthenticationError: Verification failed
     """
-    service = get_api_key_service(db)
+    if get_settings().PROXY_REDIS_RUNTIME:
+        from app.db.redis import get_redis
+        from app.services.redis_runtime import RuntimeApiKeys
+
+        service = ApiKeyService(RuntimeApiKeys(get_redis()))
+    else:
+        service = get_api_key_service(db)
     token = x_api_key or authorization
     return await service.authenticate(token or "")
 

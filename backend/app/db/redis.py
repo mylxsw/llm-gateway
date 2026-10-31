@@ -82,7 +82,7 @@ async def init_redis() -> None:
 
     # Verify connectivity
     await _redis_client.ping()
-    logger.info(f"Redis connection established: {settings.REDIS_URL}")
+    logger.info("Redis connection established")
 
 
 async def close_redis() -> None:

@@ -1,0 +1,43 @@
+name: Prepare Typeflux Redis runtime patch
+on:
+  push:
+    branches: ["fix/typeflux-redis-persona-*"]
+permissions:
+  contents: read
+  packages: write
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        id: image
+        with:
+          context: .
+          file: Dockerfile.runtimepatch
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            BASE_IMAGE=ccr.ccs.tencentyun.com/mylxsw/llm-gateway@sha256:2e994c2bc36a50ae3c0532a6c90133d4bd906d346ad05ab5112c8fd0b24b43a2
+            SOURCE_SHA=${{ github.sha }}
+          tags: ghcr.io/mylxsw/llm-gateway:typeflux-persona-${{ github.sha }}
+      - name: Record immutable image
+        env:
+          SOURCE: ${{ github.sha }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path('prepared-image.json').write_text(json.dumps({'source':os.environ['SOURCE'],'image':'ghcr.io/mylxsw/llm-gateway@'+os.environ['DIGEST'],'deployed':False}, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: typeflux-runtime-image
+          path: prepared-image.json
