@@ -211,5 +211,6 @@ async def test_runtime_snapshot_reads_do_not_perform_blocking_dns(runtime, monke
     assert provider.base_url == "https://api.deepseek.com"
     assert provider.created_at.tzinfo is not None
     from app.domain.provider import ProviderCreate
-    with pytest.raises(AssertionError, match="Blocking DNS"):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match="Blocking DNS"):
         ProviderCreate(name="New provider", base_url="https://api.deepseek.com", protocol="deepseek")
