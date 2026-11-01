@@ -297,3 +297,61 @@ def test_responses_request_to_chat_completions_strips_stream_options():
     assert "stream_options" not in chat
     assert chat["stream"] is True
     assert chat["temperature"] == 0.5
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_sse_to_responses_sse_tool_calls():
+    async def upstream():
+        yield (
+            b'data: {"id":"c1","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}\n\n'
+        )
+        yield (
+            b'data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"shell","arguments":""}}]},"finish_reason":null}]}\n\n'
+        )
+        yield (
+            b'data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"cmd\\":"}}]},"finish_reason":null}]}\n\n'
+        )
+        yield (
+            b'data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"ls\\"}"}}]},"finish_reason":"tool_calls"}]}\n\n'
+        )
+        yield b"data: [DONE]\n\n"
+
+    decoder = SSEDecoder()
+    events: list[dict] = []
+    async for chunk in chat_completions_sse_to_responses_sse(
+        upstream=upstream(), model="m"
+    ):
+        events.extend(json.loads(p) for p in decoder.feed(chunk) if p)
+
+    types = [e["type"] for e in events]
+    assert "response.function_call_arguments.delta" in types
+    done = [e for e in events if e["type"] == "response.function_call_arguments.done"]
+    assert done[0]["arguments"] == '{"cmd":"ls"}'
+
+    completed = events[-1]
+    assert completed["type"] == "response.completed"
+    output = completed["response"]["output"]
+    assert [item["type"] for item in output] == ["message", "function_call"]
+    assert output[1]["call_id"] == "call_1"
+    assert output[1]["name"] == "shell"
+    assert output[1]["arguments"] == '{"cmd":"ls"}'
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_sse_to_responses_sse_tool_call_only_has_no_empty_message():
+    async def upstream():
+        yield (
+            b'data: {"id":"c1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"f","arguments":"{}"}}]}}]}\n\n'
+        )
+        yield b"data: [DONE]\n\n"
+
+    decoder = SSEDecoder()
+    events: list[dict] = []
+    async for chunk in chat_completions_sse_to_responses_sse(
+        upstream=upstream(), model="m"
+    ):
+        events.extend(json.loads(p) for p in decoder.feed(chunk) if p)
+
+    output = events[-1]["response"]["output"]
+    assert [item["type"] for item in output] == ["function_call"]
+    assert events[1]["output_index"] == 0
