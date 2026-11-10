@@ -28,7 +28,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
     Uses SQLAlchemy ORM to implement database operations for Providers.
     """
     
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, *, validate_reads: bool = True):
         """
         Initialize Repository
         
@@ -36,6 +36,7 @@ class SQLAlchemyProviderRepository(ProviderRepository):
             session: Async database session
         """
         self.session = session
+        self._validate_reads = validate_reads
     
     def _to_domain(self, entity: ServiceProvider) -> Provider:
         """
@@ -47,7 +48,10 @@ class SQLAlchemyProviderRepository(ProviderRepository):
         Returns:
             Provider: Domain model
         """
-        return Provider(
+        # Admin writes validate URLs before persistence. Background runtime
+        # projections must not run blocking DNS validation on every saved URL.
+        factory = Provider if self._validate_reads else Provider.model_construct
+        return factory(
             id=entity.id,
             name=entity.name,
             remark=entity.remark,

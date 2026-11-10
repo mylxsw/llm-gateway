@@ -25,16 +25,25 @@ class ActiveRequestTracker:
     def __init__(self) -> None:
         self._tasks: dict[int, asyncio.Task] = {}
         self._lock = asyncio.Lock()
+        self._aliases: dict[int, int] = {}
 
     async def register(self, log_id: int, task: asyncio.Task) -> None:
         """Register a running task for the given log ID."""
         async with self._lock:
             self._tasks[log_id] = task
 
+    async def bind_alias(self, database_id: int, runtime_id: int) -> None:
+        """Bind a background-allocated database log ID to its live task."""
+        async with self._lock:
+            if runtime_id in self._tasks:
+                self._aliases[database_id] = runtime_id
+
     async def deregister(self, log_id: int) -> None:
         """Remove the task (call after completion or cancellation)."""
         async with self._lock:
-            self._tasks.pop(log_id, None)
+            runtime_id = self._aliases.get(log_id, log_id)
+            self._tasks.pop(runtime_id, None)
+            self._aliases = {k: v for k, v in self._aliases.items() if v != runtime_id}
 
     async def cancel(self, log_id: int) -> bool:
         """Cancel the task for the given log ID and remove it atomically.
@@ -42,7 +51,9 @@ class ActiveRequestTracker:
         Returns True if a task was found and cancelled, False otherwise.
         """
         async with self._lock:
-            task = self._tasks.pop(log_id, None)
+            runtime_id = self._aliases.get(log_id, log_id)
+            task = self._tasks.pop(runtime_id, None)
+            self._aliases = {k: v for k, v in self._aliases.items() if v != runtime_id}
         if task is None:
             return False
         task.cancel()
@@ -52,7 +63,7 @@ class ActiveRequestTracker:
     async def is_active(self, log_id: int) -> bool:
         """Check whether a task is currently registered for the given log ID."""
         async with self._lock:
-            return log_id in self._tasks
+            return self._aliases.get(log_id, log_id) in self._tasks
 
 
 # Global singleton
