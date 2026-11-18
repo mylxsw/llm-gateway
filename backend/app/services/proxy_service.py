@@ -44,6 +44,7 @@ from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
 from app.services.model_turn_repair import ModelTurnRepair
+from app.services.tool_reasoning_recovery import ToolReasoningRecovery
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.stream_latency import StreamLatencyTracker, stream_chunk_has_text
@@ -903,9 +904,7 @@ class ProxyService:
                 upstream_url=conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(
-                    attempt.provider.protocol
-                ),
+                supplier_protocol=conversion_data.get("supplier_protocol"),
                 converted_request_body=_smart_truncate(
                     conversion_data.get("converted_request_body")
                 ),
@@ -925,13 +924,13 @@ class ProxyService:
 
         # 8. Execute request (with retry)
         model_turn_repair = ModelTurnRepair()
+        tool_reasoning_recovery = ToolReasoningRecovery()
 
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             supplier_protocol: Optional[str] = None
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
-                client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
@@ -961,8 +960,6 @@ class ProxyService:
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
-                if self._use_no_suffix(candidate.provider_options):
-                    supplier_path = ""
                 hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
                     request_protocol,
@@ -988,6 +985,22 @@ class ProxyService:
                         target_model=candidate.target_model,
                     )
                 supplier_body = model_turn_repair.prepare(candidate, supplier_body)
+                # Record the attempted protocol even if recovery conversion fails.
+                conversion_data["supplier_protocol"] = tool_reasoning_recovery.protocol(
+                    candidate, supplier_protocol
+                )
+                conversion_data["converted_request_body"] = None
+                conversion_data["upstream_url"] = build_upstream_url(
+                    candidate.base_url,
+                    "/v1/responses" if conversion_data["supplier_protocol"] == "openai_responses" else supplier_path,
+                )
+                supplier_path, supplier_body, supplier_protocol = tool_reasoning_recovery.prepare(
+                    candidate, supplier_path, supplier_body, supplier_protocol,
+                    no_suffix=self._use_no_suffix(candidate.provider_options),
+                )
+                if self._use_no_suffix(candidate.provider_options):
+                    supplier_path = ""
+                client = get_provider_client(supplier_protocol)
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
@@ -1041,13 +1054,14 @@ class ProxyService:
             input_tokens=input_tokens,
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
-            repair_request=model_turn_repair.try_repair,
+            repair_request=tool_reasoning_recovery.repair(model_turn_repair),
+            max_repair_attempts=3,  # One model-turn repair plus two tool/reasoning stages.
         )
 
         if result.response.body is not None and result.final_provider is not None:
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
-                supplier_protocol = resolve_implementation_protocol(
+                supplier_protocol = conversion_data.get("supplier_protocol") or resolve_implementation_protocol(
                     result.final_provider.protocol
                 )
                 same_protocol = normalize_protocol(
@@ -1466,6 +1480,7 @@ class ProxyService:
 
         # 8. Execute streaming request
         model_turn_repair = ModelTurnRepair()
+        tool_reasoning_recovery = ToolReasoningRecovery()
 
         async def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
@@ -1475,7 +1490,6 @@ class ProxyService:
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
-                client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
@@ -1530,6 +1544,22 @@ class ProxyService:
                         target_model=candidate.target_model,
                     )
                 supplier_body = model_turn_repair.prepare(candidate, supplier_body)
+                # Record the attempted protocol even if recovery conversion fails.
+                stream_conversion_data["supplier_protocol"] = tool_reasoning_recovery.protocol(
+                    candidate, supplier_protocol
+                )
+                stream_conversion_data["converted_request_body"] = None
+                stream_conversion_data["upstream_url"] = build_upstream_url(
+                    candidate.base_url,
+                    "/v1/responses" if stream_conversion_data["supplier_protocol"] == "openai_responses" else supplier_path,
+                )
+                supplier_path, supplier_body, supplier_protocol = tool_reasoning_recovery.prepare(
+                    candidate, supplier_path, supplier_body, supplier_protocol,
+                    no_suffix=self._use_no_suffix(candidate.provider_options),
+                )
+                if self._use_no_suffix(candidate.provider_options):
+                    supplier_path = ""
+                client = get_provider_client(supplier_protocol)
                 if commercial_user_id:
                     from app.services.commercial import apply_stream_usage
                     supplier_body = apply_stream_usage(supplier_body, supplier_protocol, candidate.provider_options)
@@ -1822,9 +1852,7 @@ class ProxyService:
                 upstream_url=stream_conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(
-                    attempt.provider.protocol
-                ),
+                supplier_protocol=stream_conversion_data.get("supplier_protocol"),
                 converted_request_body=_smart_truncate(
                     stream_conversion_data.get("converted_request_body")
                 ),
@@ -1846,7 +1874,8 @@ class ProxyService:
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
             is_meaningful_chunk=stream_chunk_has_text,
-            repair_request=model_turn_repair.try_repair,
+            repair_request=tool_reasoning_recovery.repair(model_turn_repair),
+            max_repair_attempts=3,  # One model-turn repair plus two tool/reasoning stages.
         )
 
         # Get first chunk to determine status
