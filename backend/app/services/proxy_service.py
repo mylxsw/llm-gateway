@@ -44,6 +44,7 @@ from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
 from app.services.model_turn_repair import ModelTurnRepair
+from app.services.response_format_recovery import ResponseFormatRecovery
 from app.services.tool_reasoning_recovery import ToolReasoningRecovery
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
@@ -925,6 +926,11 @@ class ProxyService:
         # 8. Execute request (with retry)
         model_turn_repair = ModelTurnRepair()
         tool_reasoning_recovery = ToolReasoningRecovery()
+        format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+        repair_reasoning_or_turn = tool_reasoning_recovery.repair(model_turn_repair)
+
+        def repair_request(candidate: CandidateProvider, response: ProviderResponse) -> bool:
+            return format_recovery.try_repair(candidate, response) or repair_reasoning_or_turn(candidate, response)
 
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             supplier_protocol: Optional[str] = None
@@ -998,6 +1004,7 @@ class ProxyService:
                     candidate, supplier_path, supplier_body, supplier_protocol,
                     no_suffix=self._use_no_suffix(candidate.provider_options),
                 )
+                supplier_body = format_recovery.prepare(candidate, supplier_protocol, supplier_body)
                 if self._use_no_suffix(candidate.provider_options):
                     supplier_path = ""
                 client = get_provider_client(supplier_protocol)
@@ -1014,7 +1021,7 @@ class ProxyService:
                     candidate.proxy_enabled,
                     candidate.proxy_url,
                 )
-                return await client.forward(
+                response = await client.forward(
                     base_url=candidate.base_url,
                     api_key=candidate.api_key,
                     path=supplier_path,
@@ -1029,6 +1036,7 @@ class ProxyService:
                     proxy_config=proxy_config,
                     response_timeout_seconds=candidate.response_timeout_seconds,
                 )
+                return format_recovery.validate_response(candidate, response)
             except Exception as e:
                 error_msg = (
                     f"{e.code}: {e.message}"
@@ -1054,8 +1062,8 @@ class ProxyService:
             input_tokens=input_tokens,
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
-            repair_request=tool_reasoning_recovery.repair(model_turn_repair),
-            max_repair_attempts=3,  # One model-turn repair plus two tool/reasoning stages.
+            repair_request=repair_request,
+            max_repair_attempts=6,  # Three format stages plus the three existing repairs.
         )
 
         if result.response.body is not None and result.final_provider is not None:
@@ -1088,7 +1096,12 @@ class ProxyService:
                 # Capture upstream response before protocol conversion
                 conversion_data["upstream_response_body"] = hooked_upstream_body
                 response_body = hooked_upstream_body
-                if not same_protocol:
+                if not same_protocol and (
+                    result.response.is_success
+                    or not isinstance(hooked_upstream_body, dict)
+                    or "error" not in hooked_upstream_body
+                    or request_protocol not in ("openai", "openai_responses")
+                ):
                     response_body = convert_response_for_user(
                         request_protocol=request_protocol,
                         supplier_protocol=supplier_protocol,
@@ -1481,6 +1494,11 @@ class ProxyService:
         # 8. Execute streaming request
         model_turn_repair = ModelTurnRepair()
         tool_reasoning_recovery = ToolReasoningRecovery()
+        format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+        repair_reasoning_or_turn = tool_reasoning_recovery.repair(model_turn_repair)
+
+        def repair_request(candidate: CandidateProvider, response: ProviderResponse) -> bool:
+            return format_recovery.try_repair(candidate, response) or repair_reasoning_or_turn(candidate, response)
 
         async def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
@@ -1557,6 +1575,7 @@ class ProxyService:
                     candidate, supplier_path, supplier_body, supplier_protocol,
                     no_suffix=self._use_no_suffix(candidate.provider_options),
                 )
+                supplier_body = format_recovery.prepare(candidate, supplier_protocol, supplier_body)
                 if self._use_no_suffix(candidate.provider_options):
                     supplier_path = ""
                 client = get_provider_client(supplier_protocol)
@@ -1769,7 +1788,12 @@ class ProxyService:
                     with anyio.CancelScope(shield=True):
                         await upstream_gen.aclose()
 
-            return wrapped()
+            async def validated() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
+                async with aclosing(wrapped()) as stream:
+                    async for item in format_recovery.validate_stream(candidate, stream):
+                        yield item
+
+            return validated()
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
             provider_mapping = provider_mapping_by_id.get(
@@ -1874,8 +1898,8 @@ class ProxyService:
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
             is_meaningful_chunk=stream_chunk_has_text,
-            repair_request=tool_reasoning_recovery.repair(model_turn_repair),
-            max_repair_attempts=3,  # One model-turn repair plus two tool/reasoning stages.
+            repair_request=repair_request,
+            max_repair_attempts=6,  # Three format stages plus the three existing repairs.
         )
 
         # Get first chunk to determine status
