@@ -557,6 +557,16 @@ class ProxyService:
             if hooked_image_supplier_body is not None:
                 supplier_body = hooked_image_supplier_body
 
+        if (
+            supplier_protocol == log.supplier_protocol == "openai"
+            and log.converted_request_body is not None
+        ):
+            # Rebuild the full schema instruction using the format actually sent.
+            format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+            supplier_body = format_recovery.restore_logged_chat_format(
+                supplier_body, log.converted_request_body
+            )
+
         return {
             "converted_request_body": supplier_body,
             "upstream_url": build_upstream_url(provider.base_url, supplier_path),

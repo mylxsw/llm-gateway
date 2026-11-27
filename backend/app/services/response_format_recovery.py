@@ -15,6 +15,12 @@ import jsonschema_rs
 from app.common.errors import ServiceError
 from app.common.openai_responses import _extract_assistant_text_from_responses
 from app.common.protocol_conversion import convert_response_for_user
+from app.common.provider_protocols import (
+    DEEPSEEK_PROTOCOL,
+    OPENAI_PROTOCOL,
+    ZHIPU_PROTOCOL,
+    normalize_frontend_protocol,
+)
 from app.common.stream_usage import SSEDecoder
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
@@ -114,6 +120,14 @@ class _Format:
     schema: dict[str, Any] | None = None
     name: str | None = None
     strict: bool = False
+
+    def json_fallback_mode(self) -> str:
+        """Use JSON Object only if the original schema can describe an object."""
+        schema_type = (self.schema or {}).get("type")
+        schema_types = [schema_type] if isinstance(schema_type, str) else schema_type
+        if isinstance(schema_types, list) and "object" not in schema_types:
+            return "omit"
+        return "json_object"
 
     @cached_property
     def validator(self) -> jsonschema_rs.Validator | None:
@@ -216,6 +230,15 @@ class ResponseFormatRecovery:
 
         key = ModelTurnRepair._key(candidate)
         mode = self._next_modes.get(key, requested.kind)
+        # The vendor preset is preserved separately from the wire protocol.
+        # DeepSeek and GLM Chat accept JSON Object but have no JSON Schema mode.
+        if (
+            mode == "json_schema"
+            and protocol == OPENAI_PROTOCOL
+            and normalize_frontend_protocol(candidate.protocol)
+            in (DEEPSEEK_PROTOCOL, ZHIPU_PROTOCOL)
+        ):
+            mode = requested.json_fallback_mode()
         # Native Anthropic has no free-form JSON-object mode.
         if protocol == "anthropic" and mode in ("text", "json_object"):
             mode = "omit"
@@ -229,6 +252,31 @@ class ResponseFormatRecovery:
         if mode == requested.kind and protocol in ("openai", "openai_responses"):
             return body
 
+        return self._rewrite_request(requested, protocol, body, mode, validate)
+
+    def restore_logged_chat_format(
+        self, body: dict[str, Any], sent_body: dict[str, Any]
+    ) -> dict[str, Any]:
+        requested = self._format
+        if requested is None or requested.kind != "json_schema":
+            return body
+        sent_format = sent_body.get("response_format")
+        if isinstance(sent_format, dict) and sent_format.get("type") == "json_object":
+            mode = "json_object"
+        elif "response_format" not in sent_body:
+            mode = "omit"
+        else:
+            return body
+        return self._rewrite_request(requested, OPENAI_PROTOCOL, body, mode, True)
+
+    @staticmethod
+    def _rewrite_request(
+        requested: _Format,
+        protocol: str,
+        body: dict[str, Any],
+        mode: str,
+        validate: bool,
+    ) -> dict[str, Any]:
         out = dict(body)
         format_config = {"type": "json_object"} if mode == "json_object" else None
         if mode == "strict_schema":
@@ -315,16 +363,7 @@ class ResponseFormatRecovery:
             attempted.mode in ("json_schema", "strict_schema")
             and attempted.protocol != "anthropic"
         ):
-            # An object-only mode cannot fulfill an array or scalar schema.
-            schema_type = (self._format.schema or {}).get("type")
-            schema_types = (
-                [schema_type] if isinstance(schema_type, str) else schema_type
-            )
-            next_mode = (
-                "omit"
-                if isinstance(schema_types, list) and "object" not in schema_types
-                else "json_object"
-            )
+            next_mode = self._format.json_fallback_mode()
         else:
             next_mode = "omit"
         self._next_modes[key] = next_mode

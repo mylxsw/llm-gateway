@@ -3,7 +3,9 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from app.common.time import utc_now
+from app.domain.log import RequestLogModel
 from app.domain.model import ModelMapping
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
@@ -152,16 +154,33 @@ async def run_proxy(proxy, body, forward, protocol="openai"):
             "deepseek-flash",
             "deepseek",
             "json_schema",
-            [DEEPSEEK_ERROR],
-            ["json_schema", "json_object"],
+            [],
+            ["json_object"],
         ),
         (
             "glm-5",
             "zhipu",
             "json_schema",
-            ["response_format.type must be one of text, json_object"],
+            [],
+            ["json_object"],
+        ),
+        (
+            "deepseek-flash",
+            "openai",
+            "json_schema",
+            [DEEPSEEK_ERROR],
             ["json_schema", "json_object"],
         ),
+        (
+            "deepseek-flash",
+            "deepseek",
+            "json_schema",
+            ["response_format.type must be one of text"],
+            ["json_object", None],
+        ),
+        ("deepseek-flash", "deepseek", "json_object", [], ["json_object"]),
+        ("glm-5", "zhipu", "text", [], ["text"]),
+        ("deepseek-v4.1-flash", "aliyun", "json_schema", [], ["json_schema"]),
         (
             "qwen-thinking",
             "aliyun",
@@ -235,13 +254,47 @@ async def test_adapts_rejected_formats_before_any_output(
         assert len(closed) == len(calls)
     else:
         assert json.loads(output["choices"][0]["message"]["content"]) == CARD
-    if errors and kind == "json_schema":
-        if expected[-1] == "json_schema":
+    if kind == "json_schema":
+        for outbound, mode in zip(calls, expected, strict=True):
+            if mode != "json_schema":
+                assert "JSON Schema" in outbound["messages"][0]["content"]
+                assert "additionalProperties" in outbound["messages"][0]["content"]
+        if errors and expected[-1] == "json_schema":
             assert calls[-1]["response_format"]["json_schema"]["strict"] is True
-        else:
-            assert "JSON Schema" in calls[-1]["messages"][0]["content"]
-            assert "additionalProperties" in calls[-1]["messages"][0]["content"]
     assert calls[-1]["messages"][-1] == body["messages"][-1]
+
+
+@pytest.mark.parametrize("sent_mode", ["json_schema", "json_object", None])
+async def test_rebuild_preserves_the_chat_format_actually_sent(sent_mode):
+    provider = candidate("deepseek-flash", "deepseek")
+    proxy = make_proxy([provider])
+    proxy.provider_repo.get_by_id.return_value = provider
+    original = copy.deepcopy(request_body("json_schema", False))
+    description = "Describe the original entry in detail. " * 100
+    original["response_format"]["json_schema"]["schema"]["description"] = description
+    sent_body = {"messages": [{"role": "system", "content": "...[truncated]"}]}
+    if sent_mode is not None:
+        sent_body["response_format"] = {"type": sent_mode}
+    log = RequestLogModel(
+        id=1,
+        request_time=utc_now(),
+        provider_id=provider.provider_id,
+        request_protocol="openai",
+        supplier_protocol="openai",
+        request_path="/v1/chat/completions",
+        target_model=provider.target_model,
+        request_body=original,
+        converted_request_body=sent_body,
+    )
+
+    rebuilt = (await proxy.rebuild_converted_request(log))["converted_request_body"]
+
+    assert (rebuilt.get("response_format") or {}).get("type") == sent_mode
+    if sent_mode == "json_schema":
+        assert rebuilt["messages"] == original["messages"]
+    else:
+        assert description in rebuilt["messages"][0]["content"]
+        assert rebuilt["messages"][1:] == original["messages"]
 
 
 @pytest.mark.parametrize("stream", [False, True])
