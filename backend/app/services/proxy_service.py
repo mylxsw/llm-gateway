@@ -539,6 +539,7 @@ class ProxyService:
             body=hooked_body,
             target_model=target_model,
             options=conversion_options,
+            supplier_base_url=provider.base_url,
         )
         if self._use_no_suffix(provider.provider_options):
             supplier_path = ""
@@ -556,6 +557,14 @@ class ProxyService:
             )
             if hooked_image_supplier_body is not None:
                 supplier_body = hooked_image_supplier_body
+
+        if (
+            isinstance(log.converted_request_body, dict)
+            and "thinking" not in log.converted_request_body
+            and supplier_body.get("thinking") == {"type": "disabled"}
+        ):
+            # Older attempts may predate the thinking default used by conversion.
+            supplier_body.pop("thinking")
 
         if (
             supplier_protocol == log.supplier_protocol == "openai"
@@ -975,6 +984,7 @@ class ProxyService:
                     body=hooked_body,
                     target_model=candidate.target_model,
                     options=conversion_options,
+                    supplier_base_url=candidate.base_url,
                 )
                 hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
@@ -1546,6 +1556,7 @@ class ProxyService:
                     body=hooked_body,
                     target_model=candidate.target_model,
                     options=conversion_options,
+                    supplier_base_url=candidate.base_url,
                 )
                 hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,

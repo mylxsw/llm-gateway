@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from contextlib import aclosing
 from typing import Any, AsyncGenerator, Optional
+from urllib.parse import urlsplit
 
 from app.common.errors import ServiceError
 from app.common.reasoning import (
@@ -49,6 +50,7 @@ from app.common.protocol import (
 )
 from app.common.provider_protocols import (
     ANTHROPIC_PROTOCOL,
+    DEEPSEEK_PROTOCOL,
     IMPLEMENTATION_PROTOCOLS,
     OPENAI_PROTOCOL,
     OPENAI_RESPONSES_PROTOCOL,
@@ -109,6 +111,31 @@ def _restrict_tool_choice_to_auto_or_none(body: dict[str, Any]) -> None:
         body["tool_choice"] = {"type": "auto"}
 
 
+def _has_thinking_setting(body: dict[str, Any]) -> bool:
+    reasoning = body.get("reasoning")
+    return (
+        body.get("thinking") is not None
+        or body.get("reasoning_effort") is not None
+        or (isinstance(reasoning, dict) and reasoning.get("effort") is not None)
+    )
+
+
+def _deepseek_requires_function_call(body: dict[str, Any]) -> bool:
+    choice = body.get("tool_choice")
+    if isinstance(choice, dict):
+        return choice.get("type") == "function"
+    if choice != "required":
+        return False
+
+    # DeepSeek treats `required` as `auto` when its built-in web tools are present.
+    tools = body.get("tools")
+    return not isinstance(tools, list) or not any(
+        isinstance(tool, dict)
+        and tool.get("type") in ("deepseek_web_search", "deepseek_read_url")
+        for tool in tools
+    )
+
+
 def convert_request_for_supplier(
     *,
     request_protocol: str,
@@ -117,6 +144,7 @@ def convert_request_for_supplier(
     body: dict[str, Any],
     target_model: str,
     options: Optional[dict[str, Any]] = None,
+    supplier_base_url: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Convert user request protocol to supplier protocol request body/path.
@@ -132,6 +160,7 @@ def convert_request_for_supplier(
         path: Original request path
         body: Request body in user protocol format
         target_model: Target model name for the supplier
+        supplier_base_url: Base URL of the selected supplier
 
     Returns:
         tuple[str, dict]: (target_path, converted_body)
@@ -172,6 +201,22 @@ def convert_request_for_supplier(
                 converted_body,
                 source_body=body,
             )
+
+        if (
+            result.path == "/v1/chat/completions"
+            and _deepseek_requires_function_call(converted_body)
+            and not _has_thinking_setting(body)
+            and not _has_thinking_setting(converted_body)
+            and (
+                supplier_frontend_protocol == DEEPSEEK_PROTOCOL
+                or (
+                    supplier_frontend_protocol == OPENAI_PROTOCOL
+                    and urlsplit(supplier_base_url or "").hostname == "api.deepseek.com"
+                )
+            )
+        ):
+            # DeepSeek defaults to thinking mode, which rejects forced functions.
+            converted_body["thinking"] = {"type": "disabled"}
 
         if uses_adaptive_thinking(supplier_frontend_protocol):
             _restrict_tool_choice_to_auto_or_none(converted_body)
