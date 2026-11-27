@@ -8,6 +8,7 @@ export interface AuthStatusResponse {
   enabled: boolean;
   authenticated: boolean;
   enable_view_api_keys: boolean;
+  commercial_enabled?: boolean;
 }
 
 export interface LoginResponse {

@@ -98,6 +98,9 @@ def start_scheduler():
 
     # Create scheduler
     _scheduler = AsyncIOScheduler()
+    if settings.COMMERCIAL_ENABLED:
+        from app.services.commercial import recover
+        _scheduler.add_job(recover, "interval", seconds=30, max_instances=1)
 
     # Add log cleanup task (Executes every configured interval)
     _scheduler.add_job(

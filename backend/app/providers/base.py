@@ -31,6 +31,8 @@ class ProviderResponse:
     total_time_ms: Optional[int] = None
     # Error message
     error: Optional[str] = None
+    # Transport evidence, distinct from an upstream HTTP 504 response.
+    interrupted: bool = False
     
     @property
     def is_success(self) -> bool:

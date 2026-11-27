@@ -150,6 +150,7 @@ class LogService:
                 api_key_id=s.api_key_id,
                 api_key_name=s.api_key_name,
                 user_id=s.user_id,
+                commercial_user_id=s.commercial_user_id,
                 requested_model=s.requested_model,
                 target_model=s.target_model,
                 provider_id=s.provider_id,

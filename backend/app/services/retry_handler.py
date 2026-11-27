@@ -69,7 +69,7 @@ class RetryHandler:
     
     Implements the following retry logic:
     - Status code >= 500: Retry on the same provider, max 3 times, 1000ms interval
-    - Optional request repair: One corrective attempt per candidate
+    - Optional request repair: Bounded corrective attempts per candidate (default one)
     - Other status codes < 500: Switch directly to the next provider
     - All providers failed: Return the last failed response
     """
@@ -279,6 +279,7 @@ class RetryHandler:
         image_count: Optional[int] = None,
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
         repair_request: Callable[[CandidateProvider, ProviderResponse], bool] | None = None,
+        max_repair_attempts: int = 1,
     ) -> RetryResult:
         """
         Execute Request with Retry
@@ -321,7 +322,7 @@ class RetryHandler:
             
             # Same provider retry count
             same_provider_retries = 0
-            repair_attempted = False
+            repair_attempts = 0
             
             while same_provider_retries < self.max_retries:
                 # Execute request
@@ -372,10 +373,10 @@ class RetryHandler:
                     self.max_retries,
                 )
 
-                # Allow one corrective request before ordinary retry/failover.
-                if not repair_attempted and repair_request is not None:
+                # Allow bounded corrective requests before ordinary retry/failover.
+                if repair_attempts < max_repair_attempts and repair_request is not None:
                     if repair_request(current_provider, response):
-                        repair_attempted = True
+                        repair_attempts += 1
                         total_retry_count += 1
                         continue
 
@@ -433,6 +434,7 @@ class RetryHandler:
         on_failure_attempt: Callable[[AttemptRecord], Awaitable[None]] | None = None,
         is_meaningful_chunk: Callable[[bytes], bool] | None = None,
         repair_request: Callable[[CandidateProvider, ProviderResponse], bool] | None = None,
+        max_repair_attempts: int = 1,
     ) -> Any:
         """
         Execute Streaming Request with Retry
@@ -468,7 +470,7 @@ class RetryHandler:
         ):
             last_provider = current_provider
             same_provider_retries = 0
-            repair_attempted = False
+            repair_attempts = 0
             provider_response: Optional[ProviderResponse] = None
             
             while same_provider_retries < self.max_retries:
@@ -562,9 +564,9 @@ class RetryHandler:
                             # Cleanup must not turn a known HTTP error into a 502
                             # and accidentally change its retry/failover policy.
                             logger.exception("Failed to close unsuccessful upstream stream")
-                    if not repair_attempted and repair_request is not None:
+                    if repair_attempts < max_repair_attempts and repair_request is not None:
                         if repair_request(current_provider, response):
-                            repair_attempted = True
+                            repair_attempts += 1
                             total_retry_count += 1
                             continue
 

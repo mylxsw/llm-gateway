@@ -190,6 +190,10 @@ def convert_request_for_supplier(
             if converted_body.get("max_completion_tokens") is None:
                 converted_body["max_completion_tokens"] = legacy_limit
 
+        # Apply after conversion, which may strip OpenAI stream options.
+        from app.services.commercial import request_id, apply_stream_usage
+        if request_id.get():
+            converted_body = apply_stream_usage(converted_body, supplier_protocol, options)
         return result.path, converted_body
 
     except UnsupportedConversionError as e:

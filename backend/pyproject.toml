@@ -22,6 +22,7 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     "cryptography>=42.0.0",
     "mcp>=1.28.0",
+    "jsonschema-rs>=0.62.0,<0.63",
 ]
 
 [dependency-groups]
@@ -29,4 +30,5 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
+    "fakeredis[lua]>=2.40.0",
 ]

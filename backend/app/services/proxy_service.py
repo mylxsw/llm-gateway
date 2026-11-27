@@ -1,3 +1,4 @@
+from app.services.commercial import commercial_call, request_id as commercial_request_id, account_id as commercial_account_id, settle_log
 """Proxy Core Service Module
 
 Implements core business logic for request proxying."""
@@ -43,6 +44,8 @@ from app.repositories.provider_repo import ProviderRepository
 from app.rules import CandidateProvider, RuleContext, RuleEngine, TokenUsage
 from app.services.retry_handler import AttemptRecord, RetryHandler
 from app.services.model_turn_repair import ModelTurnRepair
+from app.services.response_format_recovery import ResponseFormatRecovery
+from app.services.tool_reasoning_recovery import ToolReasoningRecovery
 from app.services.model_alias import resolve_alias_target
 from app.services.provider_health import ProviderHealthTracker
 from app.services.stream_latency import StreamLatencyTracker, stream_chunk_has_text
@@ -220,6 +223,32 @@ class ProxyService:
                 self._log_repo_factory(session),
             )
 
+    async def _commercial_log_identity(self, log_data):
+        from app.config import get_settings
+        if not get_settings().COMMERCIAL_ENABLED:
+            return
+        if not hasattr(self, "_commercial_identities"):
+            self._commercial_identities = {}
+        uid = commercial_account_id.get() or self._commercial_identities.get(log_data.trace_id)
+        if uid:
+            self._commercial_identities[log_data.trace_id] = uid
+        if uid:
+            log_data.commercial_user_id = uid
+            log_data.request_url = None
+            log_data.upstream_url = None
+            log_data.user_id = None
+            # Never retain free-form upstream error bodies for commercial requests.
+            if log_data.error_info:
+                log_data.error_info = "upstream_request_failed"
+            if log_data.usage_details:
+                flags = {
+                    k: v for k, v in log_data.usage_details.items()
+                    if k in ("interrupted", "final_usage", "stream_started", "response_complete", "has_output", "has_upstream_usage") and type(v) is bool
+                }
+                allowed = {"input_tokens", "output_tokens", "total_tokens", "source", "cached_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"}
+                log_data.usage_details = {k: v for k, v in log_data.usage_details.items() if k in allowed and ((k == "source" and v in ("upstream", "mixed", "estimated")) or (k != "source" and type(v) is int and v >= 0))}
+                log_data.usage_details.update(flags)
+
     async def _write_log(
         self, log_data: RequestLogCreate, record_details: bool = True
     ) -> None:
@@ -230,6 +259,7 @@ class ProxyService:
         # earlier (e.g. before debug logging) so the payload never leaks.
         if not record_details:
             _strip_detail_payload(log_data)
+        await self._commercial_log_identity(log_data)
         async with self._repos() as (_model_repo, _provider_repo, log_repo):
             await log_repo.create(log_data)
 
@@ -263,6 +293,7 @@ class ProxyService:
             request_method=method,
             is_completed=False,
         )
+        await self._commercial_log_identity(log_data)
         async with self._repos() as (_model_repo, _provider_repo, log_repo):
             log_id = await log_repo.create_initial(log_data)
         return log_id
@@ -274,6 +305,16 @@ class ProxyService:
         if not record_details:
             _strip_detail_payload(log_data)
         log_data.is_completed = True
+        await self._commercial_log_identity(log_data)
+        try:
+            await settle_log(log_data)
+        except Exception:
+            # Financial reservation remains durable. Recovery replays journal, or
+            # moves an unknown result to review; do not turn a delivered success into a retry.
+            logger.error("Commercial settlement pending: request_id=%s", log_data.trace_id)
+        finally:
+            if hasattr(self, "_commercial_identities"):
+                self._commercial_identities.pop(log_data.trace_id, None)
         try:
             async with self._repos() as (_model_repo, _provider_repo, log_repo):
                 await log_repo.update(log_id, log_data)
@@ -516,6 +557,16 @@ class ProxyService:
             if hooked_image_supplier_body is not None:
                 supplier_body = hooked_image_supplier_body
 
+        if (
+            supplier_protocol == log.supplier_protocol == "openai"
+            and log.converted_request_body is not None
+        ):
+            # Rebuild the full schema instruction using the format actually sent.
+            format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+            supplier_body = format_recovery.restore_logged_chat_format(
+                supplier_body, log.converted_request_body
+            )
+
         return {
             "converted_request_body": supplier_body,
             "upstream_url": build_upstream_url(provider.base_url, supplier_path),
@@ -640,6 +691,7 @@ class ProxyService:
             provider_mapping_by_id,
         )
 
+    @commercial_call
     async def process_request(
         self,
         api_key_id: Optional[int],
@@ -653,6 +705,7 @@ class ProxyService:
         *,
         force_parse_response: bool = False,
         record_details: bool = True,
+        admin_model_test: bool = False,
     ) -> tuple[ProviderResponse, dict[str, Any]]:
         """
         Process Proxy Request
@@ -672,10 +725,11 @@ class ProxyService:
             NotFoundError: Model not configured
             ServiceError: No available provider
         """
-        trace_id = generate_trace_id()
+        trace_id = commercial_request_id.get() or generate_trace_id()
         request_time = utc_now()
         sanitized_body = self._sanitize_request_body_for_log(body)
         user_id = _extract_user_id(headers)
+        commercial_user_id = commercial_account_id.get()
 
         # 1. Extract requested_model
         requested_model = body.get("model")
@@ -861,9 +915,7 @@ class ProxyService:
                 upstream_url=conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(
-                    attempt.provider.protocol
-                ),
+                supplier_protocol=conversion_data.get("supplier_protocol"),
                 converted_request_body=_smart_truncate(
                     conversion_data.get("converted_request_body")
                 ),
@@ -883,13 +935,18 @@ class ProxyService:
 
         # 8. Execute request (with retry)
         model_turn_repair = ModelTurnRepair()
+        tool_reasoning_recovery = ToolReasoningRecovery()
+        format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+        repair_reasoning_or_turn = tool_reasoning_recovery.repair(model_turn_repair)
+
+        def repair_request(candidate: CandidateProvider, response: ProviderResponse) -> bool:
+            return format_recovery.try_repair(candidate, response) or repair_reasoning_or_turn(candidate, response)
 
         async def forward_fn(candidate: CandidateProvider) -> ProviderResponse:
             supplier_protocol: Optional[str] = None
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
-                client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
@@ -919,8 +976,6 @@ class ProxyService:
                     target_model=candidate.target_model,
                     options=conversion_options,
                 )
-                if self._use_no_suffix(candidate.provider_options):
-                    supplier_path = ""
                 hooked_supplier_body = await self._protocol_hooks.after_request_conversion(
                     supplier_body,
                     request_protocol,
@@ -946,6 +1001,23 @@ class ProxyService:
                         target_model=candidate.target_model,
                     )
                 supplier_body = model_turn_repair.prepare(candidate, supplier_body)
+                # Record the attempted protocol even if recovery conversion fails.
+                conversion_data["supplier_protocol"] = tool_reasoning_recovery.protocol(
+                    candidate, supplier_protocol
+                )
+                conversion_data["converted_request_body"] = None
+                conversion_data["upstream_url"] = build_upstream_url(
+                    candidate.base_url,
+                    "/v1/responses" if conversion_data["supplier_protocol"] == "openai_responses" else supplier_path,
+                )
+                supplier_path, supplier_body, supplier_protocol = tool_reasoning_recovery.prepare(
+                    candidate, supplier_path, supplier_body, supplier_protocol,
+                    no_suffix=self._use_no_suffix(candidate.provider_options),
+                )
+                supplier_body = format_recovery.prepare(candidate, supplier_protocol, supplier_body)
+                if self._use_no_suffix(candidate.provider_options):
+                    supplier_path = ""
+                client = get_provider_client(supplier_protocol)
                 # Track conversion data for logging
                 conversion_data["supplier_protocol"] = supplier_protocol
                 conversion_data["converted_request_body"] = supplier_body
@@ -959,7 +1031,7 @@ class ProxyService:
                     candidate.proxy_enabled,
                     candidate.proxy_url,
                 )
-                return await client.forward(
+                response = await client.forward(
                     base_url=candidate.base_url,
                     api_key=candidate.api_key,
                     path=supplier_path,
@@ -974,6 +1046,7 @@ class ProxyService:
                     proxy_config=proxy_config,
                     response_timeout_seconds=candidate.response_timeout_seconds,
                 )
+                return format_recovery.validate_response(candidate, response)
             except Exception as e:
                 error_msg = (
                     f"{e.code}: {e.message}"
@@ -999,13 +1072,14 @@ class ProxyService:
             input_tokens=input_tokens,
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
-            repair_request=model_turn_repair.try_repair,
+            repair_request=repair_request,
+            max_repair_attempts=6,  # Three format stages plus the three existing repairs.
         )
 
         if result.response.body is not None and result.final_provider is not None:
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
-                supplier_protocol = resolve_implementation_protocol(
+                supplier_protocol = conversion_data.get("supplier_protocol") or resolve_implementation_protocol(
                     result.final_provider.protocol
                 )
                 same_protocol = normalize_protocol(
@@ -1032,7 +1106,12 @@ class ProxyService:
                 # Capture upstream response before protocol conversion
                 conversion_data["upstream_response_body"] = hooked_upstream_body
                 response_body = hooked_upstream_body
-                if not same_protocol:
+                if not same_protocol and (
+                    result.response.is_success
+                    or not isinstance(hooked_upstream_body, dict)
+                    or "error" not in hooked_upstream_body
+                    or request_protocol not in ("openai", "openai_responses")
+                ):
                     response_body = convert_response_for_user(
                         request_protocol=request_protocol,
                         supplier_protocol=supplier_protocol,
@@ -1085,7 +1164,7 @@ class ProxyService:
         # 9. Calculate Output Token and usage details
         output_tokens = 0
         usage_details: Optional[dict[str, Any]] = None
-        if result.success and result.response.body:
+        if (result.success or commercial_user_id) and result.response.body:
             upstream_body = conversion_data.get("upstream_response_body")
             details = None
             try:
@@ -1097,9 +1176,9 @@ class ProxyService:
 
             if details:
                 usage_details = dict(details.__dict__)
-                if details.input_tokens:
+                if details.input_tokens is not None:
                     input_tokens = details.input_tokens
-                if details.output_tokens:
+                if details.output_tokens is not None:
                     output_tokens = details.output_tokens
                 else:
                     output_tokens = token_counter.count_output_body(
@@ -1107,7 +1186,7 @@ class ProxyService:
                     )
                     usage_details["output_tokens"] = output_tokens
                     usage_details["source"] = "mixed"
-                if not usage_details.get("input_tokens"):
+                if usage_details.get("input_tokens") is None:
                     usage_details["input_tokens"] = input_tokens
                     usage_details["source"] = "mixed"
                 if not usage_details.get("total_tokens") and usage_details.get(
@@ -1179,6 +1258,18 @@ class ProxyService:
         # Extract cached tokens from usage details
         cached_input_tokens = None
         cache_creation_input_tokens = None
+        if commercial_user_id:
+            from app.services.commercial import complete_usage, response_has_output
+            upstream_body = conversion_data.get('upstream_response_body') or result.response.body
+            try:
+                reported_usage = extract_usage_details(upstream_body)
+            except Exception:
+                reported_usage = None
+            usage_details = usage_details or {}
+            usage_details['response_complete'] = complete_usage(upstream_body)
+            usage_details['has_upstream_usage'] = reported_usage is not None
+            usage_details['has_output'] = response_has_output(upstream_body) or bool(reported_usage and reported_usage.output_tokens)
+            usage_details['interrupted'] = result.response.interrupted
         if usage_details:
             cached_input_tokens = (
                 usage_details.get("cache_read_input_tokens")
@@ -1251,6 +1342,8 @@ class ProxyService:
         if not record_details:
             _strip_detail_payload(log_data)
 
+        await self._commercial_log_identity(log_data)
+
         # DEBUG: Log request details
         try:
             logger.debug(f"Request Log: {log_data.model_dump_json()}")
@@ -1274,6 +1367,7 @@ class ProxyService:
             else None,
         }
 
+    @commercial_call
     async def process_request_stream(
         self,
         api_key_id: Optional[int],
@@ -1286,6 +1380,7 @@ class ProxyService:
         body: dict[str, Any],
         *,
         record_details: bool = True,
+        admin_model_test: bool = False,
     ) -> tuple[ProviderResponse, AsyncGenerator[bytes, None], dict[str, Any]]:
         """
         Process Streaming Proxy Request
@@ -1301,11 +1396,12 @@ class ProxyService:
         Returns:
             tuple: (Initial response, Stream generator, Log info)
         """
-        trace_id = generate_trace_id()
+        trace_id = commercial_request_id.get() or generate_trace_id()
         request_time = utc_now()
         start_monotonic = time.monotonic()
         sanitized_body = self._sanitize_request_body_for_log(body)
         user_id = _extract_user_id(headers)
+        commercial_user_id = commercial_account_id.get()
 
         # 1-7. Same model resolution and rule matching logic
         requested_model = body.get("model")
@@ -1407,6 +1503,12 @@ class ProxyService:
 
         # 8. Execute streaming request
         model_turn_repair = ModelTurnRepair()
+        tool_reasoning_recovery = ToolReasoningRecovery()
+        format_recovery = ResponseFormatRecovery(path, body, request_protocol)
+        repair_reasoning_or_turn = tool_reasoning_recovery.repair(model_turn_repair)
+
+        def repair_request(candidate: CandidateProvider, response: ProviderResponse) -> bool:
+            return format_recovery.try_repair(candidate, response) or repair_reasoning_or_turn(candidate, response)
 
         async def forward_stream_fn(candidate: CandidateProvider):
             async def error_gen(msg: str):
@@ -1416,7 +1518,6 @@ class ProxyService:
             try:
                 is_image_path = path in OPENAI_IMAGE_PATHS
                 supplier_protocol = resolve_implementation_protocol(candidate.protocol)
-                client = get_provider_client(supplier_protocol)
                 conversion_options = self._build_conversion_options(
                     candidate.provider_options
                 )
@@ -1471,6 +1572,26 @@ class ProxyService:
                         target_model=candidate.target_model,
                     )
                 supplier_body = model_turn_repair.prepare(candidate, supplier_body)
+                # Record the attempted protocol even if recovery conversion fails.
+                stream_conversion_data["supplier_protocol"] = tool_reasoning_recovery.protocol(
+                    candidate, supplier_protocol
+                )
+                stream_conversion_data["converted_request_body"] = None
+                stream_conversion_data["upstream_url"] = build_upstream_url(
+                    candidate.base_url,
+                    "/v1/responses" if stream_conversion_data["supplier_protocol"] == "openai_responses" else supplier_path,
+                )
+                supplier_path, supplier_body, supplier_protocol = tool_reasoning_recovery.prepare(
+                    candidate, supplier_path, supplier_body, supplier_protocol,
+                    no_suffix=self._use_no_suffix(candidate.provider_options),
+                )
+                supplier_body = format_recovery.prepare(candidate, supplier_protocol, supplier_body)
+                if self._use_no_suffix(candidate.provider_options):
+                    supplier_path = ""
+                client = get_provider_client(supplier_protocol)
+                if commercial_user_id:
+                    from app.services.commercial import apply_stream_usage
+                    supplier_body = apply_stream_usage(supplier_body, supplier_protocol, candidate.provider_options)
                 # Track conversion data for logging
                 stream_conversion_data["supplier_protocol"] = supplier_protocol
                 stream_conversion_data["converted_request_body"] = supplier_body
@@ -1520,6 +1641,12 @@ class ProxyService:
                         await upstream_gen.aclose()
                     return
 
+                upstream_usage = StreamUsageAccumulator(
+                    protocol=supplier_protocol, model=candidate.target_model
+                )
+                stream_conversion_data['usage_accumulator'] = upstream_usage
+                stream_conversion_data.pop('interrupted', None)
+
                 async def upstream_bytes() -> AsyncGenerator[bytes, None]:
                     # Reset upstream chunks for the current attempt
                     stream_conversion_data["upstream_chunks"] = []
@@ -1529,6 +1656,8 @@ class ProxyService:
 
                     async def process_chunk(chunk: bytes) -> AsyncGenerator[bytes, None]:
                         nonlocal event_buffer
+                        if commercial_user_id:
+                            upstream_usage.feed(chunk)
                         stream_conversion_data["upstream_chunks"].append(chunk)
                         event_buffer += chunk
 
@@ -1554,21 +1683,28 @@ class ProxyService:
 
                     async for event in process_chunk(first_chunk):
                         yield event
-                    async for chunk, resp in upstream_gen:
-                        if not resp.is_success:
-                            # first_resp is the same object surfaced as initial_response;
-                            # mutate it so final stream logging records the failure.
-                            first_resp.status_code = resp.status_code
-                            first_resp.headers.update(resp.headers)
-                            first_resp.error = resp.error or "Upstream stream interrupted"
-                            first_resp.body = resp.body
-                            first_resp.total_time_ms = resp.total_time_ms
-                            raise ServiceError(
-                                message=first_resp.error,
-                                code="upstream_stream_failed",
-                            )
-                        async for event in process_chunk(chunk):
-                            yield event
+                    try:
+                        async for chunk, resp in upstream_gen:
+                            if not resp.is_success:
+                                # first_resp is the same object surfaced as initial_response;
+                                # mutate it so final stream logging records the failure.
+                                first_resp.interrupted = resp.interrupted
+                                first_resp.status_code = resp.status_code
+                                first_resp.headers.update(resp.headers)
+                                first_resp.error = resp.error or "Upstream stream interrupted"
+                                first_resp.body = resp.body
+                                first_resp.total_time_ms = resp.total_time_ms
+                                raise ServiceError(
+                                    message=first_resp.error,
+                                    code="upstream_stream_failed",
+                                )
+                            async for event in process_chunk(chunk):
+                                yield event
+                    except Exception as exc:
+                        if commercial_user_id:
+                            import httpx
+                            stream_conversion_data['interrupted'] = isinstance(exc, (TimeoutError, httpx.TimeoutException))
+                        raise
 
                     # Flush any remaining data in buffer (incomplete event)
                     if event_buffer:
@@ -1620,6 +1756,9 @@ class ProxyService:
                                 yield hooked_out_chunk, first_resp
                 except Exception as e:
                     err = str(e)
+                    if commercial_user_id:
+                        import httpx
+                        stream_conversion_data['interrupted'] = stream_conversion_data.get('interrupted', False) or isinstance(e, (TimeoutError, httpx.TimeoutException))
                     if first_resp.is_success:
                         first_resp.status_code = 502
                     first_resp.error = err
@@ -1659,7 +1798,12 @@ class ProxyService:
                     with anyio.CancelScope(shield=True):
                         await upstream_gen.aclose()
 
-            return wrapped()
+            async def validated() -> AsyncGenerator[tuple[bytes, ProviderResponse], None]:
+                async with aclosing(wrapped()) as stream:
+                    async for item in format_recovery.validate_stream(candidate, stream):
+                        yield item
+
+            return validated()
 
         async def log_failed_attempt(attempt: AttemptRecord) -> None:
             provider_mapping = provider_mapping_by_id.get(
@@ -1742,9 +1886,7 @@ class ProxyService:
                 upstream_url=stream_conversion_data.get("upstream_url"),
                 # Protocol conversion fields
                 request_protocol=request_protocol,
-                supplier_protocol=resolve_implementation_protocol(
-                    attempt.provider.protocol
-                ),
+                supplier_protocol=stream_conversion_data.get("supplier_protocol"),
                 converted_request_body=_smart_truncate(
                     stream_conversion_data.get("converted_request_body")
                 ),
@@ -1766,7 +1908,8 @@ class ProxyService:
             image_count=image_count,
             on_failure_attempt=log_failed_attempt,
             is_meaningful_chunk=stream_chunk_has_text,
-            repair_request=model_turn_repair.try_repair,
+            repair_request=repair_request,
+            max_repair_attempts=6,  # Three format stages plus the three existing repairs.
         )
 
         # Get first chunk to determine status
@@ -1774,6 +1917,13 @@ class ProxyService:
             first_chunk, initial_response, final_provider, retry_count = await anext(
                 stream_gen
             )
+        except (asyncio.CancelledError, TimeoutError):
+            with anyio.CancelScope(shield=True):
+                try:
+                    await stream_gen.aclose()
+                finally:
+                    await active_requests.deregister(log_id)
+            raise
         except StopAsyncIteration:
             error = ServiceError(
                 message="Stream ended unexpectedly", code="stream_error"
@@ -1823,6 +1973,10 @@ class ProxyService:
             await active_requests.deregister(log_id)
             raise error from e
 
+        # Preserve the initial outcome: this response object may be mutated when
+        # the upstream fails later, after a successful stream has already started.
+        stream_started = initial_response.is_success
+
         # Wrap generator to handle logging
         async def wrapped_generator():
             nonlocal input_tokens
@@ -1832,6 +1986,7 @@ class ProxyService:
             )
             raw_stream_chunks: list[bytes] = []
             stream_error: Optional[str] = None
+            stream_interrupted = False
 
             def record_stream_chunk(chunk: Any) -> None:
                 if not chunk:
@@ -1844,13 +1999,25 @@ class ProxyService:
             try:
                 usage_acc.feed(first_chunk)
                 record_stream_chunk(first_chunk)
+                # Prime the generator so aclose also finalizes an unconsumed response.
+                if commercial_user_id:
+                    yield b""
                 yield first_chunk
                 async for chunk, _, _, _ in stream_gen:
                     usage_acc.feed(chunk)
                     record_stream_chunk(chunk)
                     yield chunk
             except asyncio.CancelledError:
+                stream_interrupted = True
                 stream_error = "client_disconnected"
+                raise
+            except GeneratorExit:
+                stream_interrupted = initial_response.is_success
+                stream_error = "stream_closed"
+                raise
+            except TimeoutError:
+                stream_interrupted = True
+                stream_error = "timeout"
                 raise
             except Exception as e:
                 # Log stream interruption exception, but do not throw upwards to avoid polluting StreamingResponse logs
@@ -1858,11 +2025,38 @@ class ProxyService:
                 return
             finally:
                 with anyio.CancelScope(shield=True):
-                    await stream_gen.aclose()
+                    try:
+                        await stream_gen.aclose()
+                    except Exception:
+                        # Cleanup failures must not discard already measured usage.
+                        logger.error("Upstream stream cleanup failed: request_id=%s", trace_id)
+                        stream_error = stream_error or "upstream_close_failed"
                 usage_result = usage_acc.finalize()
+                if commercial_user_id and stream_conversion_data.get('usage_accumulator'):
+                    # Trust supplier events, never usage synthesized by a converter.
+                    upstream_result = stream_conversion_data['usage_accumulator'].finalize()
+                    upstream_result.estimated_output_tokens = max(
+                        upstream_result.estimated_output_tokens,
+                        usage_result.estimated_output_tokens,
+                    )
+                    usage_result = upstream_result
+                has_upstream_usage = usage_result.usage_details is not None
+                has_output = bool(usage_result.output_text or usage_result.output_tokens)
                 usage_details = usage_result.usage_details
-                if usage_result.input_tokens:
-                    input_tokens = usage_result.input_tokens
+                if usage_result.input_tokens is not None:
+                    if commercial_user_id and not usage_result.final_usage:
+                        input_tokens = max(input_tokens or 0, usage_result.input_tokens)
+                    else:
+                        input_tokens = usage_result.input_tokens
+                if commercial_user_id and not usage_result.final_usage:
+                    usage_result.output_tokens = max(usage_result.output_tokens, usage_result.estimated_output_tokens)
+                    if usage_details:
+                        usage_details.update(
+                            input_tokens=input_tokens,
+                            output_tokens=usage_result.output_tokens,
+                            total_tokens=(input_tokens or 0) + usage_result.output_tokens,
+                            source="mixed",
+                        )
                 if usage_details is None:
                     usage_details = {
                         "input_tokens": input_tokens,
@@ -1871,10 +2065,10 @@ class ProxyService:
                         + (usage_result.output_tokens or 0),
                         "source": "estimated",
                     }
-                elif not usage_details.get("input_tokens"):
+                elif usage_details.get("input_tokens") is None:
                     usage_details["input_tokens"] = input_tokens
                     usage_details["source"] = "mixed"
-                if not usage_details.get("output_tokens"):
+                if usage_details.get("output_tokens") is None:
                     usage_details["output_tokens"] = usage_result.output_tokens
                     usage_details["source"] = "mixed"
                 if not usage_details.get("total_tokens") and usage_details.get(
@@ -1883,6 +2077,12 @@ class ProxyService:
                     usage_details["total_tokens"] = usage_details["input_tokens"] + (
                         usage_details.get("output_tokens") or 0
                     )
+                if commercial_user_id:
+                    usage_details["interrupted"] = stream_interrupted or initial_response.interrupted or stream_conversion_data.get('interrupted', False)
+                    usage_details["has_upstream_usage"] = has_upstream_usage
+                    usage_details["has_output"] = has_output
+                    usage_details["final_usage"] = usage_result.final_usage
+                    usage_details["stream_started"] = stream_started
                 total_time_ms = initial_response.total_time_ms
                 if total_time_ms is None:
                     total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
@@ -2033,6 +2233,8 @@ class ProxyService:
                 if not record_details:
                     _strip_detail_payload(log_data)
 
+                await self._commercial_log_identity(log_data)
+
                 # DEBUG: Log request details
                 try:
                     logger.debug(f"Request Log: {log_data.model_dump_json()}")
@@ -2044,14 +2246,17 @@ class ProxyService:
                 try:
                     with anyio.CancelScope(shield=True):
                         await self._update_log(log_id, log_data, record_details=record_details)
-                    await active_requests.deregister(log_id)
+                        await active_requests.deregister(log_id)
                 except Exception:
                     # Log writing failure does not affect main flow
                     pass
 
+        stream = wrapped_generator()
+        if commercial_user_id:
+            await anext(stream)
         return (
             initial_response,
-            wrapped_generator(),
+            stream,
             {
                 "trace_id": trace_id,
                 "retry_count": retry_count,

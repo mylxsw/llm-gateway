@@ -8,11 +8,13 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Header, Request, status
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import UploadFile
 
 from app.api.deps import CurrentApiKey, ModelServiceDep, ProxyServiceDep
 from app.common.errors import AppError
+from app.services.commercial import SettlingStreamingResponse as StreamingResponse
+from app.config import get_settings
 from app.common.proxy_headers import sanitize_upstream_response_headers
 
 router = APIRouter(tags=["Proxy - OpenAI"])
@@ -42,6 +44,19 @@ async def list_models(
         items, _total = await service.get_all_mappings(
             is_active=True, page=1, page_size=1000
         )
+        if get_settings().COMMERCIAL_ENABLED and api_key.key_value.startswith("sha256:"):
+            from app.db.session import engine
+            from squirrel_commercial.pricing import read_price
+            from squirrel_commercial.core import BillingError
+            async with engine.connect() as c:
+                allowed = set()
+                for item in items:
+                    try:
+                        await read_price(c, item.requested_model)
+                    except BillingError:
+                        continue
+                    allowed.add(item.requested_model)
+            items = [item for item in items if item.requested_model in allowed]
         return {
             "object": "list",
             "data": [
@@ -54,7 +69,7 @@ async def list_models(
             ],
         }
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
 
 
 async def _handle_proxy_request_with_body(
@@ -92,6 +107,7 @@ async def _handle_proxy_request_with_body(
 
             # If initial response is error, return directly
             if not initial_response.is_success:
+                await stream_gen.aclose()
                 content = initial_response.body
                 if isinstance(content, (dict, list)):
                     return JSONResponse(
@@ -157,7 +173,7 @@ async def _handle_proxy_request_with_body(
         )
 
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         # Unexpected errors return 500
         import logging
@@ -412,6 +428,7 @@ async def _handle_proxy_request_openai_responses(
             )
 
             if not initial_response.is_success:
+                await stream_gen.aclose()
                 content = initial_response.body
                 if isinstance(content, (dict, list)):
                     return JSONResponse(
@@ -477,7 +494,7 @@ async def _handle_proxy_request_openai_responses(
         )
 
     except AppError as e:
-        return JSONResponse(content=e.to_dict(), status_code=e.status_code)
+        return JSONResponse(content=e.to_dict(), status_code=e.status_code, headers=getattr(e, 'headers', None))
     except Exception as e:
         import logging
 

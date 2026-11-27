@@ -280,12 +280,15 @@ async def execute_playground_request(
     data: PlaygroundExecuteRequest,
     log_service: LogServiceDep,
     proxy_service: ProxyServiceDep,
+    api_key_service: ApiKeyServiceDep,
 ):
     """
     Execute a debug request based on an existing log with editable request data.
     """
     try:
         log = await log_service.get_by_id(log_id)
+        if log.api_key_id:
+            await api_key_service.assert_replay_allowed(log.api_key_id)
 
         if not log.api_key_id:
             raise ValidationError(
@@ -416,6 +419,7 @@ async def get_log_cost_stats(
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name (Fuzzy Match)"),
     user_id: Optional[str] = Query(None, description="User ID from X-User-ID"),
+    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID", include_in_schema=get_settings().COMMERCIAL_ENABLED),
     bucket: Optional[str] = Query(
         None,
         pattern="^(minute|hour|day)$",
@@ -473,6 +477,7 @@ async def get_log_cost_stats(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
             user_id=user_id,
+            commercial_user_id=commercial_user_id,
             bucket=resolved_bucket,
             bucket_minutes=bucket_minutes,
             tz_offset_minutes=tz_offset_minutes,
@@ -502,6 +507,7 @@ async def list_logs(
     api_key_id: Optional[int] = Query(None, description="API Key ID"),
     api_key_name: Optional[str] = Query(None, description="API Key Name"),
     user_id: Optional[str] = Query(None, description="User ID from X-User-ID"),
+    commercial_user_id: Optional[str] = Query(None, description="Verified commercial user ID", include_in_schema=get_settings().COMMERCIAL_ENABLED),
     retry_count_min: Optional[int] = Query(None, description="Min Retry Count"),
     retry_count_max: Optional[int] = Query(None, description="Max Retry Count"),
     input_tokens_min: Optional[int] = Query(None, description="Min Input Tokens"),
@@ -539,6 +545,7 @@ async def list_logs(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
             user_id=user_id,
+            commercial_user_id=commercial_user_id,
             retry_count_min=retry_count_min,
             retry_count_max=retry_count_max,
             input_tokens_min=input_tokens_min,
@@ -671,6 +678,7 @@ async def retry_log(
                 code="retry_multipart_unsupported",
             )
 
+        await api_key_service.assert_replay_allowed(log.api_key_id)
         raw_key = await api_key_service.get_raw_key_value(log.api_key_id)
         retry_headers, sanitized_lower_headers = _build_retry_headers(log, raw_key)
         base_url, path_with_query = _build_retry_target(log, sanitized_lower_headers)

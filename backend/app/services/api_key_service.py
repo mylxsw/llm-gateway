@@ -7,7 +7,7 @@ Provides business logic processing for API Keys.
 from datetime import datetime
 from typing import Optional
 
-from app.common.errors import ConflictError, NotFoundError, AuthenticationError
+from app.common.errors import AppError, ConflictError, NotFoundError, AuthenticationError
 from app.common.time import utc_now
 from app.common.sanitizer import sanitize_api_key_display
 from app.common.utils import generate_api_key
@@ -101,6 +101,11 @@ class ApiKeyService:
             )
         return self._to_response(api_key)
 
+    async def assert_replay_allowed(self, key_id: int) -> None:
+        key = await self.repo.get_by_id(key_id)
+        if key and key.key_value.startswith("sha256:"):
+            raise AppError(message="Commercial keys cannot be replayed", code="commercial_key_hidden", status_code=403)
+
     async def get_raw_key_value(self, id: int) -> str:
         """
         Get raw (unsanitized) key_value by ID
@@ -120,6 +125,8 @@ class ApiKeyService:
                 message=f"API Key with id {id} not found",
                 code="api_key_not_found",
             )
+        if api_key.key_value.startswith("sha256:"):
+            raise AppError(message="Commercial keys cannot be viewed or replayed", code="commercial_key_hidden", status_code=403)
         return api_key.key_value
     
     async def get_all(
@@ -164,6 +171,20 @@ class ApiKeyService:
                 code="api_key_not_found",
             )
         
+        if existing.key_value.startswith("sha256:"):
+            from app.config import get_settings
+            if not get_settings().COMMERCIAL_ENABLED:
+                raise AuthenticationError(message="Commercial access disabled", code="commercial_disabled")
+            from app.db.session import engine
+            from squirrel_commercial.core import admin_key_action, BillingError
+            try:
+                await admin_key_action(engine, id, data.model_dump(exclude_unset=True))
+            except BillingError as exc:
+                if exc.status == 409:
+                    raise ConflictError(message=exc.code, code=exc.code) from exc
+                raise AuthenticationError(message=exc.code, code=exc.code) from exc
+            refreshed = await self.repo.get_by_id(id)
+            return self._to_response(refreshed)
         # If updating name, check for conflict with other Keys
         if data.key_name and data.key_name != existing.key_name:
             name_conflict = await self.repo.get_by_name(data.key_name)
@@ -193,6 +214,14 @@ class ApiKeyService:
                 code="api_key_not_found",
             )
         
+        if existing.key_value.startswith("sha256:"):
+            from app.config import get_settings
+            if not get_settings().COMMERCIAL_ENABLED:
+                raise AuthenticationError(message="Commercial access disabled", code="commercial_disabled")
+            from app.db.session import engine
+            from squirrel_commercial.core import admin_key_action
+            await admin_key_action(engine, id, {'revoke': True})
+            return
         await self.repo.delete(id)
     
     async def authenticate(self, key_value: str) -> ApiKeyModel:
@@ -226,12 +255,30 @@ class ApiKeyService:
                 code="invalid_api_key",
             )
         
+        from app.config import get_settings
+        settings = get_settings()
+        if api_key.key_value.startswith("sha256:"):
+            if not settings.COMMERCIAL_ENABLED:
+                raise AuthenticationError(message="Commercial access disabled", code="commercial_disabled")
+            from app.db.session import engine
+            from squirrel_commercial.core import key_state, BillingError
+            async with engine.connect() as c:
+                try:
+                    await key_state(c, api_key.id)
+                except BillingError as exc:
+                    if exc.code in ("account_blocked", "application_suspended"):
+                        from app.services.commercial import translate
+                        raise translate(exc) from exc
+                    raise AuthenticationError(message=exc.code, code=exc.code) from exc
+        elif settings.COMMERCIAL_ENABLED and settings.COMMERCIAL_ONLY:
+            raise AuthenticationError(message="Commercial key required", code="commercial_key_required")
+
         if not api_key.is_active:
             raise AuthenticationError(
                 message="API Key is disabled",
                 code="api_key_disabled",
             )
-        
+
         # Update last used time
         try:
             await self._write_last_used(api_key.id, utc_now())

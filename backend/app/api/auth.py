@@ -20,6 +20,8 @@ class AuthStatusResponse(BaseModel):
     enabled: bool
     authenticated: bool
     enable_view_api_keys: bool = False
+    if get_settings().COMMERCIAL_ENABLED:
+        commercial_enabled: bool = True
 
 
 class LoginRequest(BaseModel):
