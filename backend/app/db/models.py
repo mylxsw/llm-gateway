@@ -392,6 +392,7 @@ class RequestLog(Base):
     is_stream: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Is Request Completed (False = still in progress, True = completed or failed)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    completion_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Request path (e.g., /v1/chat/completions)
     request_path: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     # Original request URL used by the client
@@ -425,6 +426,7 @@ class RequestLog(Base):
         # Supports the log list ORDER BY, which leads with is_completed (to keep
         # in-progress requests on page 1) then falls back to request_time.
         Index("idx_request_logs_completed_time", "is_completed", "request_time"),
+        Index("idx_request_logs_completion_deadline", "is_completed", "completion_deadline"),
     )
 
     # Relationships

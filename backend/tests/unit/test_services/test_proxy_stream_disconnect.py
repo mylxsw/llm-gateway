@@ -5,19 +5,21 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from starlette.responses import StreamingResponse
+from starlette.requests import ClientDisconnect
 
 from app.common.protocol import converters
 from app.common.time import utc_now
 from app.domain.model import ModelMapping
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
+from app.services.active_requests import active_requests
+from app.services.commercial import SettlingStreamingResponse
 from app.services.proxy_service import ProxyService
 
 
-@pytest.mark.parametrize("http_disconnect", [False, True])
+@pytest.mark.parametrize("disconnect", ["consumer", "response_start", "body"])
 async def test_disconnect_during_buffering_closes_provider(
-    monkeypatch, http_disconnect
+    monkeypatch, disconnect
 ):
     monkeypatch.setattr(converters, "ANTHROPIC_HEARTBEAT_INTERVAL_SECONDS", 0.005)
     now = utc_now()
@@ -42,6 +44,7 @@ async def test_disconnect_during_buffering_closes_provider(
     service = ProxyService(
         model_repo=AsyncMock(), provider_repo=AsyncMock(), log_repo=AsyncMock()
     )
+    service.log_repo.create_initial.return_value = 193
     service._resolve_candidates = AsyncMock(
         return_value=(mapping, [candidate], 0, "anthropic", {})
     )
@@ -96,7 +99,19 @@ async def test_disconnect_during_buffering_closes_provider(
             },
         )
         assert response.is_success
-        if http_disconnect:
+        if disconnect == "response_start":
+
+            async def fail_to_send(message):
+                raise OSError("Client closed the connection")
+
+            http_response = SettlingStreamingResponse(output, media_type="text/event-stream")
+            with pytest.raises(ClientDisconnect):
+                await http_response(
+                    {"type": "http", "asgi": {"spec_version": "2.4"}},
+                    None,
+                    fail_to_send,
+                )
+        elif disconnect == "body":
 
             async def receive():
                 await disconnected.wait()
@@ -106,7 +121,7 @@ async def test_disconnect_during_buffering_closes_provider(
                 if b"event: ping" in message.get("body", b""):
                     disconnected.set()
 
-            http_response = StreamingResponse(output, media_type="text/event-stream")
+            http_response = SettlingStreamingResponse(output, media_type="text/event-stream")
             await asyncio.wait_for(
                 http_response(
                     {"type": "http", "asgi": {"spec_version": "2.3"}},
@@ -126,3 +141,6 @@ async def test_disconnect_during_buffering_closes_provider(
             finally:
                 await output.aclose()
         assert closed.is_set()
+        service.log_repo.update.assert_awaited_once()
+        assert service.log_repo.update.await_args.args[1].is_completed is True
+        assert not await active_requests.is_active(193)

@@ -274,6 +274,7 @@ See [docs/api.md](docs/api.md) for complete API documentation.
 | `DATABASE_TYPE` | sqlite | Database type: `sqlite` or `postgresql` |
 | `DATABASE_URL` | sqlite+aiosqlite:///./llm_gateway.db | Database connection string |
 | `RETRY_MAX_ATTEMPTS` | 3 | Max retry attempts for 500+ errors |
+| `REQUEST_MAX_DURATION_SECONDS` | 3600 | Total proxy request deadline in seconds, including routing, retries, and upstream stream reads |
 | `RETRY_DELAY_MS` | 1000 | Delay between retries (milliseconds) |
 | `PROVIDER_HEALTH_ENABLED` | true | Enable runtime provider health degradation |
 | `PROVIDER_HEALTH_WINDOW_SECONDS` | 600 | Provider health sliding-window duration |

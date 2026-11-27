@@ -1,3 +1,5 @@
+import io
+import wave
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -5,12 +7,13 @@ import pytest
 from app.common.time import utc_now
 from app.domain.model import ModelMapping
 from app.providers.base import ProviderResponse
+from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
 from app.rules.models import CandidateProvider
 from app.services.proxy_service import ProxyService
 
 
 @pytest.mark.asyncio
-async def test_process_request_sanitizes_multipart_body_and_binary_response():
+async def test_process_request_sanitizes_multipart_body_and_binary_response(db_session):
     now = utc_now()
     model_mapping = ModelMapping(
         requested_model="audio-model",
@@ -32,10 +35,11 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
         weight=1,
     )
 
+    log_repo = SQLAlchemyLogRepository(db_session)
     service = ProxyService(
         model_repo=AsyncMock(),
         provider_repo=AsyncMock(),
-        log_repo=AsyncMock(),
+        log_repo=log_repo,
     )
     service._resolve_candidates = AsyncMock(  # type: ignore[method-assign]
         return_value=(model_mapping, [candidate], 0, "openai", {})
@@ -51,6 +55,11 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
     fake_client = AsyncMock()
     fake_client.forward = AsyncMock(side_effect=forward)
 
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+        wav.writeframes(b"\xff\x00" * 80)
+    audio_data = buffer.getvalue()
     request_body = {
         "model": "audio-model",
         "_files": [
@@ -58,7 +67,7 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
                 "field": "file",
                 "filename": "audio.wav",
                 "content_type": "audio/wav",
-                "data": b"fake-audio",
+                "data": audio_data,
             }
         ],
     }
@@ -69,7 +78,7 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
             return_value=("/v1/audio/transcriptions", request_body),
         ):
             response, _ = await service.process_request(
-                api_key_id=1,
+                api_key_id=None,
                 api_key_name="k",
                 request_protocol="openai",
                 path="/v1/audio/transcriptions",
@@ -80,8 +89,8 @@ async def test_process_request_sanitizes_multipart_body_and_binary_response():
             )
 
     assert response.status_code == 200
-    service.log_repo.create_initial.assert_awaited()
-    service.log_repo.update.assert_awaited()
-    log_data = service.log_repo.update.await_args.args[1]
-    assert log_data.request_body["_files"][0]["size"] == len(b"fake-audio")
+    log_data = await log_repo.get_by_id(1)
+    assert log_data.is_completed is True
+    assert log_data.request_body["_files"][0]["size"] == len(audio_data)
+    assert log_data.converted_request_body["_files"][0]["data"] == f"[binary data: {len(audio_data)} bytes]"
     assert log_data.response_body == "[binary data: 8 bytes]"

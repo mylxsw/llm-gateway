@@ -90,8 +90,10 @@ class SettlingStreamingResponse(StreamingResponse):
         try:
             await super().__call__(scope, receive, send)
         finally:
-            if isinstance(self.body_iterator, CommercialStream):
-                await self.body_iterator.aclose()
+            close = getattr(self.body_iterator, "aclose", None)
+            if close is not None:
+                with anyio.CancelScope(shield=True):
+                    await close()
 
 
 def commercial_call(fn):

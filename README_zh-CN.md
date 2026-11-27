@@ -260,6 +260,7 @@ response = client.responses.create(
 | `DATABASE_TYPE` | sqlite | 数据库类型：`sqlite` 或 `postgresql` |
 | `DATABASE_URL` | sqlite+aiosqlite:///./llm_gateway.db | 数据库连接字符串 |
 | `RETRY_MAX_ATTEMPTS` | 3 | 500+ 错误的最大重试次数 |
+| `REQUEST_MAX_DURATION_SECONDS` | 3600 | 单次代理请求的总时限（秒），包含路由、重试和读取上游流 |
 | `RETRY_DELAY_MS` | 1000 | 重试间隔（毫秒） |
 | `PROVIDER_HEALTH_ENABLED` | true | 是否启用 Provider 运行时健康降级 |
 | `PROVIDER_HEALTH_WINDOW_SECONDS` | 600 | Provider 健康统计滑动窗口（秒） |

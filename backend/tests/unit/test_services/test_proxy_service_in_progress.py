@@ -1,10 +1,12 @@
 """Failure-path coverage for initial request logs."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.common.errors import ServiceError
+from app.common.errors import AppError, ServiceError
+from app.config import get_settings
 from app.common.time import utc_now
 from app.domain.model import ModelMapping
 from app.providers.base import ProviderResponse
@@ -130,3 +132,90 @@ async def test_all_provider_failures_still_complete_initial_log():
     assert log_data.response_status == 503
     assert log_data.error_info == "upstream unavailable"
     assert await active_requests.is_active(43) is False
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("stage", ["routing", "provider"])
+async def test_cancelled_request_finishes_log(stream, stage, monkeypatch):
+    service = _service_with_resolution_failure()
+    entered = asyncio.Event()
+    closed = asyncio.Event()
+
+    async def wait_for_cancellation(*args, **kwargs):
+        try:
+            entered.set()
+            await asyncio.Event().wait()
+        finally:
+            closed.set()
+
+    if stage == "routing":
+        service._resolve_candidates = wait_for_cancellation
+    else:
+        now = utc_now()
+        mapping = ModelMapping(requested_model="test-model", created_at=now, updated_at=now)
+        candidate = CandidateProvider(
+            provider_id=1,
+            provider_name="test",
+            base_url="https://example.com",
+            protocol="openai",
+            api_key="test",
+            target_model="test-model",
+        )
+        service._resolve_candidates = AsyncMock(return_value=(mapping, [candidate], 0, "openai", {}))
+        provider = AsyncMock()
+        provider.forward = wait_for_cancellation
+
+        async def forward_stream(**kwargs):
+            yield await wait_for_cancellation()
+
+        provider.forward_stream = forward_stream
+        monkeypatch.setattr("app.services.proxy_service.get_provider_client", lambda *_: provider)
+
+    method = service.process_request_stream if stream else service.process_request
+    task = asyncio.create_task(method(
+        api_key_id=1,
+        api_key_name="key",
+        request_protocol="openai",
+        path="/v1/chat/completions",
+        request_url="/v1/chat/completions",
+        method="POST",
+        headers={},
+        body={"model": "test-model", "stream": stream, "messages": []},
+    ))
+    await asyncio.wait_for(entered.wait(), timeout=2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert closed.is_set()
+    service.log_repo.update.assert_awaited_once()
+    log_id, log_data = service.log_repo.update.await_args.args
+    assert log_data.is_completed is True
+    assert log_data.response_status == 499
+    assert not await active_requests.is_active(log_id)
+
+
+async def test_gateway_deadline_completes_request_before_first_chunk(monkeypatch):
+    service = _service_with_resolution_failure()
+    monkeypatch.setattr(get_settings(), "REQUEST_MAX_DURATION_SECONDS", 0.01)
+
+    async def wait_forever(**kwargs):
+        await asyncio.Event().wait()
+
+    service._resolve_candidates = wait_forever
+    with pytest.raises(AppError) as error:
+        await service.process_request_stream(
+            api_key_id=1,
+            api_key_name="key",
+            request_protocol="openai",
+            path="/v1/chat/completions",
+            request_url="/v1/chat/completions",
+            method="POST",
+            headers={},
+            body={"model": "test-model", "stream": True, "messages": []},
+        )
+    assert error.value.status_code == 504
+    log_id, log_data = service.log_repo.update.await_args.args
+    assert log_data.response_status == 504
+    assert log_data.is_completed is True
+    assert not await active_requests.is_active(log_id)

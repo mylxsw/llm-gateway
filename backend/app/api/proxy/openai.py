@@ -11,6 +11,7 @@ from fastapi import APIRouter, Header, Request, status
 from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import UploadFile
 
+from app.api.proxy.disconnect import until_disconnect
 from app.api.deps import CurrentApiKey, ModelServiceDep, ProxyServiceDep
 from app.common.errors import AppError
 from app.services.commercial import SettlingStreamingResponse as StreamingResponse
@@ -93,16 +94,19 @@ async def _handle_proxy_request_with_body(
                 initial_response,
                 stream_gen,
                 log_info,
-            ) = await service.process_request_stream(
-                api_key_id=api_key.id,
-                api_key_name=api_key.key_name,
-                record_details=api_key.record_details,
-                request_protocol="openai",
-                path=path,
-                request_url=str(request.url),
-                method=request.method,
-                headers=headers,
-                body=body,
+            ) = await until_disconnect(
+                request,
+                service.process_request_stream(
+                    api_key_id=api_key.id,
+                    api_key_name=api_key.key_name,
+                    record_details=api_key.record_details,
+                    request_protocol="openai",
+                    path=path,
+                    request_url=str(request.url),
+                    method=request.method,
+                    headers=headers,
+                    body=body,
+                ),
             )
 
             # If initial response is error, return directly
@@ -141,16 +145,19 @@ async def _handle_proxy_request_with_body(
                 media_type="text/event-stream",
             )
 
-        response, log_info = await service.process_request(
-            api_key_id=api_key.id,
-            api_key_name=api_key.key_name,
-            record_details=api_key.record_details,
-            request_protocol="openai",
-            path=path,
-            request_url=str(request.url),
-            method=request.method,
-            headers=headers,
-            body=body,
+        response, log_info = await until_disconnect(
+            request,
+            service.process_request(
+                api_key_id=api_key.id,
+                api_key_name=api_key.key_name,
+                record_details=api_key.record_details,
+                request_protocol="openai",
+                path=path,
+                request_url=str(request.url),
+                method=request.method,
+                headers=headers,
+                body=body,
+            ),
         )
 
         content = response.body
@@ -415,16 +422,19 @@ async def _handle_proxy_request_openai_responses(
                 initial_response,
                 stream_gen,
                 log_info,
-            ) = await service.process_request_stream(
-                api_key_id=api_key.id,
-                api_key_name=api_key.key_name,
-                record_details=api_key.record_details,
-                request_protocol="openai_responses",
-                path=path,
-                request_url=str(request.url),
-                method=request.method,
-                headers=headers,
-                body=body,
+            ) = await until_disconnect(
+                request,
+                service.process_request_stream(
+                    api_key_id=api_key.id,
+                    api_key_name=api_key.key_name,
+                    record_details=api_key.record_details,
+                    request_protocol="openai_responses",
+                    path=path,
+                    request_url=str(request.url),
+                    method=request.method,
+                    headers=headers,
+                    body=body,
+                ),
             )
 
             if not initial_response.is_success:
@@ -462,16 +472,19 @@ async def _handle_proxy_request_openai_responses(
                 media_type="text/event-stream",
             )
 
-        response, log_info = await service.process_request(
-            api_key_id=api_key.id,
-            api_key_name=api_key.key_name,
-            record_details=api_key.record_details,
-            request_protocol="openai_responses",
-            path=path,
-            request_url=str(request.url),
-            method=request.method,
-            headers=headers,
-            body=body,
+        response, log_info = await until_disconnect(
+            request,
+            service.process_request(
+                api_key_id=api_key.id,
+                api_key_name=api_key.key_name,
+                record_details=api_key.record_details,
+                request_protocol="openai_responses",
+                path=path,
+                request_url=str(request.url),
+                method=request.method,
+                headers=headers,
+                body=body,
+            ),
         )
 
         content = response.body

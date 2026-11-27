@@ -6,6 +6,7 @@ Provides CRUD endpoints for Model Mappings and Model-Provider Mappings.
 
 import json
 import time
+from contextlib import aclosing
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -533,11 +534,12 @@ async def test_model(
                 headers=headers,
                 body=body,
             )
-            content = await _collect_stream_text(
-                stream=stream_gen,
-                implementation=implementation,
-                requested_model=requested_model,
-            )
+            async with aclosing(stream_gen):
+                content = await _collect_stream_text(
+                    stream=stream_gen,
+                    implementation=implementation,
+                    requested_model=requested_model,
+                )
             elapsed_ms = int((time.monotonic() - start) * 1000)
             if not content and initial_response.error:
                 content = initial_response.error

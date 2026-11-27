@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Header, Request, status
 from fastapi.responses import JSONResponse, Response
 
+from app.api.proxy.disconnect import until_disconnect
 from app.api.deps import CurrentApiKey, ProxyServiceDep
 from app.common.errors import AppError
 from app.services.commercial import SettlingStreamingResponse as StreamingResponse
@@ -50,16 +51,19 @@ async def create_message(
         is_stream = body.get("stream", False)
         
         if is_stream:
-            initial_response, stream_gen, log_info = await service.process_request_stream(
-                api_key_id=api_key.id,
-                api_key_name=api_key.key_name,
-                record_details=api_key.record_details,
-                request_protocol="anthropic",
-                path="/v1/messages",
-                request_url=str(request.url),
-                method="POST",
-                headers=headers,
-                body=body,
+            initial_response, stream_gen, log_info = await until_disconnect(
+                request,
+                service.process_request_stream(
+                    api_key_id=api_key.id,
+                    api_key_name=api_key.key_name,
+                    record_details=api_key.record_details,
+                    request_protocol="anthropic",
+                    path="/v1/messages",
+                    request_url=str(request.url),
+                    method="POST",
+                    headers=headers,
+                    body=body,
+                ),
             )
             
             # If initial response is error, return directly
@@ -94,16 +98,19 @@ async def create_message(
                 media_type="text/event-stream",
             )
         else:
-            response, log_info = await service.process_request(
-                api_key_id=api_key.id,
-                api_key_name=api_key.key_name,
-                record_details=api_key.record_details,
-                request_protocol="anthropic",
-                path="/v1/messages",
-                request_url=str(request.url),
-                method="POST",
-                headers=headers,
-                body=body,
+            response, log_info = await until_disconnect(
+                request,
+                service.process_request(
+                    api_key_id=api_key.id,
+                    api_key_name=api_key.key_name,
+                    record_details=api_key.record_details,
+                    request_protocol="anthropic",
+                    path="/v1/messages",
+                    request_url=str(request.url),
+                    method="POST",
+                    headers=headers,
+                    body=body,
+                ),
             )
             
             content = response.body
