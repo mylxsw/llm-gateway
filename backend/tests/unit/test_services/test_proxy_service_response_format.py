@@ -3,7 +3,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 from app.common.time import utc_now
 from app.domain.log import RequestLogModel
 from app.domain.model import ModelMapping
