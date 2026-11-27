@@ -2,14 +2,83 @@ import copy
 import json
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from app.common.time import utc_now
+from app.domain.log import RequestLogModel
 from app.domain.model import ModelMapping
 from app.providers.base import ProviderResponse
 from app.rules.models import CandidateProvider
 from app.services.proxy_service import ProxyService
 from tests.unit.test_services.test_tool_reasoning_recovery import BODY, ERROR
+
+
+@pytest.mark.parametrize("stream", [False, True])
+async def test_deepseek_forced_tool_succeeds_on_first_forward(stream):
+    now = utc_now()
+    mapping = ModelMapping(requested_model="selection", strategy="priority", is_active=True,
+                           created_at=now, updated_at=now)
+    candidate = CandidateProvider(
+        provider_id=1, provider_name="DeepSeek", base_url="https://api.deepseek.com",
+        protocol="openai", api_key="test", target_model="deepseek-flash", priority=1,
+    )
+    proxy = ProxyService(model_repo=AsyncMock(), provider_repo=AsyncMock(), log_repo=AsyncMock())
+    proxy._resolve_candidates = AsyncMock(return_value=(mapping, [candidate], 0, "openai", {}))
+    name = "answer_or_edit_selection"
+    choice = {"type": "function", "function": {"name": name}}
+    body = {
+        "model": "selection", "stream": stream, "max_tokens": 4096,
+        "messages": [{"role": "user", "content": "Explain the selected text"}],
+        "tools": [choice], "tool_choice": choice, "parallel_tool_calls": False,
+    }
+    calls = []
+
+    def upstream(request):
+        sent = json.loads(request.content)
+        calls.append((str(request.url), sent))
+        if sent.get("thinking") != {"type": "disabled"}:
+            return httpx.Response(400, json={"error": {
+                "message": "Thinking mode does not support this tool_choice"
+            }})
+        tool_call = {"id": "call_1", "type": "function", "function": {
+            "name": name, "arguments": '{"answer_edit":"answer","content":"Example"}'
+        }}
+        if stream:
+            delta = {"choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, **tool_call}]}}]}
+            return httpx.Response(200, text=f"data: {json.dumps(delta)}\n\ndata: [DONE]\n\n",
+                                  headers={"content-type": "text/event-stream"})
+        return httpx.Response(200, json={"choices": [{"index": 0, "finish_reason": "tool_calls",
+                              "message": {"role": "assistant", "tool_calls": [tool_call]}}]})
+
+    request = dict(api_key_id=1, api_key_name="test", request_protocol="openai", path="/v1/chat/completions",
+                   request_url="/v1/chat/completions", method="POST", headers={}, body=body)
+    async_client = httpx.AsyncClient
+    with patch("app.providers.openai_client.httpx.AsyncClient",
+               side_effect=lambda **kwargs: async_client(transport=httpx.MockTransport(upstream), **kwargs)):
+        if stream:
+            response, chunks, _ = await proxy.process_request_stream(**request)
+            assert name.encode() in b"".join([chunk async for chunk in chunks])
+        else:
+            response, _ = await proxy.process_request(**request)
+            tool_calls = json.loads(response.body)["choices"][0]["message"]["tool_calls"]
+            assert tool_calls[0]["function"]["name"] == name
+
+    assert response.status_code == 200
+    assert calls == [("https://api.deepseek.com/chat/completions", {
+        **body, "model": "deepseek-flash", "thinking": {"type": "disabled"},
+    })]
+    assert "thinking" not in body
+
+    proxy.provider_repo.get_by_id.return_value = candidate
+    for sent_body in (calls[0][1], {key: value for key, value in calls[0][1].items() if key != "thinking"}):
+        log = RequestLogModel(
+            id=1, request_time=now, provider_id=1, request_protocol="openai", supplier_protocol="openai",
+            request_path=request["path"], target_model="deepseek-flash", request_body=body,
+            converted_request_body=sent_body,
+        )
+        rebuilt = (await proxy.rebuild_converted_request(log))["converted_request_body"]
+        assert rebuilt == sent_body
 
 
 @pytest.mark.asyncio

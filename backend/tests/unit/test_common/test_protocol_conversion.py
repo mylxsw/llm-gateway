@@ -224,6 +224,54 @@ def test_convert_request_openai_to_deepseek_preserves_explicit_thinking_type():
     assert out_body["thinking"] == {"type": "disabled"}
 
 
+@pytest.mark.parametrize(
+    ("protocol", "base_url", "choice", "settings", "web_tool", "expected"),
+    [
+        ("deepseek", None, "required", {}, False, "disabled"),
+        ("deepseek", None, "auto", {}, False, None),
+        ("deepseek", None, "required", {}, True, None),
+        ("deepseek", None, "named", {"thinking": {"type": "enabled"}}, False, "enabled"),
+        ("deepseek", None, "required", {"reasoning_effort": "high"}, False, "enabled"),
+        ("deepseek", None, "required", {"reasoning": {"effort": "none"}}, False, "disabled"),
+        ("deepseek", None, "required", {"reasoning_effort": "max"}, False, None),
+        ("openai", "https://api.deepseek.com/v1", "named", {}, False, "disabled"),
+        ("openai", "https://deepseek.example.com/v1", "named", {}, False, None),
+        ("moonshot", None, "named", {}, False, None),
+    ],
+)
+def test_forced_tool_defaults_to_non_thinking_only_for_deepseek_chat(
+    protocol, base_url, choice, settings, web_tool, expected
+):
+    tool_choice = (
+        {"type": "function", "function": {"name": "answer_or_edit_selection"}}
+        if choice == "named"
+        else choice
+    )
+    tools = [{"type": "function", "function": {"name": "answer_or_edit_selection"}}]
+    if web_tool:
+        tools.append({"type": "deepseek_web_search"})
+    body = {
+        "model": "selection",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "tools": tools,
+        "tool_choice": tool_choice,
+        **settings,
+    }
+    _, converted = convert_request_for_supplier(
+        request_protocol="openai",
+        supplier_protocol=protocol,
+        supplier_base_url=base_url,
+        path="/v1/chat/completions",
+        body=body,
+        target_model="deepseek-flash",
+    )
+
+    assert converted["tool_choice"] == tool_choice
+    assert converted["tools"] == tools
+    assert converted.get("thinking") == ({"type": expected} if expected else None)
+    assert body.get("thinking") == settings.get("thinking")
+
+
 def test_convert_request_openai_to_moonshot_uses_deepseek_thinking_handling():
     path, out_body = convert_request_for_supplier(
         request_protocol="openai",
