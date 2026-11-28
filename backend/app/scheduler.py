@@ -5,6 +5,7 @@ Uses APScheduler to manage scheduled tasks, such as log cleanup and KV store cle
 """
 
 import logging
+from datetime import timedelta
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -12,6 +13,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
+from app.common.time import utc_now
 from app.db.session import get_db
 from app.repositories.sqlalchemy.kv_store_repo import SQLAlchemyKVStoreRepository
 from app.repositories.sqlalchemy.log_repo import SQLAlchemyLogRepository
@@ -21,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 # Global Scheduler Instance
 _scheduler: Optional[AsyncIOScheduler] = None
+
+
+async def expire_request_logs_task():
+    # Give normal completion and the Redis writer time to commit.
+    cutoff = utc_now() - timedelta(minutes=5)
+    async for db in get_db():
+        count = await SQLAlchemyLogRepository(db).expire_overdue(cutoff)
+        if count:
+            logger.warning("Closed %s overdue request logs with no recorded result", count)
 
 
 async def cleanup_logs_task():
@@ -98,6 +109,7 @@ def start_scheduler():
 
     # Create scheduler
     _scheduler = AsyncIOScheduler()
+    _scheduler.add_job(expire_request_logs_task, "interval", seconds=60, max_instances=1)
     if settings.COMMERCIAL_ENABLED:
         from app.services.commercial import recover
         _scheduler.add_job(recover, "interval", seconds=30, max_instances=1)

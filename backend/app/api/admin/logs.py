@@ -5,6 +5,7 @@ Provides request log query endpoints.
 """
 
 import json
+from contextlib import aclosing
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import urlsplit
@@ -31,6 +32,7 @@ from app.common.errors import AppError, NotFoundError, ValidationError
 from app.common.utils import try_parse_json_object
 from app.config import get_settings
 from app.services.active_requests import active_requests
+from app.services.commercial import SettlingStreamingResponse
 from app.domain.log import (
     RequestLogQuery,
     RequestLogResponse,
@@ -323,23 +325,52 @@ async def execute_playground_request(
                     body=request_body,
                 )
 
-                yield _sse_event(
-                    "status",
-                    {
-                        "response_status": initial_response.status_code,
-                        "trace_id": log_info.get("trace_id") if log_info else None,
-                        "provider_name": log_info.get("provider_name") if log_info else None,
-                        "target_model": log_info.get("target_model") if log_info else None,
-                        "first_byte_delay_ms": initial_response.first_byte_delay_ms,
-                    },
-                )
+                async with aclosing(stream_gen):
+                    yield _sse_event(
+                        "status",
+                        {
+                            "response_status": initial_response.status_code,
+                            "trace_id": log_info.get("trace_id") if log_info else None,
+                            "provider_name": log_info.get("provider_name") if log_info else None,
+                            "target_model": log_info.get("target_model") if log_info else None,
+                            "first_byte_delay_ms": initial_response.first_byte_delay_ms,
+                        },
+                    )
 
-                if not initial_response.is_success:
+                    if not initial_response.is_success:
+                        response_body = initial_response.body
+                        if isinstance(response_body, bytes):
+                            response_body = response_body.decode("utf-8", errors="replace")
+                        yield _sse_event(
+                            "done",
+                            {
+                                "response_status": initial_response.status_code,
+                                "response_body": response_body,
+                                "trace_id": log_info.get("trace_id") if log_info else None,
+                                "provider_name": log_info.get("provider_name") if log_info else None,
+                                "target_model": log_info.get("target_model") if log_info else None,
+                                "first_byte_delay_ms": initial_response.first_byte_delay_ms,
+                                "total_time_ms": initial_response.total_time_ms,
+                            },
+                        )
+                        return
+
+                    streamed_content = ""
+                    async for chunk in stream_gen:
+                        if isinstance(chunk, bytes):
+                            text_chunk = chunk.decode("utf-8", errors="ignore")
+                        else:
+                            text_chunk = str(chunk)
+                        if not text_chunk:
+                            continue
+                        streamed_content += text_chunk
+                        yield _sse_event("chunk", {"content": text_chunk})
+
                     yield _sse_event(
                         "done",
                         {
                             "response_status": initial_response.status_code,
-                            "response_body": initial_response.body,
+                            "response_body": streamed_content,
                             "trace_id": log_info.get("trace_id") if log_info else None,
                             "provider_name": log_info.get("provider_name") if log_info else None,
                             "target_model": log_info.get("target_model") if log_info else None,
@@ -347,33 +378,8 @@ async def execute_playground_request(
                             "total_time_ms": initial_response.total_time_ms,
                         },
                     )
-                    return
 
-                streamed_content = ""
-                async for chunk in stream_gen:
-                    if isinstance(chunk, bytes):
-                        text_chunk = chunk.decode("utf-8", errors="ignore")
-                    else:
-                        text_chunk = str(chunk)
-                    if not text_chunk:
-                        continue
-                    streamed_content += text_chunk
-                    yield _sse_event("chunk", {"content": text_chunk})
-
-                yield _sse_event(
-                    "done",
-                    {
-                        "response_status": initial_response.status_code,
-                        "response_body": streamed_content,
-                        "trace_id": log_info.get("trace_id") if log_info else None,
-                        "provider_name": log_info.get("provider_name") if log_info else None,
-                        "target_model": log_info.get("target_model") if log_info else None,
-                        "first_byte_delay_ms": initial_response.first_byte_delay_ms,
-                        "total_time_ms": initial_response.total_time_ms,
-                    },
-                )
-
-            return StreamingResponse(
+            return SettlingStreamingResponse(
                 event_stream(),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache"},

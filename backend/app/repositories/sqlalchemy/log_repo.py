@@ -4,11 +4,13 @@ Log Repository SQLAlchemy Implementation
 Provides concrete database operation implementation for request logs.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import Integer, and_, case, cast, delete, func, not_, or_, select
+from sqlalchemy import Integer, and_, case, cast, delete, func, not_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import StatementError
 from sqlalchemy.orm import aliased, joinedload
 
 from app.common.time import ensure_utc, to_utc_naive, utc_now
@@ -30,6 +32,9 @@ from app.domain.log import (
     RequestLogSummary,
 )
 from app.repositories.log_repo import LogRepository
+
+_MISSING_COMPLETION = "The gateway did not record how the request ended"
+logger = logging.getLogger(__name__)
 
 
 # Columns selected for list/summary queries (excludes large JSON/Text fields)
@@ -133,7 +138,7 @@ class SQLAlchemyLogRepository(LogRepository):
             response_status=entity.response_status,
             response_body=detail.response_body if detail else entity.response_body,
             usage_details=detail.usage_details if detail else entity.usage_details,
-            error_info=detail.error_info if detail else entity.error_info,
+            error_info=(detail.error_info if detail else None) or entity.error_info,
             matched_provider_count=entity.matched_provider_count,
             trace_id=entity.trace_id,
             is_stream=entity.is_stream,
@@ -183,6 +188,7 @@ class SQLAlchemyLogRepository(LogRepository):
         # Main table: scalar/summary fields only, large fields set to NULL
         entity = RequestLogORM(
             request_time=to_utc_naive(data.request_time),
+            completion_deadline=to_utc_naive(data.completion_deadline),
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
             user_id=data.user_id,
@@ -292,6 +298,7 @@ class SQLAlchemyLogRepository(LogRepository):
         Returns the new log ID for later update."""
         entity = RequestLogORM(
             request_time=to_utc_naive(data.request_time),
+            completion_deadline=to_utc_naive(data.completion_deadline),
             api_key_id=data.api_key_id,
             api_key_name=data.api_key_name,
             user_id=data.user_id,
@@ -324,7 +331,14 @@ class SQLAlchemyLogRepository(LogRepository):
             sa_update(RequestLogORM)
             .where(
                 RequestLogORM.id == log_id,
-                RequestLogORM.is_completed.is_(False),
+                or_(
+                    RequestLogORM.is_completed.is_(False),
+                    and_(
+                        RequestLogORM.completion_deadline.isnot(None),
+                        RequestLogORM.response_status.is_(None),
+                        RequestLogORM.error_info == _MISSING_COMPLETION,
+                    ),
+                ),
             )
             .values(
                 provider_id=data.provider_id,
@@ -343,6 +357,7 @@ class SQLAlchemyLogRepository(LogRepository):
                 price_source=data.price_source,
                 response_status=data.response_status,
                 is_completed=True,
+                error_info=None,
                 resolved_model=data.resolved_model,
                 target_model=data.target_model,
                 supplier_protocol=data.supplier_protocol,
@@ -375,8 +390,16 @@ class SQLAlchemyLogRepository(LogRepository):
             usage_details=data.usage_details,
             error_info=data.error_info,
         )
-        await self.session.merge(detail)
-        await self.session.commit()
+        try:
+            await self.session.merge(detail)
+            await self.session.commit()
+        except StatementError:
+            # A detail failure must not undo a known completion. Re-run the
+            # guarded update after rollback so cancellation can still win.
+            logger.warning("Could not save completion details for log %s", log_id)
+            await self.session.rollback()
+            await self.session.execute(stmt.values(error_info=data.error_info))
+            await self.session.commit()
 
         # Re-fetch with joined detail
         result = await self.session.execute(
@@ -386,6 +409,27 @@ class SQLAlchemyLogRepository(LogRepository):
         )
         entity = result.unique().scalar_one()
         return self._to_domain(entity)
+
+    async def expire_overdue(self, cutoff: datetime, limit: int = 500) -> int:
+        """Stop timing rows past their own deadlines while allowing a late real result."""
+        overdue = (
+            RequestLogORM.is_completed.is_(False),
+            RequestLogORM.completion_deadline <= to_utc_naive(cutoff),
+        )
+        batch = (
+            select(RequestLogORM.id)
+            .where(*overdue)
+            .order_by(RequestLogORM.completion_deadline, RequestLogORM.id)
+            .limit(limit)
+        )
+        result = await self.session.execute(
+            update(RequestLogORM)
+            .where(*overdue, RequestLogORM.id.in_(batch))
+            .values(is_completed=True, error_info=_MISSING_COMPLETION)
+            .execution_options(synchronize_session=False)
+        )
+        await self.session.commit()
+        return result.rowcount
 
     async def cancel(self, log_id: int, error_info: str = "Request cancelled by admin") -> None:
         """Atomically mark an in-progress log as cancelled."""

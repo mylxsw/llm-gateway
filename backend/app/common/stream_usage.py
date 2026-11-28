@@ -47,7 +47,7 @@ class SSEDecoder:
     @staticmethod
     def _extract_data_payload(event: bytes) -> Optional[str]:
         data_lines: list[bytes] = []
-        for line in event.split(b"\n"):
+        for line in event.splitlines():
             if not line:
                 continue
             if line.startswith(b"data:"):
@@ -61,6 +61,35 @@ class SSEDecoder:
             return b"\n".join(data_lines).decode("utf-8", errors="ignore")
         except Exception:
             return None
+
+
+_TERMINAL_EVENT_TYPES = {
+    "anthropic": {"message_stop"},
+    "openai_responses": {"response.completed", "response.failed", "response.incomplete"},
+}
+
+
+def is_terminal_sse_event(event: bytes, protocol: str) -> bool:
+    if protocol == "openai":
+        if b"[DONE]" not in event:
+            return False
+        payload = SSEDecoder._extract_data_payload(event)
+        return payload is not None and payload.strip() == "[DONE]"
+    terminal_types = _TERMINAL_EVENT_TYPES.get(protocol)
+    if terminal_types is None:
+        return False
+    for line in event.splitlines():
+        if line.startswith(b"event:"):
+            return line[6:].strip().decode("utf-8", errors="replace") in terminal_types
+    payload = SSEDecoder._extract_data_payload(event)
+    if payload is None:
+        return False
+    try:
+        data = json.loads(payload)
+    except ValueError:
+        return False
+    event_type = data.get("type") if isinstance(data, dict) else None
+    return isinstance(event_type, str) and event_type in terminal_types
 
 
 @dataclass

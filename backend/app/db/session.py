@@ -331,10 +331,9 @@ def _run_migrations(sync_conn) -> None:
             "user_id": "user_id VARCHAR(255)",
             "resolved_model": "resolved_model VARCHAR(100)",
             "is_completed": "is_completed BOOLEAN DEFAULT TRUE",
+            "completion_deadline": "completion_deadline TIMESTAMP",
         },
     )
-    # Any unfinished row visible during startup belongs to a previous process
-    # and can no longer have a live task behind it.
     if "request_logs" in table_names:
         sync_conn.execute(
             text(
@@ -352,10 +351,8 @@ def _run_migrations(sync_conn) -> None:
         )
         sync_conn.execute(
             text(
-                "UPDATE request_logs "
-                "SET is_completed = TRUE, response_status = 500, "
-                "error_info = 'Request interrupted by server restart' "
-                "WHERE is_completed = FALSE"
+                "CREATE INDEX IF NOT EXISTS idx_request_logs_completion_deadline "
+                "ON request_logs (is_completed, completion_deadline)"
             )
         )
     ensure_columns(

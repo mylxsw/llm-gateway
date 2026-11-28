@@ -64,6 +64,8 @@ class RequestLogBase(CommercialLogFields):
 class RequestLogCreate(RequestLogBase):
     """Create Request Log Model"""
 
+    completion_deadline: Optional[datetime] = Field(None, exclude=True)
+
     # Retry Count
     retry_count: int = Field(0, description="Retry Count")
     # First Byte Delay (ms)

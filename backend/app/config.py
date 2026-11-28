@@ -8,7 +8,7 @@ Supports SQLite (default) and PostgreSQL databases.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     # HTTP Client Config
     # Request timeout (seconds)
     HTTP_TIMEOUT: int = 1800
+    # Total time across routing, retries, and upstream stream reads.
+    REQUEST_MAX_DURATION_SECONDS: int = Field(3600, ge=1)
     # Whether provider base URLs may use private/internal IP addresses
     ALLOW_PRIVATE_IP_PROVIDER: bool = False
 

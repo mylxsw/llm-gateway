@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse, Response
 
+from app.api.proxy.disconnect import until_disconnect
 from app.api.deps import CurrentApiKey, ProxyServiceDep
 from app.common.errors import AppError
 from app.common.proxy_headers import sanitize_upstream_response_headers
@@ -47,16 +48,19 @@ async def systemone(
         body: dict[str, Any] = await request.json()
         headers = dict(request.headers)
 
-        response, log_info = await service.process_request(
-            api_key_id=api_key.id,
-            api_key_name=api_key.key_name,
-            record_details=api_key.record_details,
-            request_protocol=JEV_PROTOCOL_NAME,
-            path="/v1/systemone",
-            request_url=str(request.url),
-            method=request.method,
-            headers=headers,
-            body=body,
+        response, log_info = await until_disconnect(
+            request,
+            service.process_request(
+                api_key_id=api_key.id,
+                api_key_name=api_key.key_name,
+                record_details=api_key.record_details,
+                request_protocol=JEV_PROTOCOL_NAME,
+                path="/v1/systemone",
+                request_url=str(request.url),
+                method=request.method,
+                headers=headers,
+                body=body,
+            ),
         )
 
         content = response.body

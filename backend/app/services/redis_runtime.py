@@ -121,6 +121,8 @@ class RuntimeLogs:
         handle = -(uuid.uuid4().int % (2**63 - 1) + 1)
         payload = data.model_dump(mode="json")
         payload["runtime_handle"] = handle
+        if data.completion_deadline is not None:
+            payload["completion_deadline"] = data.completion_deadline.isoformat()
         await enqueue(self.client, "initial", payload)
         return handle
 
@@ -189,7 +191,9 @@ class RedisRuntime:
             existing = await repo.get_by_id(row_id) if row_id is not None else None
             if existing is None:
                 existing = await repo.create(log)
-            elif fields["kind"] == "complete" and not existing.is_completed:
+            elif fields["kind"] == "complete" and (
+                not existing.is_completed or existing.response_status is None
+            ):
                 existing = await repo.update(existing.id, log)
             if "runtime_handle" in data:
                 from app.services.active_requests import active_requests

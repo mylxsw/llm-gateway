@@ -1,4 +1,4 @@
-"""Startup recovery for request rows orphaned by a previous process."""
+"""Request log schema and rolling startup behavior."""
 
 from datetime import datetime
 
@@ -6,11 +6,11 @@ import pytest
 from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Base, ModelMapping, RequestLog, RequestLogDetail
+from app.db.models import Base, ModelMapping, RequestLog
 from app.db.session import _run_migrations
 
 
-def test_startup_marks_orphaned_in_progress_logs_failed():
+def test_startup_does_not_close_another_workers_request():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
 
@@ -33,16 +33,9 @@ def test_startup_marks_orphaned_in_progress_logs_failed():
                 RequestLog.response_status,
             ).where(RequestLog.id == log_id)
         ).one()
-        error_info = connection.execute(
-            select(RequestLogDetail.error_info).where(
-                RequestLogDetail.log_id == log_id
-            )
-        ).scalar_one()
-
     engine.dispose()
-    assert row.is_completed is True
-    assert row.response_status == 500
-    assert error_info == "Request interrupted by server restart"
+    assert row.is_completed is False
+    assert row.response_status is None
 
 
 def test_alias_target_foreign_key_has_stable_restrict_name():

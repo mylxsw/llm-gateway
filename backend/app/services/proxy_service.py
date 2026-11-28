@@ -7,9 +7,11 @@ import asyncio
 import copy
 import json
 import logging
+import re
 import time
 from contextlib import aclosing, asynccontextmanager
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, AsyncGenerator, Callable, Optional
 
 import anyio
@@ -17,7 +19,7 @@ import anyio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.common.costs import calculate_cost_from_billing, resolve_billing
-from app.common.errors import NotFoundError, ServiceError
+from app.common.errors import AppError, NotFoundError, ServiceError
 from app.common.protocol_conversion import (
     convert_request_for_supplier,
     convert_response_for_user,
@@ -28,12 +30,13 @@ from app.common.provider_protocols import resolve_implementation_protocol
 from app.common.reasoning import force_disable_reasoning_for_supplier
 from app.common.proxy import build_proxy_config
 from app.common.sanitizer import sanitize_headers
-from app.common.stream_usage import StreamUsageAccumulator
+from app.common.stream_usage import StreamUsageAccumulator, is_terminal_sse_event
 from app.common.time import utc_now
 from app.common.upstream_url import build_upstream_url
 from app.common.token_counter import get_token_counter
 from app.common.usage_extractor import extract_usage_details
 from app.common.utils import generate_trace_id
+from app.config import get_settings
 from app.domain.log import RequestLogCreate, RequestLogModel
 from app.domain.model import ModelMapping, ModelMappingProviderResponse
 from app.domain.provider import Provider
@@ -62,6 +65,7 @@ logger = logging.getLogger(__name__)
 
 MAX_LOG_TEXT_LENGTH = 10000
 MAX_USER_ID_LENGTH = 255
+_SSE_EVENT_END = re.compile(br"\r?\n\r?\n")
 CandidateKey = tuple[str, int] | tuple[str, int, str]
 
 
@@ -75,6 +79,8 @@ def _smart_truncate(data: Any, max_list: int = 20, max_str: int = 1000) -> Any:
     """
     Recursively truncate data structures for logging.
     """
+    if isinstance(data, (bytes, bytearray)):
+        return f"[binary data: {len(data)} bytes]"
     if isinstance(data, dict):
         return {k: _smart_truncate(v, max_list, max_str) for k, v in data.items()}
 
@@ -122,6 +128,15 @@ def _strip_detail_payload(log_data: RequestLogCreate) -> None:
     """Null out the heavy detail payload fields on a log entry in place."""
     for field in _DETAIL_PAYLOAD_FIELDS:
         setattr(log_data, field, None)
+
+
+@dataclass(frozen=True)
+class _RequestRun:
+    log_id: int
+    initial: RequestLogCreate
+    started_at: float
+    deadline: float
+    record_details: bool
 
 
 class ProxyService:
@@ -263,29 +278,37 @@ class ProxyService:
         async with self._repos() as (_model_repo, _provider_repo, log_repo):
             await log_repo.create(log_data)
 
-    async def _write_initial_log(
+    @asynccontextmanager
+    async def _request_run(
         self,
-        request_time: datetime,
+        *,
         api_key_id: int | None,
         api_key_name: str | None,
-        user_id: str | None,
-        requested_model: str,
-        trace_id: str,
-        is_stream: bool,
         request_protocol: str,
         path: str,
         request_url: str | None,
         method: str,
-    ) -> int:
-        """Create a minimal log entry immediately when a request is received.
-        Returns the new log ID for later update."""
-        log_data = RequestLogCreate(
+        headers: dict[str, str],
+        body: dict[str, Any],
+        is_stream: bool,
+        record_details: bool,
+    ) -> AsyncGenerator[_RequestRun, None]:
+        requested_model = body.get("model")
+        if not requested_model:
+            message = "Model is required" if is_stream else "Model is required in request body"
+            raise ServiceError(message=message, code="missing_model")
+
+        started_at = asyncio.get_running_loop().time()
+        duration = get_settings().REQUEST_MAX_DURATION_SECONDS
+        request_time = utc_now()
+        initial = RequestLogCreate(
             request_time=request_time,
+            completion_deadline=request_time + timedelta(seconds=duration),
             api_key_id=api_key_id,
             api_key_name=api_key_name,
-            user_id=user_id,
+            user_id=_extract_user_id(headers),
             requested_model=requested_model,
-            trace_id=trace_id,
+            trace_id=commercial_request_id.get() or generate_trace_id(),
             is_stream=is_stream,
             request_protocol=request_protocol,
             request_path=path,
@@ -293,10 +316,25 @@ class ProxyService:
             request_method=method,
             is_completed=False,
         )
-        await self._commercial_log_identity(log_data)
-        async with self._repos() as (_model_repo, _provider_repo, log_repo):
-            log_id = await log_repo.create_initial(log_data)
-        return log_id
+        await self._commercial_log_identity(initial)
+        with anyio.CancelScope(shield=True):
+            async with self._repos() as (_model_repo, _provider_repo, log_repo):
+                log_id = await log_repo.create_initial(initial)
+        run = _RequestRun(log_id, initial, started_at, started_at + duration, record_details)
+
+        try:
+            async with asyncio.timeout_at(run.deadline):
+                task = asyncio.current_task()
+                if task is not None:
+                    await active_requests.register(log_id, task)
+                yield run
+        except (Exception, asyncio.CancelledError) as error:
+            await self._finalize_request_error(run, error, headers=headers, body=body)
+            if isinstance(error, TimeoutError):
+                raise AppError(
+                    "Request exceeded the gateway deadline", code="request_timeout", status_code=504
+                ) from error
+            raise
 
     async def _update_log(
         self, log_id: int, log_data: RequestLogCreate, record_details: bool = True
@@ -315,53 +353,50 @@ class ProxyService:
         finally:
             if hasattr(self, "_commercial_identities"):
                 self._commercial_identities.pop(log_data.trace_id, None)
-        try:
-            async with self._repos() as (_model_repo, _provider_repo, log_repo):
-                await log_repo.update(log_id, log_data)
-        except Exception:
-            logger.exception("Failed to update log: log_id=%s", log_id)
+        for attempt in range(2):
+            try:
+                async with self._repos() as (_model_repo, _provider_repo, log_repo):
+                    await log_repo.update(log_id, log_data)
+                return
+            except Exception:
+                if attempt == 0:
+                    continue
+                logger.exception("Failed to update log: log_id=%s", log_id)
 
-    async def _finalize_initial_log_error(
+    async def _finalize_request_error(
         self,
-        *,
-        log_id: int,
-        request_time: datetime,
-        api_key_id: int | None,
-        api_key_name: str | None,
-        user_id: str | None,
-        requested_model: str,
-        trace_id: str,
-        is_stream: bool,
-        request_protocol: str,
-        path: str,
-        request_url: str | None,
-        method: str,
-        headers: dict[str, str],
-        sanitized_body: dict[str, Any],
+        run: _RequestRun,
         error: BaseException,
-        record_details: bool,
+        *,
+        headers: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
     ) -> None:
-        """Turn an initial row into a terminal failure row."""
-        status_code = getattr(error, "status_code", 500)
-        log_data = RequestLogCreate(
-            request_time=request_time,
-            api_key_id=api_key_id,
-            api_key_name=api_key_name,
-            user_id=user_id,
-            requested_model=requested_model,
-            request_headers=sanitize_headers(headers),
-            request_body=sanitized_body,
-            response_status=status_code,
-            error_info=str(error),
-            trace_id=trace_id,
-            is_stream=is_stream,
-            request_protocol=request_protocol,
-            request_path=path,
-            request_url=request_url,
-            request_method=method,
-        )
+        status = getattr(error, "status_code", 500)
+        message = str(error) or "Request processing failed"
+        if isinstance(error, asyncio.CancelledError):
+            status, message = 499, "Request cancelled"
+        elif isinstance(error, TimeoutError):
+            status, message = 504, "Request exceeded the gateway deadline"
+        log_data = run.initial.model_copy(update={
+            "response_status": status,
+            "error_info": message,
+            "total_time_ms": int((asyncio.get_running_loop().time() - run.started_at) * 1000),
+            # An interrupted or unexpected request may have reached the provider.
+            "usage_details": {"interrupted": True}
+            if status in (499, 504) or not isinstance(error, AppError)
+            else None,
+        })
+        if run.record_details and headers is not None and body is not None:
+            try:
+                log_data.request_headers = sanitize_headers(headers)
+                log_data.request_body = self._sanitize_request_body_for_log(body)
+            except Exception:
+                logger.warning("Could not prepare details for log %s", run.log_id)
         with anyio.CancelScope(shield=True):
-            await self._update_log(log_id, log_data, record_details=record_details)
+            try:
+                await self._update_log(run.log_id, log_data, record_details=run.record_details)
+            finally:
+                await active_requests.deregister(run.log_id)
 
     def _get_strategy(self, strategy_name: str) -> SelectionStrategy:
         """
@@ -734,74 +769,49 @@ class ProxyService:
             NotFoundError: Model not configured
             ServiceError: No available provider
         """
-        trace_id = commercial_request_id.get() or generate_trace_id()
-        request_time = utc_now()
-        sanitized_body = self._sanitize_request_body_for_log(body)
-        user_id = _extract_user_id(headers)
-        commercial_user_id = commercial_account_id.get()
-
-        # 1. Extract requested_model
-        requested_model = body.get("model")
-        if not requested_model:
-            raise ServiceError(
-                message="Model is required in request body",
-                code="missing_model",
-            )
-
-        # 1.5 Create initial log entry immediately (before upstream call)
-        log_id = await self._write_initial_log(
-            request_time=request_time,
+        async with self._request_run(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
-            user_id=user_id,
-            requested_model=requested_model,
-            trace_id=trace_id,
-            is_stream=False,
             request_protocol=request_protocol,
             path=path,
             request_url=request_url,
             method=method,
-        )
-        current_task = asyncio.current_task()
-        if current_task is not None:
-            await active_requests.register(log_id, current_task)
+            headers=headers,
+            body=body,
+            is_stream=False,
+            record_details=record_details,
+        ) as run:
+            return await self._forward_request(run, headers, body, force_parse_response=force_parse_response)
 
-        # 2. Get model mapping
-        try:
-            (
-                model_mapping,
-                candidates,
-                input_tokens,
-                protocol,
-                provider_mapping_by_id,
-            ) = await self._resolve_candidates(
-                requested_model=requested_model,
-                request_protocol=request_protocol,
-                headers=headers,
-                body=body,
-                trace_id=trace_id,
-            )
-        except Exception as exc:
-            await self._finalize_initial_log_error(
-                log_id=log_id,
-                request_time=request_time,
-                api_key_id=api_key_id,
-                api_key_name=api_key_name,
-                user_id=user_id,
-                requested_model=requested_model,
-                trace_id=trace_id,
-                is_stream=False,
-                request_protocol=request_protocol,
-                path=path,
-                request_url=request_url,
-                method=method,
-                headers=headers,
-                sanitized_body=sanitized_body,
-                error=exc,
-                record_details=record_details,
-            )
-            await active_requests.deregister(log_id)
-            raise
+    async def _forward_request(
+        self,
+        run: _RequestRun,
+        headers: dict[str, str],
+        body: dict[str, Any],
+        *,
+        force_parse_response: bool,
+    ) -> tuple[ProviderResponse, dict[str, Any]]:
+        initial, log_id, record_details = run.initial, run.log_id, run.record_details
+        api_key_id, api_key_name, user_id = initial.api_key_id, initial.api_key_name, initial.user_id
+        trace_id, request_time = initial.trace_id, initial.request_time
+        requested_model, request_protocol = initial.requested_model, initial.request_protocol
+        path, request_url, method = initial.request_path, initial.request_url, initial.request_method
+        sanitized_body = self._sanitize_request_body_for_log(body)
+        commercial_user_id = commercial_account_id.get()
+
+        (
+            model_mapping,
+            candidates,
+            input_tokens,
+            protocol,
+            provider_mapping_by_id,
+        ) = await self._resolve_candidates(
+            requested_model=requested_model,
+            request_protocol=request_protocol,
+            headers=headers,
+            body=body,
+            trace_id=trace_id,
+        )
         token_counter = get_token_counter(protocol)
 
         # Extract image count for per-image billing
@@ -1347,20 +1357,6 @@ class ProxyService:
             ),
         )
 
-        # Strip detail payload before debug logging so a key with detail
-        # logging disabled never leaks bodies/headers into application logs.
-        if not record_details:
-            _strip_detail_payload(log_data)
-
-        await self._commercial_log_identity(log_data)
-
-        # DEBUG: Log request details
-        try:
-            logger.debug(f"Request Log: {log_data.model_dump_json()}")
-        except AttributeError:
-            # Fallback for Pydantic v1
-            logger.debug(f"Request Log: {log_data.json()}")
-
         # The initial row represents the overall request and must always reach
         # a terminal state. Failed-attempt rows remain useful retry diagnostics.
         await self._update_log(log_id, log_data, record_details=record_details)
@@ -1406,72 +1402,47 @@ class ProxyService:
         Returns:
             tuple: (Initial response, Stream generator, Log info)
         """
-        trace_id = commercial_request_id.get() or generate_trace_id()
-        request_time = utc_now()
-        start_monotonic = time.monotonic()
-        sanitized_body = self._sanitize_request_body_for_log(body)
-        user_id = _extract_user_id(headers)
-        commercial_user_id = commercial_account_id.get()
-
-        # 1-7. Same model resolution and rule matching logic
-        requested_model = body.get("model")
-        if not requested_model:
-            raise ServiceError(message="Model is required", code="missing_model")
-
-        # Create initial log entry immediately
-        log_id = await self._write_initial_log(
-            request_time=request_time,
+        async with self._request_run(
             api_key_id=api_key_id,
             api_key_name=api_key_name,
-            user_id=user_id,
-            requested_model=requested_model,
-            trace_id=trace_id,
-            is_stream=True,
             request_protocol=request_protocol,
             path=path,
             request_url=request_url,
             method=method,
+            headers=headers,
+            body=body,
+            is_stream=True,
+            record_details=record_details,
+        ) as run:
+            return await self._forward_stream(run, headers, body)
+
+    async def _forward_stream(
+        self,
+        run: _RequestRun,
+        headers: dict[str, str],
+        body: dict[str, Any],
+    ) -> tuple[ProviderResponse, AsyncGenerator[bytes, None], dict[str, Any]]:
+        initial, log_id, record_details = run.initial, run.log_id, run.record_details
+        api_key_id, api_key_name, user_id = initial.api_key_id, initial.api_key_name, initial.user_id
+        trace_id, request_time = initial.trace_id, initial.request_time
+        requested_model, request_protocol = initial.requested_model, initial.request_protocol
+        path, request_url, method = initial.request_path, initial.request_url, initial.request_method
+        sanitized_body = self._sanitize_request_body_for_log(body)
+        commercial_user_id = commercial_account_id.get()
+
+        (
+            model_mapping,
+            candidates,
+            input_tokens,
+            protocol,
+            provider_mapping_by_id,
+        ) = await self._resolve_candidates(
+            requested_model=requested_model,
+            request_protocol=request_protocol,
+            headers=headers,
+            body=body,
+            trace_id=trace_id,
         )
-        current_task = asyncio.current_task()
-        if current_task is not None:
-            await active_requests.register(log_id, current_task)
-
-        try:
-            (
-                model_mapping,
-                candidates,
-                input_tokens,
-                protocol,
-                provider_mapping_by_id,
-            ) = await self._resolve_candidates(
-                requested_model=requested_model,
-                request_protocol=request_protocol,
-                headers=headers,
-                body=body,
-                trace_id=trace_id,
-            )
-        except Exception as exc:
-            await self._finalize_initial_log_error(
-                log_id=log_id,
-                request_time=request_time,
-                api_key_id=api_key_id,
-                api_key_name=api_key_name,
-                user_id=user_id,
-                requested_model=requested_model,
-                trace_id=trace_id,
-                is_stream=True,
-                request_protocol=request_protocol,
-                path=path,
-                request_url=request_url,
-                method=method,
-                headers=headers,
-                sanitized_body=sanitized_body,
-                error=exc,
-                record_details=record_details,
-            )
-            await active_requests.deregister(log_id)
-            raise
-
         # Extract image count for per-image billing
         image_count: Optional[int] = None
         if path in OPENAI_IMAGE_PATHS:
@@ -1662,23 +1633,21 @@ class ProxyService:
                     # Reset upstream chunks for the current attempt
                     stream_conversion_data["upstream_chunks"] = []
 
-                    # Buffer for complete SSE events (events end with \n\n)
                     event_buffer = b""
+                    terminal = False
+                    normalized_supplier = normalize_protocol(supplier_protocol)
 
                     async def process_chunk(chunk: bytes) -> AsyncGenerator[bytes, None]:
-                        nonlocal event_buffer
+                        nonlocal event_buffer, terminal
                         if commercial_user_id:
                             upstream_usage.feed(chunk)
                         stream_conversion_data["upstream_chunks"].append(chunk)
                         event_buffer += chunk
 
-                        # Process complete SSE events (each event ends with \n\n)
-                        while b"\n\n" in event_buffer:
-                            # Find the position of the event delimiter
-                            delimiter_pos = event_buffer.index(b"\n\n")
-                            # Extract the complete event including the delimiter
-                            complete_event = event_buffer[: delimiter_pos + 2]
-                            event_buffer = event_buffer[delimiter_pos + 2 :]
+                        while delimiter := _SSE_EVENT_END.search(event_buffer):
+                            complete_event = event_buffer[:delimiter.end()]
+                            event_buffer = event_buffer[delimiter.end():]
+                            terminal = is_terminal_sse_event(complete_event, normalized_supplier)
 
                             # Call hook with complete SSE event
                             hooked_event = (
@@ -1691,9 +1660,13 @@ class ProxyService:
                             if hooked_event is None:
                                 hooked_event = complete_event
                             yield hooked_event
+                            if terminal:
+                                return
 
                     async for event in process_chunk(first_chunk):
                         yield event
+                    if terminal:
+                        return
                     try:
                         async for chunk, resp in upstream_gen:
                             if not resp.is_success:
@@ -1711,6 +1684,8 @@ class ProxyService:
                                 )
                             async for event in process_chunk(chunk):
                                 yield event
+                            if terminal:
+                                return
                     except Exception as exc:
                         if commercial_user_id:
                             import httpx
@@ -1925,64 +1900,17 @@ class ProxyService:
 
         # Get first chunk to determine status
         try:
-            first_chunk, initial_response, final_provider, retry_count = await anext(
-                stream_gen
-            )
-        except (asyncio.CancelledError, TimeoutError):
+            first_chunk, initial_response, final_provider, retry_count = await anext(stream_gen)
+        except BaseException as error:
             with anyio.CancelScope(shield=True):
-                try:
-                    await stream_gen.aclose()
-                finally:
-                    await active_requests.deregister(log_id)
+                await stream_gen.aclose()
+            if isinstance(error, StopAsyncIteration):
+                raise ServiceError("Stream ended unexpectedly", code="stream_error") from error
+            if isinstance(error, (asyncio.CancelledError, TimeoutError)):
+                raise
+            if isinstance(error, Exception):
+                raise ServiceError(f"Stream connection error: {error}", code="stream_error") from error
             raise
-        except StopAsyncIteration:
-            error = ServiceError(
-                message="Stream ended unexpectedly", code="stream_error"
-            )
-            await self._finalize_initial_log_error(
-                log_id=log_id,
-                request_time=request_time,
-                api_key_id=api_key_id,
-                api_key_name=api_key_name,
-                user_id=user_id,
-                requested_model=requested_model,
-                trace_id=trace_id,
-                is_stream=True,
-                request_protocol=request_protocol,
-                path=path,
-                request_url=request_url,
-                method=method,
-                headers=headers,
-                sanitized_body=sanitized_body,
-                error=error,
-                record_details=record_details,
-            )
-            await active_requests.deregister(log_id)
-            raise error
-        except Exception as e:
-            error = ServiceError(
-                message=f"Stream connection error: {str(e)}", code="stream_error"
-            )
-            await self._finalize_initial_log_error(
-                log_id=log_id,
-                request_time=request_time,
-                api_key_id=api_key_id,
-                api_key_name=api_key_name,
-                user_id=user_id,
-                requested_model=requested_model,
-                trace_id=trace_id,
-                is_stream=True,
-                request_protocol=request_protocol,
-                path=path,
-                request_url=request_url,
-                method=method,
-                headers=headers,
-                sanitized_body=sanitized_body,
-                error=error,
-                record_details=record_details,
-            )
-            await active_requests.deregister(log_id)
-            raise error from e
 
         # Preserve the initial outcome: this response object may be mutated when
         # the upstream fails later, after a successful stream has already started.
@@ -1990,7 +1918,6 @@ class ProxyService:
 
         # Wrap generator to handle logging
         async def wrapped_generator():
-            nonlocal input_tokens
             usage_acc = StreamUsageAccumulator(
                 protocol=protocol,
                 model=requested_model,
@@ -2010,14 +1937,21 @@ class ProxyService:
             try:
                 usage_acc.feed(first_chunk)
                 record_stream_chunk(first_chunk)
-                # Prime the generator so aclose also finalizes an unconsumed response.
-                if commercial_user_id:
+                if stream_started:
+                    # Prime the stream so aclose also runs before the first body chunk.
                     yield b""
-                yield first_chunk
-                async for chunk, _, _, _ in stream_gen:
-                    usage_acc.feed(chunk)
-                    record_stream_chunk(chunk)
-                    yield chunk
+                    yield first_chunk
+                    while True:
+                        if asyncio.get_running_loop().time() >= run.deadline:
+                            raise TimeoutError
+                        async with asyncio.timeout_at(run.deadline):
+                            item = await anext(stream_gen, None)
+                        if item is None:
+                            break
+                        chunk, _, _, _ = item
+                        usage_acc.feed(chunk)
+                        record_stream_chunk(chunk)
+                        yield chunk
             except asyncio.CancelledError:
                 stream_interrupted = True
                 stream_error = "client_disconnected"
@@ -2029,6 +1963,7 @@ class ProxyService:
             except TimeoutError:
                 stream_interrupted = True
                 stream_error = "timeout"
+                initial_response.status_code = 504
                 raise
             except Exception as e:
                 # Log stream interruption exception, but do not throw upwards to avoid polluting StreamingResponse logs
@@ -2042,228 +1977,231 @@ class ProxyService:
                         # Cleanup failures must not discard already measured usage.
                         logger.error("Upstream stream cleanup failed: request_id=%s", trace_id)
                         stream_error = stream_error or "upstream_close_failed"
-                usage_result = usage_acc.finalize()
-                if commercial_user_id and stream_conversion_data.get('usage_accumulator'):
-                    # Trust supplier events, never usage synthesized by a converter.
-                    upstream_result = stream_conversion_data['usage_accumulator'].finalize()
-                    upstream_result.estimated_output_tokens = max(
-                        upstream_result.estimated_output_tokens,
-                        usage_result.estimated_output_tokens,
-                    )
-                    usage_result = upstream_result
-                has_upstream_usage = usage_result.usage_details is not None
-                has_output = bool(usage_result.output_text or usage_result.output_tokens)
-                usage_details = usage_result.usage_details
-                if usage_result.input_tokens is not None:
-                    if commercial_user_id and not usage_result.final_usage:
-                        input_tokens = max(input_tokens or 0, usage_result.input_tokens)
-                    else:
-                        input_tokens = usage_result.input_tokens
-                if commercial_user_id and not usage_result.final_usage:
-                    usage_result.output_tokens = max(usage_result.output_tokens, usage_result.estimated_output_tokens)
-                    if usage_details:
-                        usage_details.update(
-                            input_tokens=input_tokens,
-                            output_tokens=usage_result.output_tokens,
-                            total_tokens=(input_tokens or 0) + usage_result.output_tokens,
-                            source="mixed",
-                        )
-                if usage_details is None:
-                    usage_details = {
-                        "input_tokens": input_tokens,
-                        "output_tokens": usage_result.output_tokens,
-                        "total_tokens": (input_tokens or 0)
-                        + (usage_result.output_tokens or 0),
-                        "source": "estimated",
-                    }
-                elif usage_details.get("input_tokens") is None:
-                    usage_details["input_tokens"] = input_tokens
-                    usage_details["source"] = "mixed"
-                if usage_details.get("output_tokens") is None:
-                    usage_details["output_tokens"] = usage_result.output_tokens
-                    usage_details["source"] = "mixed"
-                if not usage_details.get("total_tokens") and usage_details.get(
-                    "input_tokens"
-                ):
-                    usage_details["total_tokens"] = usage_details["input_tokens"] + (
-                        usage_details.get("output_tokens") or 0
-                    )
-                if commercial_user_id:
-                    usage_details["interrupted"] = stream_interrupted or initial_response.interrupted or stream_conversion_data.get('interrupted', False)
-                    usage_details["has_upstream_usage"] = has_upstream_usage
-                    usage_details["has_output"] = has_output
-                    usage_details["final_usage"] = usage_result.final_usage
-                    usage_details["stream_started"] = stream_started
-                total_time_ms = initial_response.total_time_ms
-                if total_time_ms is None:
-                    total_time_ms = int((time.monotonic() - start_monotonic) * 1000)
-
-                # 10. Record log (after stream ends)
-                # Record the raw stream response (SSE) plus a reconstructed summary in one field.
-                provider_mapping = (
-                    provider_mapping_by_id.get(self._candidate_key(final_provider))
-                    if final_provider is not None
-                    else None
-                )
-                billing = resolve_billing(
-                    input_tokens=input_tokens,
-                    model_input_price=model_mapping.input_price,
-                    model_output_price=model_mapping.output_price,
-                    model_billing_mode=model_mapping.billing_mode,
-                    model_per_request_price=model_mapping.per_request_price,
-                    model_per_image_price=model_mapping.per_image_price,
-                    model_tiered_pricing=model_mapping.tiered_pricing,
-                    model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
-                    model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
-                    model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
-                    model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
-                    provider_billing_mode=provider_mapping.billing_mode
-                    if provider_mapping
-                    else None,
-                    provider_per_request_price=provider_mapping.per_request_price
-                    if provider_mapping
-                    else None,
-                    provider_per_image_price=provider_mapping.per_image_price
-                    if provider_mapping
-                    else None,
-                    provider_tiered_pricing=provider_mapping.tiered_pricing
-                    if provider_mapping
-                    else None,
-                    provider_input_price=provider_mapping.input_price
-                    if provider_mapping
-                    else None,
-                    provider_output_price=provider_mapping.output_price
-                    if provider_mapping
-                    else None,
-                    provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
-                    if provider_mapping
-                    else None,
-                    provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
-                    if provider_mapping
-                    else None,
-                    provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
-                    if provider_mapping
-                    else None,
-                    provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
-                    if provider_mapping
-                    else None,
-                )
-                # Extract cached tokens from stream usage details
-                stream_cached_input_tokens = None
-                stream_cache_creation_input_tokens = None
-                if usage_details:
-                    stream_cached_input_tokens = (
-                        usage_details.get("cache_read_input_tokens")
-                        if usage_details.get("cache_read_input_tokens") is not None
-                        else usage_details.get("cached_tokens")
-                    )
-                    stream_cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
-                cost = calculate_cost_from_billing(
-                    billing=billing,
-                    input_tokens=input_tokens,
-                    output_tokens=usage_result.output_tokens,
-                    image_count=image_count,
-                    cached_input_tokens=stream_cached_input_tokens,
-                    cache_creation_input_tokens=stream_cache_creation_input_tokens,
-                )
-                raw_stream_text = (
-                    b"".join(raw_stream_chunks).decode("utf-8", errors="replace")
-                    if raw_stream_chunks
-                    else ""
-                )
-                reconstructed_body = json.dumps(
-                    {
-                        "type": "stream_reconstruction",
-                        "protocol": protocol,
-                        "output_text": usage_result.output_text,
-                        "upstream_reported_output_tokens": usage_result.upstream_reported_output_tokens,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                combined_body = raw_stream_text
-                log_data = RequestLogCreate(
-                    request_time=request_time,
-                    api_key_id=api_key_id,
-                    api_key_name=api_key_name,
-                    user_id=user_id,
-                    requested_model=requested_model,
-                    resolved_model=model_mapping.requested_model,
-                    target_model=final_provider.target_model
-                    if final_provider
-                    else None,
-                    provider_id=final_provider.provider_id if final_provider else None,
-                    provider_name=final_provider.provider_name
-                    if final_provider
-                    else None,
-                    retry_count=retry_count,
-                    matched_provider_count=len(candidates),
-                    first_byte_delay_ms=initial_response.first_byte_delay_ms,
-                    total_time_ms=total_time_ms,
-                    input_tokens=input_tokens,
-                    output_tokens=usage_result.output_tokens,
-                    total_cost=cost.total_cost,
-                    input_cost=cost.input_cost,
-                    output_cost=cost.output_cost,
-                    cached_input_cost=cost.cached_input_cost,
-                    cached_output_cost=cost.cached_output_cost,
-                    price_source=billing.price_source,
-                    request_headers=sanitize_headers(headers),
-                    response_headers=sanitize_headers(initial_response.headers),
-                    request_body=sanitized_body,
-                    response_body=combined_body
-                    if raw_stream_text or reconstructed_body
-                    else None,
-                    response_status=initial_response.status_code,
-                    usage_details=usage_details,
-                    error_info=initial_response.error or stream_error,
-                    trace_id=trace_id,
-                    is_stream=True,
-                    request_path=path,
-                    request_url=request_url,
-                    request_method=method,
-                    upstream_url=stream_conversion_data.get("upstream_url"),
-                    # Protocol conversion fields
-                    request_protocol=stream_conversion_data.get("request_protocol"),
-                    supplier_protocol=stream_conversion_data.get("supplier_protocol"),
-                    converted_request_body=_smart_truncate(
-                        stream_conversion_data.get("converted_request_body")
-                    ),
-                    # For stream, upstream_response_body is the raw stream captured from upstream
-                    upstream_response_body=(
-                        b"".join(stream_conversion_data["upstream_chunks"]).decode(
-                            "utf-8", errors="replace"
-                        )
-                        if stream_conversion_data.get("upstream_chunks")
-                        else (raw_stream_text if raw_stream_text else None)
-                    ),
-                )
-
-                # Strip detail payload before debug logging so a key with detail
-                # logging disabled never leaks bodies/headers into application logs.
-                if not record_details:
-                    _strip_detail_payload(log_data)
-
-                await self._commercial_log_identity(log_data)
-
-                # DEBUG: Log request details
-                try:
-                    logger.debug(f"Request Log: {log_data.model_dump_json()}")
-                except AttributeError:
-                    # Fallback for Pydantic v1
-                    logger.debug(f"Request Log: {log_data.json()}")
-
-                # client disconnect triggers cancellation, use shield to ensure logs are written to DB
-                try:
-                    with anyio.CancelScope(shield=True):
-                        await self._update_log(log_id, log_data, record_details=record_details)
+                    try:
+                        await finish_stream(usage_acc, raw_stream_chunks, stream_interrupted, stream_error)
+                    except Exception as error:
+                        logger.exception("Failed to prepare completion for request %s", trace_id)
+                        await self._finalize_request_error(run, error)
+                    finally:
                         await active_requests.deregister(log_id)
-                except Exception:
-                    # Log writing failure does not affect main flow
-                    pass
+
+        async def finish_stream(
+            usage_acc: StreamUsageAccumulator,
+            raw_stream_chunks: list[bytes],
+            stream_interrupted: bool,
+            stream_error: str | None,
+        ) -> None:
+            nonlocal input_tokens
+            usage_result = usage_acc.finalize()
+            if commercial_user_id and stream_conversion_data.get('usage_accumulator'):
+                # Trust supplier events, never usage synthesized by a converter.
+                upstream_result = stream_conversion_data['usage_accumulator'].finalize()
+                upstream_result.estimated_output_tokens = max(
+                    upstream_result.estimated_output_tokens,
+                    usage_result.estimated_output_tokens,
+                )
+                usage_result = upstream_result
+            has_upstream_usage = usage_result.usage_details is not None
+            has_output = bool(usage_result.output_text or usage_result.output_tokens)
+            usage_details = usage_result.usage_details
+            if usage_result.input_tokens is not None:
+                if commercial_user_id and not usage_result.final_usage:
+                    input_tokens = max(input_tokens or 0, usage_result.input_tokens)
+                else:
+                    input_tokens = usage_result.input_tokens
+            if commercial_user_id and not usage_result.final_usage:
+                usage_result.output_tokens = max(usage_result.output_tokens, usage_result.estimated_output_tokens)
+                if usage_details:
+                    usage_details.update(
+                        input_tokens=input_tokens,
+                        output_tokens=usage_result.output_tokens,
+                        total_tokens=(input_tokens or 0) + usage_result.output_tokens,
+                        source="mixed",
+                    )
+            if usage_details is None:
+                usage_details = {
+                    "input_tokens": input_tokens,
+                    "output_tokens": usage_result.output_tokens,
+                    "total_tokens": (input_tokens or 0)
+                    + (usage_result.output_tokens or 0),
+                    "source": "estimated",
+                }
+            elif usage_details.get("input_tokens") is None:
+                usage_details["input_tokens"] = input_tokens
+                usage_details["source"] = "mixed"
+            if usage_details.get("output_tokens") is None:
+                usage_details["output_tokens"] = usage_result.output_tokens
+                usage_details["source"] = "mixed"
+            if not usage_details.get("total_tokens") and usage_details.get(
+                "input_tokens"
+            ):
+                usage_details["total_tokens"] = usage_details["input_tokens"] + (
+                    usage_details.get("output_tokens") or 0
+                )
+            if commercial_user_id:
+                usage_details["interrupted"] = stream_interrupted or initial_response.interrupted or stream_conversion_data.get('interrupted', False)
+                usage_details["has_upstream_usage"] = has_upstream_usage
+                usage_details["has_output"] = has_output
+                usage_details["final_usage"] = usage_result.final_usage
+                usage_details["stream_started"] = stream_started
+            total_time_ms = initial_response.total_time_ms
+            if total_time_ms is None:
+                total_time_ms = int((asyncio.get_running_loop().time() - run.started_at) * 1000)
+
+            # 10. Record log (after stream ends)
+            # Record the raw stream response (SSE) plus a reconstructed summary in one field.
+            provider_mapping = (
+                provider_mapping_by_id.get(self._candidate_key(final_provider))
+                if final_provider is not None
+                else None
+            )
+            billing = resolve_billing(
+                input_tokens=input_tokens,
+                model_input_price=model_mapping.input_price,
+                model_output_price=model_mapping.output_price,
+                model_billing_mode=model_mapping.billing_mode,
+                model_per_request_price=model_mapping.per_request_price,
+                model_per_image_price=model_mapping.per_image_price,
+                model_tiered_pricing=model_mapping.tiered_pricing,
+                model_cache_billing_enabled=getattr(model_mapping, "cache_billing_enabled", None),
+                model_cached_input_price=getattr(model_mapping, "cached_input_price", None),
+                model_cached_output_price=getattr(model_mapping, "cached_output_price", None),
+                model_cache_creation_input_price=getattr(model_mapping, "cache_creation_input_price", None),
+                provider_billing_mode=provider_mapping.billing_mode
+                if provider_mapping
+                else None,
+                provider_per_request_price=provider_mapping.per_request_price
+                if provider_mapping
+                else None,
+                provider_per_image_price=provider_mapping.per_image_price
+                if provider_mapping
+                else None,
+                provider_tiered_pricing=provider_mapping.tiered_pricing
+                if provider_mapping
+                else None,
+                provider_input_price=provider_mapping.input_price
+                if provider_mapping
+                else None,
+                provider_output_price=provider_mapping.output_price
+                if provider_mapping
+                else None,
+                provider_cache_billing_enabled=getattr(provider_mapping, "cache_billing_enabled", None)
+                if provider_mapping
+                else None,
+                provider_cached_input_price=getattr(provider_mapping, "cached_input_price", None)
+                if provider_mapping
+                else None,
+                provider_cached_output_price=getattr(provider_mapping, "cached_output_price", None)
+                if provider_mapping
+                else None,
+                provider_cache_creation_input_price=getattr(provider_mapping, "cache_creation_input_price", None)
+                if provider_mapping
+                else None,
+            )
+            # Extract cached tokens from stream usage details
+            stream_cached_input_tokens = None
+            stream_cache_creation_input_tokens = None
+            if usage_details:
+                stream_cached_input_tokens = (
+                    usage_details.get("cache_read_input_tokens")
+                    if usage_details.get("cache_read_input_tokens") is not None
+                    else usage_details.get("cached_tokens")
+                )
+                stream_cache_creation_input_tokens = usage_details.get("cache_creation_input_tokens")
+            cost = calculate_cost_from_billing(
+                billing=billing,
+                input_tokens=input_tokens,
+                output_tokens=usage_result.output_tokens,
+                image_count=image_count,
+                cached_input_tokens=stream_cached_input_tokens,
+                cache_creation_input_tokens=stream_cache_creation_input_tokens,
+            )
+            raw_stream_text = (
+                b"".join(raw_stream_chunks).decode("utf-8", errors="replace")
+                if raw_stream_chunks
+                else ""
+            )
+            reconstructed_body = json.dumps(
+                {
+                    "type": "stream_reconstruction",
+                    "protocol": protocol,
+                    "output_text": usage_result.output_text,
+                    "upstream_reported_output_tokens": usage_result.upstream_reported_output_tokens,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            combined_body = raw_stream_text
+            log_data = RequestLogCreate(
+                request_time=request_time,
+                api_key_id=api_key_id,
+                api_key_name=api_key_name,
+                user_id=user_id,
+                requested_model=requested_model,
+                resolved_model=model_mapping.requested_model,
+                target_model=final_provider.target_model
+                if final_provider
+                else None,
+                provider_id=final_provider.provider_id if final_provider else None,
+                provider_name=final_provider.provider_name
+                if final_provider
+                else None,
+                retry_count=retry_count,
+                matched_provider_count=len(candidates),
+                first_byte_delay_ms=initial_response.first_byte_delay_ms,
+                total_time_ms=total_time_ms,
+                input_tokens=input_tokens,
+                output_tokens=usage_result.output_tokens,
+                total_cost=cost.total_cost,
+                input_cost=cost.input_cost,
+                output_cost=cost.output_cost,
+                cached_input_cost=cost.cached_input_cost,
+                cached_output_cost=cost.cached_output_cost,
+                price_source=billing.price_source,
+                request_headers=sanitize_headers(headers),
+                response_headers=sanitize_headers(initial_response.headers),
+                request_body=sanitized_body,
+                response_body=combined_body
+                if raw_stream_text or reconstructed_body
+                else None,
+                response_status=initial_response.status_code,
+                usage_details=usage_details,
+                error_info=initial_response.error or stream_error,
+                trace_id=trace_id,
+                is_stream=True,
+                request_path=path,
+                request_url=request_url,
+                request_method=method,
+                upstream_url=stream_conversion_data.get("upstream_url"),
+                # Protocol conversion fields
+                request_protocol=stream_conversion_data.get("request_protocol"),
+                supplier_protocol=stream_conversion_data.get("supplier_protocol"),
+                converted_request_body=_smart_truncate(
+                    stream_conversion_data.get("converted_request_body")
+                ),
+                # For stream, upstream_response_body is the raw stream captured from upstream
+                upstream_response_body=(
+                    b"".join(stream_conversion_data["upstream_chunks"]).decode(
+                        "utf-8", errors="replace"
+                    )
+                    if stream_conversion_data.get("upstream_chunks")
+                    else (raw_stream_text if raw_stream_text else None)
+                ),
+            )
+
+            await self._update_log(log_id, log_data, record_details=record_details)
 
         stream = wrapped_generator()
-        if commercial_user_id:
+        if not stream_started:
+            # An initial error is already terminal. Finalize it before returning
+            # to callers that may only use initial_response.body.
+            await anext(stream, None)
+
+            async def initial_error_stream():
+                yield first_chunk
+
+            stream = initial_error_stream()
+        else:
             await anext(stream)
         return (
             initial_response,

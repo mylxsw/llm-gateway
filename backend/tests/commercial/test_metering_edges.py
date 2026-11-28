@@ -210,7 +210,7 @@ async def test_initial_stream_error_releases_reservation(commercial_gateway, mon
     body = {'model': 'model', 'stream': True, 'max_tokens': 100,
             'messages': [{'role': 'user', 'content': 'hi'}]}
     request = SimpleNamespace(headers={}, url='https://example.com/v1/messages', method='POST',
-                              json=AsyncMock(return_value=body))
+                              json=AsyncMock(return_value=body), receive=asyncio.Event().wait)
     key = SimpleNamespace(id=kid, key_name='test', record_details=False)
     if protocol == 'openai':
         from app.api.proxy.openai import _handle_proxy_request_with_body
